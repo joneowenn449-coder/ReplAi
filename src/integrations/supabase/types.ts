@@ -14,7 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      reviews: {
+        Row: {
+          ai_draft: string | null
+          author_name: string
+          created_date: string
+          fetched_at: string
+          id: string
+          photo_links: Json | null
+          product_article: string
+          product_name: string
+          rating: number
+          sent_answer: string | null
+          status: string
+          text: string | null
+          updated_at: string
+          wb_id: string
+        }
+        Insert: {
+          ai_draft?: string | null
+          author_name?: string
+          created_date?: string
+          fetched_at?: string
+          id?: string
+          photo_links?: Json | null
+          product_article?: string
+          product_name?: string
+          rating: number
+          sent_answer?: string | null
+          status?: string
+          text?: string | null
+          updated_at?: string
+          wb_id: string
+        }
+        Update: {
+          ai_draft?: string | null
+          author_name?: string
+          created_date?: string
+          fetched_at?: string
+          id?: string
+          photo_links?: Json | null
+          product_article?: string
+          product_name?: string
+          rating?: number
+          sent_answer?: string | null
+          status?: string
+          text?: string | null
+          updated_at?: string
+          wb_id?: string
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          ai_prompt_template: string
+          auto_reply_enabled: boolean
+          id: string
+          last_sync_at: string | null
+        }
+        Insert: {
+          ai_prompt_template?: string
+          auto_reply_enabled?: boolean
+          id?: string
+          last_sync_at?: string | null
+        }
+        Update: {
+          ai_prompt_template?: string
+          auto_reply_enabled?: boolean
+          id?: string
+          last_sync_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

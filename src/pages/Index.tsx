@@ -4,157 +4,76 @@ import { ApiStatus } from "@/components/ApiStatus";
 import { StatsCards } from "@/components/StatsCards";
 import { FilterTabs } from "@/components/FilterTabs";
 import { ReviewCard } from "@/components/ReviewCard";
-import { toast } from "sonner";
-
-// Моковые данные для демонстрации
-const mockReviews = [
-  {
-    id: "1",
-    rating: 5,
-    authorName: "Дарья",
-    date: "6 фев. 2026",
-    productName: "Сумка кросс-боди через плечо маленькая • LUNÉRA",
-    productArticle: "722695948",
-    status: "auto" as const,
-    images: [
-      "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=100&h=100&fit=crop",
-      "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=100&h=100&fit=crop",
-      "https://images.unsplash.com/photo-1566150905458-1bf1fc113f0d?w=100&h=100&fit=crop",
-      "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=100&h=100&fit=crop",
-    ],
-  },
-  {
-    id: "2",
-    rating: 4,
-    authorName: "Анна",
-    date: "5 фев. 2026",
-    productName: "Рюкзак городской женский • LUNÉRA",
-    productArticle: "856234712",
-    status: "sent" as const,
-    text: "Отличный рюкзак, вместительный и стильный. Немного тяжеловат, но качество на высоте.",
-    images: [
-      "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=100&h=100&fit=crop",
-    ],
-  },
-  {
-    id: "3",
-    rating: 5,
-    authorName: "Мария",
-    date: "5 фев. 2026",
-    productName: "Кошелек женский из натуральной кожи • LUNÉRA",
-    productArticle: "634892156",
-    status: "sent" as const,
-    text: "Кошелек просто супер! Мягкая кожа, удобные отделения.",
-  },
-  {
-    id: "4",
-    rating: 3,
-    authorName: "Екатерина",
-    date: "4 фев. 2026",
-    productName: "Клатч вечерний с цепочкой • LUNÉRA",
-    productArticle: "923847561",
-    status: "auto" as const,
-    text: "Цепочка оказалась короче, чем на фото. В остальном нормально.",
-    images: [
-      "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?w=100&h=100&fit=crop",
-      "https://images.unsplash.com/photo-1612902456551-333ac5afa26e?w=100&h=100&fit=crop",
-    ],
-  },
-  {
-    id: "5",
-    rating: 5,
-    authorName: "Ольга",
-    date: "4 фев. 2026",
-    productName: "Сумка-шоппер большая • LUNÉRA",
-    productArticle: "478123965",
-    status: "sent" as const,
-    text: "Идеальная сумка для ежедневного использования!",
-  },
-  {
-    id: "6",
-    rating: 4,
-    authorName: "Светлана",
-    date: "3 фев. 2026",
-    productName: "Ремень женский кожаный • LUNÉRA",
-    productArticle: "789456123",
-    status: "sent" as const,
-  },
-  {
-    id: "7",
-    rating: 5,
-    authorName: "Наталья",
-    date: "3 фев. 2026",
-    productName: "Косметичка дорожная • LUNÉRA",
-    productArticle: "321654987",
-    status: "sent" as const,
-    text: "Очень удобная, много кармашков!",
-  },
-  {
-    id: "8",
-    rating: 5,
-    authorName: "Ирина",
-    date: "2 фев. 2026",
-    productName: "Сумка через плечо • LUNÉRA",
-    productArticle: "159753486",
-    status: "new" as const,
-    text: "Очень красивая сумка!",
-  },
-  {
-    id: "9",
-    rating: 4,
-    authorName: "Елена",
-    date: "2 фев. 2026",
-    productName: "Клатч • LUNÉRA",
-    productArticle: "753159486",
-    status: "pending" as const,
-  },
-];
+import { SettingsDialog } from "@/components/SettingsDialog";
+import {
+  useReviews,
+  useSettings,
+  useSyncReviews,
+  useUpdateSettings,
+} from "@/hooks/useReviews";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
+import { Loader2 } from "lucide-react";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("reviews");
   const [activeFilter, setActiveFilter] = useState("all");
-  const [autoReply, setAutoReply] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
+  const { data: settings } = useSettings();
+  const syncReviews = useSyncReviews();
+  const updateSettings = useUpdateSettings();
+
+  const autoReply = settings?.auto_reply_enabled ?? false;
 
   const stats = {
-    new: mockReviews.filter((r) => r.status === "new").length,
-    pending: mockReviews.filter((r) => r.status === "pending").length,
-    auto: mockReviews.filter((r) => r.status === "auto").length,
-    sent: mockReviews.filter((r) => r.status === "sent").length,
+    new: reviews.filter((r) => r.status === "new").length,
+    pending: reviews.filter((r) => r.status === "pending").length,
+    auto: reviews.filter((r) => r.status === "auto").length,
+    sent: reviews.filter((r) => r.status === "sent").length,
   };
 
   const counts = {
-    all: mockReviews.length,
+    all: reviews.length,
     ...stats,
   };
 
   const filteredReviews =
     activeFilter === "all"
-      ? mockReviews
-      : mockReviews.filter((r) => r.status === activeFilter);
+      ? reviews
+      : reviews.filter((r) => r.status === activeFilter);
 
   const handleSync = () => {
-    toast.success("Синхронизация запущена");
+    syncReviews.mutate();
   };
 
-  const handleSettingsClick = () => {
-    toast.info("Настройки будут доступны в следующей версии");
+  const handleAutoReplyChange = (value: boolean) => {
+    updateSettings.mutate({ auto_reply_enabled: value });
   };
+
+  const lastSyncFormatted = settings?.last_sync_at
+    ? format(new Date(settings.last_sync_at), "d MMM yyyy 'в' HH:mm", {
+        locale: ru,
+      })
+    : "Ещё не синхронизировано";
 
   return (
     <div className="min-h-screen bg-background">
       <Header
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onSettingsClick={handleSettingsClick}
+        onSettingsClick={() => setSettingsOpen(true)}
       />
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
         <ApiStatus
           isConnected={true}
-          lastSync="6 фев. 2026 в 13:25"
+          lastSync={lastSyncFormatted}
           autoReply={autoReply}
-          onAutoReplyChange={setAutoReply}
+          onAutoReplyChange={handleAutoReplyChange}
           onSync={handleSync}
+          isSyncing={syncReviews.isPending}
         />
 
         <StatsCards
@@ -170,18 +89,43 @@ const Index = () => {
           counts={counts}
         />
 
-        <div className="space-y-4">
-          {filteredReviews.map((review) => (
-            <ReviewCard key={review.id} {...review} />
-          ))}
+        {reviewsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredReviews.map((review) => (
+              <ReviewCard
+                key={review.id}
+                id={review.id}
+                rating={review.rating}
+                authorName={review.author_name}
+                date={format(new Date(review.created_date), "d MMM yyyy", {
+                  locale: ru,
+                })}
+                productName={review.product_name}
+                productArticle={review.product_article}
+                status={review.status}
+                images={review.photo_links}
+                text={review.text}
+                aiDraft={review.ai_draft}
+                sentAnswer={review.sent_answer}
+              />
+            ))}
 
-          {filteredReviews.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              Нет отзывов в этой категории
-            </div>
-          )}
-        </div>
+            {filteredReviews.length === 0 && !reviewsLoading && (
+              <div className="text-center py-12 text-muted-foreground">
+                {reviews.length === 0
+                  ? "Нажмите «Синхронизировать» чтобы загрузить отзывы с WB"
+                  : "Нет отзывов в этой категории"}
+              </div>
+            )}
+          </div>
+        )}
       </main>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 };

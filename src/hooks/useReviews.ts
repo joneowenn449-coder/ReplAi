@@ -1,0 +1,159 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+export interface Review {
+  id: string;
+  wb_id: string;
+  rating: number;
+  author_name: string;
+  text: string | null;
+  product_name: string;
+  product_article: string;
+  photo_links: string[];
+  created_date: string;
+  status: "new" | "pending" | "auto" | "sent";
+  ai_draft: string | null;
+  sent_answer: string | null;
+  fetched_at: string;
+  updated_at: string;
+}
+
+export interface Settings {
+  id: string;
+  auto_reply_enabled: boolean;
+  ai_prompt_template: string;
+  last_sync_at: string | null;
+}
+
+export function useReviews() {
+  return useQuery({
+    queryKey: ["reviews"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("*")
+        .order("created_date", { ascending: false });
+      if (error) throw error;
+      return (data as unknown as Review[]) || [];
+    },
+  });
+}
+
+export function useSettings() {
+  return useQuery({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("settings")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as unknown as Settings | null;
+    },
+  });
+}
+
+export function useSyncReviews() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("sync-reviews");
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      const newCount = data?.new || 0;
+      const autoSent = data?.autoSent || 0;
+      toast.success(
+        `Синхронизация завершена: ${newCount} новых, ${autoSent} автоответов`
+      );
+    },
+    onError: (error) => {
+      toast.error(`Ошибка синхронизации: ${error.message}`);
+    },
+  });
+}
+
+export function useSendReply() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      reviewId,
+      answerText,
+    }: {
+      reviewId: string;
+      answerText?: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("send-reply", {
+        body: { review_id: reviewId, answer_text: answerText },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      toast.success("Ответ отправлен на WB");
+    },
+    onError: (error) => {
+      toast.error(`Ошибка отправки: ${error.message}`);
+    },
+  });
+}
+
+export function useGenerateReply() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (reviewId: string) => {
+      const { data, error } = await supabase.functions.invoke(
+        "generate-reply",
+        {
+          body: { review_id: reviewId },
+        }
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      toast.success("Новый черновик сгенерирован");
+    },
+    onError: (error) => {
+      toast.error(`Ошибка генерации: ${error.message}`);
+    },
+  });
+}
+
+export function useUpdateSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: Partial<Settings>) => {
+      const { data: existing } = await supabase
+        .from("settings")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+
+      if (!existing) throw new Error("Settings not found");
+
+      const { error } = await supabase
+        .from("settings")
+        .update(updates as Record<string, unknown>)
+        .eq("id", existing.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (error) => {
+      toast.error(`Ошибка сохранения: ${error.message}`);
+    },
+  });
+}

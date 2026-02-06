@@ -20,6 +20,7 @@ export type Database = {
           author_name: string
           created_date: string
           fetched_at: string
+          has_video: boolean
           id: string
           photo_links: Json | null
           product_article: string
@@ -36,6 +37,7 @@ export type Database = {
           author_name?: string
           created_date?: string
           fetched_at?: string
+          has_video?: boolean
           id?: string
           photo_links?: Json | null
           product_article?: string
@@ -52,6 +54,7 @@ export type Database = {
           author_name?: string
           created_date?: string
           fetched_at?: string
+          has_video?: boolean
           id?: string
           photo_links?: Json | null
           product_article?: string

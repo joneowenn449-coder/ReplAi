@@ -93,6 +93,7 @@ serve(async (req) => {
             fb.productDetails?.nmId || fb.nmId || ""
           ),
           photo_links: fb.photoLinks || [],
+          has_video: !!(fb.video && (fb.video.link || fb.video.previewImage)),
           created_date: fb.createdDate || new Date().toISOString(),
           status: "archived",
           ai_draft: null,

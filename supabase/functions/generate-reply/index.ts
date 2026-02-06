@@ -47,7 +47,22 @@ serve(async (req) => {
       settings?.ai_prompt_template ||
       "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
 
-    const userMessage = `Отзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${review.text || "(Без текста, только оценка)"}`;
+    // Build attachment info
+    const photoLinks = Array.isArray(review.photo_links) ? review.photo_links : [];
+    const photoCount = photoLinks.length;
+    const hasVideo = review.has_video === true;
+    let attachmentInfo = "";
+    if (photoCount > 0 || hasVideo) {
+      const parts: string[] = [];
+      if (photoCount > 0) {
+        const photoWord = photoCount === 1 ? "фотографию" : photoCount < 5 ? "фотографии" : "фотографий";
+        parts.push(`${photoCount} ${photoWord}`);
+      }
+      if (hasVideo) parts.push("видео");
+      attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
+    }
+
+    const userMessage = `Отзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${review.text || "(Без текста, только оценка)"}${attachmentInfo}`;
 
     // Call OpenRouter
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {

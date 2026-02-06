@@ -1,0 +1,1 @@
+ALTER TABLE public.reviews ADD COLUMN has_video boolean NOT NULL DEFAULT false;

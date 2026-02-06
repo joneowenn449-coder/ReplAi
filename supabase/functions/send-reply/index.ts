@@ -13,11 +13,9 @@ serve(async (req) => {
   }
 
   try {
-    const WB_API_KEY = Deno.env.get("WB_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!WB_API_KEY) throw new Error("WB_API_KEY is not configured");
     if (!SUPABASE_URL) throw new Error("SUPABASE_URL is not configured");
     if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
 
@@ -25,6 +23,16 @@ serve(async (req) => {
     if (!review_id) throw new Error("review_id is required");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Resolve WB API key: DB first, then env fallback
+    const { data: settings } = await supabase
+      .from("settings")
+      .select("wb_api_key")
+      .limit(1)
+      .maybeSingle();
+
+    const WB_API_KEY = settings?.wb_api_key || Deno.env.get("WB_API_KEY");
+    if (!WB_API_KEY) throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
 
     // Get review from DB
     const { data: review, error: fetchError } = await supabase

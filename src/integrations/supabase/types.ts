@@ -71,18 +71,21 @@ export type Database = {
           auto_reply_enabled: boolean
           id: string
           last_sync_at: string | null
+          wb_api_key: string | null
         }
         Insert: {
           ai_prompt_template?: string
           auto_reply_enabled?: boolean
           id?: string
           last_sync_at?: string | null
+          wb_api_key?: string | null
         }
         Update: {
           ai_prompt_template?: string
           auto_reply_enabled?: boolean
           id?: string
           last_sync_at?: string | null
+          wb_api_key?: string | null
         }
         Relationships: []
       }

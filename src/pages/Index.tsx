@@ -9,8 +9,8 @@ import {
   useReviews,
   useSettings,
   useSyncReviews,
-  useUpdateSettings,
   useFetchArchive,
+  DEFAULT_REPLY_MODES,
 } from "@/hooks/useReviews";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -25,9 +25,8 @@ const Index = () => {
   const { data: settings } = useSettings();
   const syncReviews = useSyncReviews();
   const fetchArchive = useFetchArchive();
-  const updateSettings = useUpdateSettings();
 
-  const autoReply = settings?.auto_reply_enabled ?? false;
+  const replyModes = settings?.reply_modes ?? DEFAULT_REPLY_MODES;
 
   const activeReviews = reviews.filter((r) => r.status !== "archived");
 
@@ -53,9 +52,6 @@ const Index = () => {
     syncReviews.mutate();
   };
 
-  const handleAutoReplyChange = (value: boolean) => {
-    updateSettings.mutate({ auto_reply_enabled: value });
-  };
 
   const lastSyncFormatted = settings?.last_sync_at
     ? format(new Date(settings.last_sync_at), "d MMM yyyy 'в' HH:mm", {
@@ -75,8 +71,7 @@ const Index = () => {
         <ApiStatus
           isConnected={!!settings?.wb_api_key}
           lastSync={lastSyncFormatted}
-          autoReply={autoReply}
-          onAutoReplyChange={handleAutoReplyChange}
+          replyModes={replyModes}
           onSync={handleSync}
           isSyncing={syncReviews.isPending}
           onFetchArchive={() => fetchArchive.mutate()}

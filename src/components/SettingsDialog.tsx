@@ -19,14 +19,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   useSettings,
   useUpdateSettings,
   useValidateApiKey,
   useDeleteApiKey,
+  DEFAULT_REPLY_MODES,
+  ReplyModes,
 } from "@/hooks/useReviews";
 import { toast } from "sonner";
-import { Check, Pencil, Trash2, Loader2, KeyRound } from "lucide-react";
+import { Check, Pencil, Trash2, Loader2, KeyRound, Star } from "lucide-react";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -47,6 +50,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   const [prompt, setPrompt] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [isEditingKey, setIsEditingKey] = useState(false);
+  const [replyModes, setReplyModes] = useState<ReplyModes>(DEFAULT_REPLY_MODES);
 
   const hasKey = !!settings?.wb_api_key;
 
@@ -57,21 +61,34 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   }, [settings?.ai_prompt_template]);
 
   useEffect(() => {
+    if (settings?.reply_modes) {
+      setReplyModes(settings.reply_modes);
+    }
+  }, [settings?.reply_modes]);
+
+  useEffect(() => {
     if (!open) {
       setIsEditingKey(false);
       setApiKeyInput("");
     }
   }, [open]);
 
-  const handleSavePrompt = () => {
+  const handleSaveSettings = () => {
     updateSettings.mutate(
-      { ai_prompt_template: prompt },
+      { ai_prompt_template: prompt, reply_modes: replyModes },
       {
         onSuccess: () => {
           toast.success("Настройки сохранены");
         },
       }
     );
+  };
+
+  const handleToggleRating = (rating: string, checked: boolean) => {
+    setReplyModes((prev) => ({
+      ...prev,
+      [rating]: checked ? "auto" : "manual",
+    }));
   };
 
   const handleValidateKey = () => {
@@ -205,6 +222,54 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
             )}
           </div>
 
+          {/* Reply Modes by Rating Section */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-foreground block">
+              Режим ответов по рейтингу
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Авто — ответ отправляется сразу, Ручной — попадает на согласование.
+            </p>
+            <div className="space-y-2">
+              {[5, 4, 3, 2, 1].map((rating) => {
+                const key = String(rating);
+                const isAuto = replyModes[key] === "auto";
+                return (
+                  <div
+                    key={rating}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 border border-border"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {Array.from({ length: rating }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className="w-4 h-4 fill-yellow-400 text-yellow-400"
+                        />
+                      ))}
+                      {Array.from({ length: 5 - rating }).map((_, i) => (
+                        <Star
+                          key={`empty-${i}`}
+                          className="w-4 h-4 text-muted-foreground/30"
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 text-right">
+                        {isAuto ? "Авто" : "Ручной"}
+                      </span>
+                      <Switch
+                        checked={isAuto}
+                        onCheckedChange={(checked) =>
+                          handleToggleRating(key, checked)
+                        }
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* AI Prompt Section */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground block">
@@ -227,10 +292,10 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
               Отмена
             </Button>
             <Button
-              onClick={handleSavePrompt}
+              onClick={handleSaveSettings}
               disabled={updateSettings.isPending}
             >
-              {updateSettings.isPending ? "Сохранение..." : "Сохранить промпт"}
+              {updateSettings.isPending ? "Сохранение..." : "Сохранить"}
             </Button>
           </div>
         </div>

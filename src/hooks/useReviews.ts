@@ -19,9 +19,22 @@ export interface Review {
   updated_at: string;
 }
 
+export type ReplyMode = "auto" | "manual";
+
+export type ReplyModes = Record<string, ReplyMode>;
+
+export const DEFAULT_REPLY_MODES: ReplyModes = {
+  "1": "manual",
+  "2": "manual",
+  "3": "manual",
+  "4": "manual",
+  "5": "manual",
+};
+
 export interface Settings {
   id: string;
   auto_reply_enabled: boolean;
+  reply_modes: ReplyModes;
   ai_prompt_template: string;
   last_sync_at: string | null;
   wb_api_key: string | null;

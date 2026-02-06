@@ -71,6 +71,7 @@ export type Database = {
           auto_reply_enabled: boolean
           id: string
           last_sync_at: string | null
+          reply_modes: Json
           wb_api_key: string | null
         }
         Insert: {
@@ -78,6 +79,7 @@ export type Database = {
           auto_reply_enabled?: boolean
           id?: string
           last_sync_at?: string | null
+          reply_modes?: Json
           wb_api_key?: string | null
         }
         Update: {
@@ -85,6 +87,7 @@ export type Database = {
           auto_reply_enabled?: boolean
           id?: string
           last_sync_at?: string | null
+          reply_modes?: Json
           wb_api_key?: string | null
         }
         Relationships: []

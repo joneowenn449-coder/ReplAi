@@ -42,9 +42,23 @@ async function generateAIReply(
   systemPrompt: string,
   reviewText: string,
   rating: number,
-  productName: string
+  productName: string,
+  photoCount: number = 0,
+  hasVideo: boolean = false
 ) {
-  const userMessage = `Отзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}`;
+  // Build attachment info
+  let attachmentInfo = "";
+  if (photoCount > 0 || hasVideo) {
+    const parts: string[] = [];
+    if (photoCount > 0) {
+      const photoWord = photoCount === 1 ? "фотографию" : photoCount < 5 ? "фотографии" : "фотографий";
+      parts.push(`${photoCount} ${photoWord}`);
+    }
+    if (hasVideo) parts.push("видео");
+    attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
+  }
+
+  const userMessage = `Отзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}`;
 
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -131,6 +145,9 @@ serve(async (req) => {
 
       if (existing) continue;
 
+      const photoLinks = fb.photoLinks || [];
+      const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
+
       // Generate AI draft
       let aiDraft = "";
       try {
@@ -139,7 +156,9 @@ serve(async (req) => {
           promptTemplate,
           fb.text || "",
           fb.productValuation || 5,
-          fb.productDetails?.productName || fb.subjectName || "Товар"
+          fb.productDetails?.productName || fb.subjectName || "Товар",
+          photoLinks.length,
+          hasVideo
         );
       } catch (e) {
         console.error(`AI generation failed for ${wbId}:`, e);
@@ -176,7 +195,8 @@ serve(async (req) => {
           fb.productDetails?.productName || fb.subjectName || "Товар",
         product_article:
           String(fb.productDetails?.nmId || fb.nmId || ""),
-        photo_links: fb.photoLinks || [],
+        photo_links: photoLinks,
+        has_video: hasVideo,
         created_date: fb.createdDate || new Date().toISOString(),
         status,
         ai_draft: aiDraft || null,

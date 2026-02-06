@@ -11,6 +11,7 @@ export interface Review {
   product_name: string;
   product_article: string;
   photo_links: string[];
+  has_video: boolean;
   created_date: string;
   status: "new" | "pending" | "auto" | "sent" | "archived";
   ai_draft: string | null;

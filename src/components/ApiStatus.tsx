@@ -1,6 +1,7 @@
 import { Switch } from "@/components/ui/switch";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface ApiStatusProps {
   isConnected: boolean;
@@ -8,6 +9,7 @@ interface ApiStatusProps {
   autoReply: boolean;
   onAutoReplyChange: (value: boolean) => void;
   onSync: () => void;
+  isSyncing?: boolean;
 }
 
 export const ApiStatus = ({
@@ -16,6 +18,7 @@ export const ApiStatus = ({
   autoReply,
   onAutoReplyChange,
   onSync,
+  isSyncing = false,
 }: ApiStatusProps) => {
   return (
     <div className="bg-card rounded-xl border border-border p-4 flex items-center justify-between">
@@ -42,10 +45,11 @@ export const ApiStatus = ({
         <Button
           onClick={onSync}
           variant="outline"
+          disabled={isSyncing}
           className="bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
         >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Синхронизировать
+          <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
+          {isSyncing ? "Синхронизация..." : "Синхронизировать"}
         </Button>
       </div>
     </div>

@@ -1,1 +1,10 @@
 project_id = "yzlrebnfslyvqscjmmwh"
+
+[functions.sync-reviews]
+verify_jwt = false
+
+[functions.send-reply]
+verify_jwt = false
+
+[functions.generate-reply]
+verify_jwt = false

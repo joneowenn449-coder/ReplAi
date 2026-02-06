@@ -12,7 +12,7 @@ interface ReviewCardProps {
 date: string;
   productName: string;
   productArticle: string;
-  status: "new" | "pending" | "auto" | "sent";
+  status: "new" | "pending" | "auto" | "sent" | "archived";
   images?: string[];
   text?: string | null;
   aiDraft?: string | null;
@@ -39,18 +39,20 @@ export const ReviewCard = ({
   const sendReply = useSendReply();
   const generateReply = useGenerateReply();
 
-  const statusLabels = {
+  const statusLabels: Record<string, string> = {
     new: "Новый",
     pending: "Ожидает",
     auto: "Автоответ",
     sent: "Отправлено",
+    archived: "Архив",
   };
 
-  const statusClasses = {
+  const statusClasses: Record<string, string> = {
     new: "badge-new",
     pending: "badge-pending",
     auto: "badge-auto",
     sent: "badge-sent",
+    archived: "badge-sent",
   };
 
   const handleSend = () => {
@@ -63,8 +65,9 @@ export const ReviewCard = ({
     generateReply.mutate(id);
   };
 
-  const hasDraft = aiDraft && status !== "sent";
-  const hasAnswer = sentAnswer && status === "sent";
+  const isArchived = status === "archived";
+  const hasDraft = aiDraft && status !== "sent" && !isArchived;
+  const hasAnswer = sentAnswer && (status === "sent" || isArchived);
 
   return (
     <div className="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow">

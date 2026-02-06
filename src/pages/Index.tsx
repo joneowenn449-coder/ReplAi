@@ -10,6 +10,7 @@ import {
   useSettings,
   useSyncReviews,
   useUpdateSettings,
+  useFetchArchive,
 } from "@/hooks/useReviews";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -23,25 +24,29 @@ const Index = () => {
   const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
   const { data: settings } = useSettings();
   const syncReviews = useSyncReviews();
+  const fetchArchive = useFetchArchive();
   const updateSettings = useUpdateSettings();
 
   const autoReply = settings?.auto_reply_enabled ?? false;
+
+  const activeReviews = reviews.filter((r) => r.status !== "archived");
 
   const stats = {
     new: reviews.filter((r) => r.status === "new").length,
     pending: reviews.filter((r) => r.status === "pending").length,
     auto: reviews.filter((r) => r.status === "auto").length,
     sent: reviews.filter((r) => r.status === "sent").length,
+    archived: reviews.filter((r) => r.status === "archived").length,
   };
 
   const counts = {
-    all: reviews.length,
+    all: activeReviews.length,
     ...stats,
   };
 
   const filteredReviews =
     activeFilter === "all"
-      ? reviews
+      ? activeReviews
       : reviews.filter((r) => r.status === activeFilter);
 
   const handleSync = () => {
@@ -74,6 +79,8 @@ const Index = () => {
           onAutoReplyChange={handleAutoReplyChange}
           onSync={handleSync}
           isSyncing={syncReviews.isPending}
+          onFetchArchive={() => fetchArchive.mutate()}
+          isFetchingArchive={fetchArchive.isPending}
         />
 
         <StatsCards

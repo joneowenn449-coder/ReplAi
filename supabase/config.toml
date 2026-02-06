@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.validate-api-key]
 verify_jwt = false
+
+[functions.fetch-archive]
+verify_jwt = false

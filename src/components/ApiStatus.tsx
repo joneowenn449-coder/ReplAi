@@ -1,29 +1,59 @@
-import { Switch } from "@/components/ui/switch";
 import { RefreshCw, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ReplyModes, DEFAULT_REPLY_MODES } from "@/hooks/useReviews";
 
 interface ApiStatusProps {
   isConnected: boolean;
   lastSync: string;
-  autoReply: boolean;
-  onAutoReplyChange: (value: boolean) => void;
+  replyModes: ReplyModes;
   onSync: () => void;
   isSyncing?: boolean;
   onFetchArchive?: () => void;
   isFetchingArchive?: boolean;
 }
 
+function formatReplyModesSummary(modes: ReplyModes): string {
+  const autoRatings: number[] = [];
+  const manualRatings: number[] = [];
+
+  for (let i = 1; i <= 5; i++) {
+    if (modes[String(i)] === "auto") {
+      autoRatings.push(i);
+    } else {
+      manualRatings.push(i);
+    }
+  }
+
+  if (autoRatings.length === 0) return "Все ответы вручную";
+  if (autoRatings.length === 5) return "Все ответы автоматически";
+
+  const formatRange = (nums: number[]) => {
+    if (nums.length === 0) return "";
+    const sorted = [...nums].sort((a, b) => a - b);
+    if (sorted.length === 1) return `★${sorted[0]}`;
+    const isConsecutive = sorted.every((n, i) => i === 0 || n === sorted[i - 1] + 1);
+    if (isConsecutive) return `★${sorted[0]}-${sorted[sorted.length - 1]}`;
+    return sorted.map((n) => `★${n}`).join(", ");
+  };
+
+  const parts: string[] = [];
+  if (autoRatings.length > 0) parts.push(`Авто: ${formatRange(autoRatings)}`);
+  if (manualRatings.length > 0) parts.push(`Ручной: ${formatRange(manualRatings)}`);
+  return parts.join(" | ");
+}
+
 export const ApiStatus = ({
   isConnected,
   lastSync,
-  autoReply,
-  onAutoReplyChange,
+  replyModes,
   onSync,
   isSyncing = false,
   onFetchArchive,
   isFetchingArchive = false,
 }: ApiStatusProps) => {
+  const summary = formatReplyModesSummary(replyModes);
+
   return (
     <div className="bg-card rounded-xl border border-border p-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -42,10 +72,7 @@ export const ApiStatus = ({
         </div>
       </div>
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Switch checked={autoReply} onCheckedChange={onAutoReplyChange} />
-          <span className="text-sm font-medium text-foreground">Авто-ответы</span>
-        </div>
+        <span className="text-sm text-muted-foreground">{summary}</span>
         {isConnected && onFetchArchive && (
           <Button
             onClick={onFetchArchive}

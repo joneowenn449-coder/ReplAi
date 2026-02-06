@@ -102,7 +102,9 @@ serve(async (req) => {
     const WB_API_KEY = settings?.wb_api_key || Deno.env.get("WB_API_KEY");
     if (!WB_API_KEY) throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
 
-    const autoReply = settings?.auto_reply_enabled ?? false;
+    // Per-rating reply modes: default all to "manual"
+    const defaultModes = { "1": "manual", "2": "manual", "3": "manual", "4": "manual", "5": "manual" };
+    const replyModes = settings?.reply_modes || defaultModes;
     const promptTemplate =
       settings?.ai_prompt_template ||
       "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
@@ -145,9 +147,12 @@ serve(async (req) => {
       }
 
       let status = "pending";
+      const rating = fb.productValuation || 5;
+      const ratingKey = String(rating);
+      const modeForRating = replyModes[ratingKey] || "manual";
 
-      // Auto-reply if enabled and draft generated
-      if (autoReply && aiDraft) {
+      // Auto-reply if mode is "auto" for this rating and draft generated
+      if (modeForRating === "auto" && aiDraft) {
         try {
           await sendWBAnswer(WB_API_KEY, wbId, aiDraft);
           status = "auto";

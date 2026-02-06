@@ -29,7 +29,7 @@ serve(async (req) => {
 
     // Test the key against WB API
     const testResp = await fetch(
-      "https://feedbacks-api.wildberries.ru/api/v1/feedbacks?isAnswered=false&take=1",
+      "https://feedbacks-api.wildberries.ru/api/v1/feedbacks?isAnswered=false&take=1&skip=0",
       { headers: { Authorization: trimmedKey } }
     );
 

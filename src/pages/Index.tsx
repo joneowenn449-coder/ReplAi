@@ -68,7 +68,7 @@ const Index = () => {
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
         <ApiStatus
-          isConnected={true}
+          isConnected={!!settings?.wb_api_key}
           lastSync={lastSyncFormatted}
           autoReply={autoReply}
           onAutoReplyChange={handleAutoReplyChange}

@@ -1,0 +1,1 @@
+ALTER TABLE public.settings ADD COLUMN wb_api_key text;

@@ -81,12 +81,10 @@ serve(async (req) => {
   }
 
   try {
-    const WB_API_KEY = Deno.env.get("WB_API_KEY");
     const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!WB_API_KEY) throw new Error("WB_API_KEY is not configured");
     if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY is not configured");
     if (!SUPABASE_URL) throw new Error("SUPABASE_URL is not configured");
     if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
@@ -99,6 +97,10 @@ serve(async (req) => {
       .select("*")
       .limit(1)
       .maybeSingle();
+
+    // Resolve WB API key: DB first, then env fallback
+    const WB_API_KEY = settings?.wb_api_key || Deno.env.get("WB_API_KEY");
+    if (!WB_API_KEY) throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
 
     const autoReply = settings?.auto_reply_enabled ?? false;
     const promptTemplate =

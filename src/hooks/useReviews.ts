@@ -24,6 +24,7 @@ export interface Settings {
   auto_reply_enabled: boolean;
   ai_prompt_template: string;
   last_sync_at: string | null;
+  wb_api_key: string | null;
 }
 
 export function useReviews() {
@@ -154,6 +155,60 @@ export function useUpdateSettings() {
     },
     onError: (error) => {
       toast.error(`Ошибка сохранения: ${error.message}`);
+    },
+  });
+}
+
+export function useValidateApiKey() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (apiKey: string) => {
+      const { data, error } = await supabase.functions.invoke(
+        "validate-api-key",
+        { body: { api_key: apiKey } }
+      );
+      if (error) throw error;
+      if (!data?.valid) {
+        throw new Error(data?.error || "Ключ не прошёл проверку");
+      }
+      return data as { valid: boolean; masked_key: string };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      toast.success("API-ключ подтверждён и сохранён");
+    },
+    onError: (error) => {
+      toast.error(`Ошибка проверки: ${error.message}`);
+    },
+  });
+}
+
+export function useDeleteApiKey() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data: existing } = await supabase
+        .from("settings")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+
+      if (!existing) throw new Error("Settings not found");
+
+      const { error } = await supabase
+        .from("settings")
+        .update({ wb_api_key: null } as Record<string, unknown>)
+        .eq("id", existing.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      toast.success("API-ключ удалён");
+    },
+    onError: (error) => {
+      toast.error(`Ошибка удаления: ${error.message}`);
     },
   });
 }

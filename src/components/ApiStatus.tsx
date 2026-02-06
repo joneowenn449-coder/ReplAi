@@ -1,5 +1,5 @@
 import { Switch } from "@/components/ui/switch";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,8 @@ interface ApiStatusProps {
   onAutoReplyChange: (value: boolean) => void;
   onSync: () => void;
   isSyncing?: boolean;
+  onFetchArchive?: () => void;
+  isFetchingArchive?: boolean;
 }
 
 export const ApiStatus = ({
@@ -19,6 +21,8 @@ export const ApiStatus = ({
   onAutoReplyChange,
   onSync,
   isSyncing = false,
+  onFetchArchive,
+  isFetchingArchive = false,
 }: ApiStatusProps) => {
   return (
     <div className="bg-card rounded-xl border border-border p-4 flex items-center justify-between">
@@ -42,6 +46,16 @@ export const ApiStatus = ({
           <Switch checked={autoReply} onCheckedChange={onAutoReplyChange} />
           <span className="text-sm font-medium text-foreground">Авто-ответы</span>
         </div>
+        {isConnected && onFetchArchive && (
+          <Button
+            onClick={onFetchArchive}
+            variant="outline"
+            disabled={isFetchingArchive}
+          >
+            <Archive className={cn("w-4 h-4 mr-2", isFetchingArchive && "animate-pulse")} />
+            {isFetchingArchive ? "Загрузка..." : "Загрузить архив"}
+          </Button>
+        )}
         <Button
           onClick={onSync}
           variant="outline"

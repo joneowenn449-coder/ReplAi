@@ -9,6 +9,7 @@ interface FilterTabsProps {
     pending: number;
     auto: number;
     sent: number;
+    archived: number;
   };
 }
 
@@ -23,6 +24,7 @@ export const FilterTabs = ({
     { id: "pending", label: "Ожидают", count: counts.pending },
     { id: "auto", label: "Автоответ", count: counts.auto },
     { id: "sent", label: "Отправлено", count: counts.sent },
+    { id: "archived", label: "Архив", count: counts.archived },
   ];
 
   return (

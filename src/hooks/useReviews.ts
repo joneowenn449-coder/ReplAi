@@ -12,7 +12,7 @@ export interface Review {
   product_article: string;
   photo_links: string[];
   created_date: string;
-  status: "new" | "pending" | "auto" | "sent";
+  status: "new" | "pending" | "auto" | "sent" | "archived";
   ai_draft: string | null;
   sent_answer: string | null;
   fetched_at: string;
@@ -76,6 +76,29 @@ export function useSyncReviews() {
     },
     onError: (error) => {
       toast.error(`Ошибка синхронизации: ${error.message}`);
+    },
+  });
+}
+
+export function useFetchArchive() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("fetch-archive");
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      const inserted = data?.inserted || 0;
+      const fetched = data?.fetched || 0;
+      toast.success(
+        `Архив загружен: ${inserted} новых из ${fetched} отзывов`
+      );
+    },
+    onError: (error) => {
+      toast.error(`Ошибка загрузки архива: ${error.message}`);
     },
   });
 }

@@ -27,6 +27,7 @@ import {
   useDeleteApiKey,
   DEFAULT_REPLY_MODES,
   ReplyModes,
+  ReplyMode,
 } from "@/hooks/useReviews";
 import { toast } from "sonner";
 import { Check, Pencil, Trash2, Loader2, KeyRound, Star } from "lucide-react";
@@ -75,7 +76,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
 
   const handleSaveSettings = () => {
     updateSettings.mutate(
-      { ai_prompt_template: prompt, reply_modes: replyModes },
+      { ai_prompt_template: prompt },
       {
         onSuccess: () => {
           toast.success("Настройки сохранены");
@@ -85,10 +86,19 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   };
 
   const handleToggleRating = (rating: string, checked: boolean) => {
-    setReplyModes((prev) => ({
-      ...prev,
-      [rating]: checked ? "auto" : "manual",
-    }));
+    const newModes: ReplyModes = {
+      ...replyModes,
+      [rating]: (checked ? "auto" : "manual") as ReplyMode,
+    };
+    setReplyModes(newModes);
+    updateSettings.mutate(
+      { reply_modes: newModes },
+      {
+        onSuccess: () => {
+          toast.success("Режим обновлён");
+        },
+      }
+    );
   };
 
   const handleValidateKey = () => {

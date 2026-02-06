@@ -117,12 +117,12 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg p-4 sm:p-5">
+        <DialogHeader className="pb-2">
           <DialogTitle>Настройки</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4">
           {/* API Key Section */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -237,19 +237,19 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
                 return (
                   <div
                     key={rating}
-                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 border border-border"
+                    className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/50 border border-border"
                   >
                     <div className="flex items-center gap-1.5">
                       {Array.from({ length: rating }).map((_, i) => (
                         <Star
                           key={i}
-                          className="w-4 h-4 fill-yellow-400 text-yellow-400"
+                          className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400"
                         />
                       ))}
                       {Array.from({ length: 5 - rating }).map((_, i) => (
                         <Star
                           key={`empty-${i}`}
-                          className="w-4 h-4 text-muted-foreground/30"
+                          className="w-3.5 h-3.5 text-muted-foreground/30"
                         />
                       ))}
                     </div>
@@ -278,7 +278,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[160px] text-sm"
+              className="min-h-[100px] text-sm"
               placeholder="Опишите, как ИИ должен отвечать на отзывы..."
             />
             <p className="text-xs text-muted-foreground">
@@ -286,18 +286,18 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
               генерации ответов на отзывы.
             </p>
           </div>
+        </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Отмена
-            </Button>
-            <Button
-              onClick={handleSaveSettings}
-              disabled={updateSettings.isPending}
-            >
-              {updateSettings.isPending ? "Сохранение..." : "Сохранить"}
-            </Button>
-          </div>
+        <div className="flex justify-end gap-2 pt-3 border-t border-border">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Отмена
+          </Button>
+          <Button
+            onClick={handleSaveSettings}
+            disabled={updateSettings.isPending}
+          >
+            {updateSettings.isPending ? "Сохранение..." : "Сохранить"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

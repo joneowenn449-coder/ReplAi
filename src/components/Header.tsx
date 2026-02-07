@@ -13,6 +13,17 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
   return (
     <div className="bg-card border-b border-border">
       <div className="max-w-6xl mx-auto px-6 py-4">
+        <div className="flex items-center gap-2 mb-4">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="hsl(var(--primary))" />
+            <path d="M10 12C10 10.8954 10.8954 10 12 10H16C18.2091 10 20 11.7909 20 14C20 16.2091 18.2091 18 16 18H13V22H10V12ZM13 15H16C16.5523 15 17 14.5523 17 14C17 13.4477 16.5523 13 16 13H13V15Z" fill="white" />
+            <path d="M16 16L21 22" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+          <span className="text-xl font-bold tracking-tight">
+            Repl<span className="text-primary">Ai</span>
+          </span>
+        </div>
+
         <NavTabs activeTab={activeTab} onTabChange={onTabChange} unreadChatsCount={unreadChatsCount} />
         
         <div className="flex items-start justify-between mt-6">

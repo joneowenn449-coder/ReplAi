@@ -1,66 +1,54 @@
 
-# Fix: sending the wrong (initial) draft version after regeneration
 
-## Problem
+# Короткие благодарности для пустых отзывов с 4-5 звёздами
 
-After regenerating a reply multiple times and clicking "Send", the system sends the initial version instead of the latest one. Two bugs cause this:
+## Что нужно сделать
 
-1. **`handleSend` does not pass text explicitly.** When not in edit mode, it sends `undefined` to the backend, which then reads `ai_draft` from the database. If a race condition occurs between multiple regeneration calls, the DB may have a stale version.
+Для пустых отзывов (без текста, плюсов и минусов) с рейтингом 4 или 5 звёзд -- генерировать короткий ответ-благодарность за высокую оценку вместо стандартного развёрнутого ответа. Режимы (авто/ручной) работают как обычно.
 
-2. **`editedText` state never syncs with new drafts.** It is initialized once via `useState(aiDraft || "")` and never updates when `aiDraft` changes from regeneration. If the user ever toggled edit mode, the stale value would be sent.
+## Что будет изменено
 
-## Solution
+### 1. `supabase/functions/generate-reply/index.ts`
 
-### File: `src/components/ReviewCard.tsx`
-
-**A. Always pass the visible text explicitly to send functions:**
-
-Change `handleSend` so it always resolves to the currently displayed text:
+Добавить проверку: если отзыв пустой (нет `text`, `pros`, `cons`) и рейтинг 4 или 5, использовать специальный короткий промпт вместо основного:
 
 ```text
-BEFORE:
-  const textToSend = customText || (editMode ? editedText : undefined);
-
-AFTER:
-  const textToSend = customText || (editMode ? editedText : aiDraft) || undefined;
+Специальный промпт для пустых 4-5 звёзд:
+"Покупатель оставил оценку [N] из 5 без текста. 
+ Напиши краткую благодарность за высокую оценку. 
+ Максимум 1-2 предложения. Без лишних деталей."
 ```
 
-This ensures that even without edit mode, the current `aiDraft` prop (which reflects the latest regeneration) is passed to the backend.
+Основной `ai_prompt_template` из настроек в этом случае не используется -- ответ должен быть максимально коротким.
 
-**B. Sync `editedText` when `aiDraft` prop changes:**
+### 2. `supabase/functions/sync-reviews/index.ts`
 
-Add a `useEffect` to keep `editedText` in sync when the prop updates (from regeneration):
+Аналогичная логика в функции `generateAIReply`:
+- Добавить параметр `isEmpty` (отзыв без текста)
+- Если `isEmpty === true` и рейтинг 4 или 5 -- использовать короткий промпт благодарности
+- Для пустых отзывов с рейтингом 1-3 -- оставить стандартное поведение (развёрнутый ответ)
 
-```typescript
-useEffect(() => {
-  if (!editMode) {
-    setEditedText(aiDraft || "");
-  }
-}, [aiDraft]);
-```
-
-**C. Disable "Send" button while regeneration is in progress:**
-
-Prevent the user from clicking "Send" while a new draft is being generated:
+### Схема логики
 
 ```text
-disabled={sendReply.isPending || generateReply.isPending}
+Пустой отзыв?
+  ├── Нет  --> стандартная генерация (как сейчас)
+  └── Да
+       ├── Рейтинг 4-5 --> короткая благодарность (1-2 предложения)
+       └── Рейтинг 1-3 --> стандартная генерация (как сейчас)
 ```
 
-This applies to both the draft section "Send" button and the sent-answer-edit "Send" button.
+## Что НЕ меняется
 
-### No backend changes needed
+- Режимы авто/ручной работают без изменений для всех отзывов
+- UI остаётся прежним
+- Для отзывов с текстом ничего не меняется
+- База данных не затрагивается
 
-The `send-reply` edge function already handles receiving explicit `answer_text` correctly. The fix is entirely on the frontend.
+## Файлы
 
-## Affected file
+| Файл | Изменение |
+|------|-----------|
+| `supabase/functions/generate-reply/index.ts` | Короткий промпт для пустых 4-5 звёзд |
+| `supabase/functions/sync-reviews/index.ts` | Та же логика в `generateAIReply` |
 
-| File | Change |
-|------|--------|
-| `src/components/ReviewCard.tsx` | Fix `handleSend` to always pass visible text; sync `editedText` with prop; disable Send during regeneration |
-
-## Result
-
-- The text visible on screen at the moment of clicking "Send" is exactly what gets sent to Wildberries
-- No more race conditions between regeneration and sending
-- Editing state stays in sync with the latest generated draft

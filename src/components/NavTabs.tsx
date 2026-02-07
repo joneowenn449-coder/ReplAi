@@ -4,9 +4,10 @@ import { Bot, MessageCircle } from "lucide-react";
 interface NavTabsProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  unreadChatsCount?: number;
 }
 
-export const NavTabs = ({ activeTab, onTabChange }: NavTabsProps) => {
+export const NavTabs = ({ activeTab, onTabChange, unreadChatsCount = 0 }: NavTabsProps) => {
   return (
     <div className="flex items-center gap-2">
       <button
@@ -31,6 +32,11 @@ export const NavTabs = ({ activeTab, onTabChange }: NavTabsProps) => {
       >
         <MessageCircle className="w-4 h-4" />
         Чаты
+        {unreadChatsCount > 0 && (
+          <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold leading-none">
+            {unreadChatsCount > 99 ? "99+" : unreadChatsCount}
+          </span>
+        )}
       </button>
       <button
         onClick={() => onTabChange("ai")}

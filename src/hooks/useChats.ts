@@ -59,6 +59,7 @@ export function useChats() {
       if (error) throw error;
       return (data as unknown as Chat[]) || [];
     },
+    refetchInterval: 30_000,
   });
 }
 

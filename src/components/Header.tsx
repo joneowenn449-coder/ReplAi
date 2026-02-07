@@ -6,13 +6,14 @@ interface HeaderProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onSettingsClick: () => void;
+  unreadChatsCount?: number;
 }
 
-export const Header = ({ activeTab, onTabChange, onSettingsClick }: HeaderProps) => {
+export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCount }: HeaderProps) => {
   return (
     <div className="bg-card border-b border-border">
       <div className="max-w-6xl mx-auto px-6 py-4">
-        <NavTabs activeTab={activeTab} onTabChange={onTabChange} />
+        <NavTabs activeTab={activeTab} onTabChange={onTabChange} unreadChatsCount={unreadChatsCount} />
         
         <div className="flex items-start justify-between mt-6">
           <div>

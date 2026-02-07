@@ -204,8 +204,10 @@ serve(async (req) => {
       }
     }
 
-    // Step 4: Update last_message_text and last_message_at for each chat
-    const { data: allChats } = await supabase.from("chats").select("chat_id");
+    // Step 4: Update last_message_text, last_message_at, and is_read for each chat
+    const { data: allChats } = await supabase
+      .from("chats")
+      .select("chat_id, last_message_at");
 
     if (allChats) {
       for (const chat of allChats) {
@@ -218,12 +220,22 @@ serve(async (req) => {
           .maybeSingle();
 
         if (lastMsg) {
+          const isNewClientMessage =
+            lastMsg.sender === "client" &&
+            (!chat.last_message_at || new Date(lastMsg.sent_at) > new Date(chat.last_message_at));
+
+          const updatePayload: Record<string, unknown> = {
+            last_message_text: lastMsg.text || "📎 Вложение",
+            last_message_at: lastMsg.sent_at,
+          };
+
+          if (isNewClientMessage) {
+            updatePayload.is_read = false;
+          }
+
           await supabase
             .from("chats")
-            .update({
-              last_message_text: lastMsg.text || (lastMsg.sender === "client" ? "📎 Вложение" : "📎 Вложение"),
-              last_message_at: lastMsg.sent_at,
-            })
+            .update(updatePayload)
             .eq("chat_id", chat.chat_id);
         }
       }

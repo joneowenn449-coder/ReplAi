@@ -40,11 +40,16 @@ async function fetchEvents(apiKey: string, next: number = 0) {
   const resp = await fetch(url, {
     headers: { Authorization: apiKey },
   });
+  const rawBody = await resp.text();
+  console.log(`[sync-chats] WB Events API response status: ${resp.status}, body: ${rawBody.slice(0, 500)}`);
   if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`WB Events API error ${resp.status}: ${text}`);
+    throw new Error(`WB Events API error ${resp.status}: ${rawBody}`);
   }
-  return resp.json();
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    throw new Error(`WB Events API returned non-JSON: ${rawBody.slice(0, 200)}`);
+  }
 }
 
 serve(async (req) => {
@@ -74,9 +79,8 @@ serve(async (req) => {
       throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
     }
 
-    // Step 1: Fetch chats list
     const chatsData = await fetchChats(WB_API_KEY);
-    const chats = chatsData?.chats || [];
+    const chats = chatsData?.chats || chatsData?.result || [];
 
     console.log(`Fetched ${chats.length} chats from WB`);
 
@@ -120,7 +124,9 @@ serve(async (req) => {
 
     while (hasMore && pagesProcessed < maxPages) {
       const eventsData = await fetchEvents(WB_API_KEY, next);
-      const events = eventsData?.events || [];
+      // WB API returns { result: { events: [...], next: N } }
+      const eventsContainer = eventsData?.result || eventsData;
+      const events = eventsContainer?.events || [];
 
       if (events.length === 0) {
         hasMore = false;
@@ -161,6 +167,8 @@ serve(async (req) => {
         }
 
         const sender = event.isManager || event.is_manager ? "seller" : "client";
+        const msgData = event.message;
+        const messageText = typeof msgData === "string" ? msgData : (msgData?.text || event.text || null);
         const sentAt = event.createdAt || event.created_at || new Date().toISOString();
 
         // Insert message (ignore duplicates via ON CONFLICT)
@@ -171,7 +179,7 @@ serve(async (req) => {
               chat_id: chatId,
               event_id: String(eventId),
               sender,
-              text: event.message || event.text || null,
+              text: messageText,
               attachments: attachments.length > 0 ? attachments : [],
               sent_at: sentAt,
             },
@@ -187,7 +195,7 @@ serve(async (req) => {
       }
 
       // Check for more pages
-      next = eventsData?.next || 0;
+      next = eventsContainer?.next || 0;
       hasMore = !!next;
       pagesProcessed++;
 

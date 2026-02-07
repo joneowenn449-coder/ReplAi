@@ -33,8 +33,7 @@ const Index = () => {
 
   const stats = {
     pending: reviews.filter((r) => r.status === "pending").length,
-    auto: reviews.filter((r) => r.status === "auto").length,
-    sent: reviews.filter((r) => r.status === "sent").length,
+    answered: reviews.filter((r) => r.status === "auto" || r.status === "sent").length,
     archived: reviews.filter((r) => r.status === "archived").length,
   };
 
@@ -46,7 +45,9 @@ const Index = () => {
   const filteredReviews =
     activeFilter === "all"
       ? activeReviews
-      : reviews.filter((r) => r.status === activeFilter);
+      : activeFilter === "answered"
+        ? reviews.filter((r) => r.status === "auto" || r.status === "sent")
+        : reviews.filter((r) => r.status === activeFilter);
 
   const handleSync = () => {
     syncReviews.mutate();
@@ -84,8 +85,7 @@ const Index = () => {
 
             <StatsCards
               pendingCount={stats.pending}
-              autoCount={stats.auto}
-              sentCount={stats.sent}
+              answeredCount={stats.answered}
             />
 
             <FilterTabs

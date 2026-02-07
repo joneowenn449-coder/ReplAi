@@ -43,6 +43,21 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
+    // Fetch recommendations for this product article
+    const { data: recommendations } = await supabase
+      .from("product_recommendations")
+      .select("target_article, target_name")
+      .eq("source_article", review.product_article);
+
+    let recommendationInstruction = "";
+    if (recommendations && recommendations.length > 0) {
+      const recList = recommendations
+        .map((r) => `- Артикул ${r.target_article}${r.target_name ? `: "${r.target_name}"` : ""}`)
+        .join("\n");
+      recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
+      console.log(`[generate-reply] Adding ${recommendations.length} recommendations to prompt`);
+    }
+
     const promptTemplate =
       settings?.ai_prompt_template ||
       "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
@@ -130,7 +145,7 @@ serve(async (req) => {
       ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
       : "";
 
-    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}`;
+    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
 
     console.log(`[generate-reply] Using prompt (${promptTemplate.length} chars): ${promptTemplate.substring(0, 200)}...`);
     console.log(`[generate-reply] User message: ${userMessage}`);

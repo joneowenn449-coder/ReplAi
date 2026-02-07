@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useReviews";
 import { toast } from "sonner";
 import { Check, Pencil, Trash2, Loader2, KeyRound, Star } from "lucide-react";
+import { RecommendationsSection } from "@/components/RecommendationsSection";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -279,6 +280,9 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
               })}
             </div>
           </div>
+
+          {/* Recommendations Section */}
+          <RecommendationsSection />
 
           {/* AI Prompt Section */}
           <div className="space-y-2">

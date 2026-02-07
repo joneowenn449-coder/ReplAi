@@ -48,7 +48,7 @@ export const NavTabs = ({ activeTab, onTabChange, unreadChatsCount = 0 }: NavTab
         )}
       >
         <Bot className="w-4 h-4" />
-        AI
+        AI аналитик
       </button>
     </div>
   );

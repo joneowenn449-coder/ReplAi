@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -19,7 +18,6 @@ import { Plus, X, Package, Loader2 } from "lucide-react";
 export const RecommendationsSection = () => {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [newArticle, setNewArticle] = useState("");
-  const [newName, setNewName] = useState("");
 
   const { data: articles = [], isLoading: articlesLoading } =
     useProductArticles();
@@ -28,18 +26,23 @@ export const RecommendationsSection = () => {
   const addRecommendation = useAddRecommendation();
   const deleteRecommendation = useDeleteRecommendation();
 
+  const existingArticles = new Set(recommendations.map((r) => r.target_article));
+  const availableArticles = articles.filter(
+    (a) => a.article !== selectedArticle && !existingArticles.has(a.article)
+  );
+
   const handleAdd = () => {
-    if (!selectedArticle || !newArticle.trim()) return;
+    if (!selectedArticle || !newArticle) return;
+    const targetName = articles.find((a) => a.article === newArticle)?.name || "";
     addRecommendation.mutate(
       {
         sourceArticle: selectedArticle,
-        targetArticle: newArticle.trim(),
-        targetName: newName.trim(),
+        targetArticle: newArticle,
+        targetName,
       },
       {
         onSuccess: () => {
           setNewArticle("");
-          setNewName("");
         },
       }
     );
@@ -132,25 +135,29 @@ export const RecommendationsSection = () => {
 
           {/* Add new recommendation */}
           <div className="flex gap-2">
-            <Input
-              value={newArticle}
-              onChange={(e) => setNewArticle(e.target.value)}
-              placeholder="Артикул"
-              className="font-mono text-sm flex-1"
-            />
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Название (необяз.)"
-              className="text-sm flex-1"
-            />
+            <Select value={newArticle} onValueChange={setNewArticle}>
+              <SelectTrigger className="flex-1 font-mono text-sm">
+                <SelectValue placeholder="Выберите артикул..." />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border z-50">
+                {availableArticles.length === 0 ? (
+                  <div className="py-3 px-2 text-sm text-muted-foreground text-center">
+                    Нет доступных артикулов
+                  </div>
+                ) : (
+                  availableArticles.map((a) => (
+                    <SelectItem key={a.article} value={a.article}>
+                      {a.article}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               size="icon"
               onClick={handleAdd}
-              disabled={
-                !newArticle.trim() || addRecommendation.isPending
-              }
+              disabled={!newArticle || addRecommendation.isPending}
               title="Добавить рекомендацию"
             >
               {addRecommendation.isPending ? (

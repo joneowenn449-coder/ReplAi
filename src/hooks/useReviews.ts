@@ -48,12 +48,24 @@ export function useReviews() {
   return useQuery({
     queryKey: ["reviews"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("reviews")
-        .select("*")
-        .order("created_date", { ascending: false });
-      if (error) throw error;
-      return (data as unknown as Review[]) || [];
+      const allReviews: Review[] = [];
+      const pageSize = 1000;
+      let from = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("reviews")
+          .select("*")
+          .order("created_date", { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const rows = (data as unknown as Review[]) || [];
+        allReviews.push(...rows);
+        if (rows.length < pageSize) break;
+        from += pageSize;
+      }
+
+      return allReviews;
     },
   });
 }

@@ -32,7 +32,6 @@ const Index = () => {
   const activeReviews = reviews.filter((r) => r.status !== "archived");
 
   const stats = {
-    new: reviews.filter((r) => r.status === "new").length,
     pending: reviews.filter((r) => r.status === "pending").length,
     auto: reviews.filter((r) => r.status === "auto").length,
     sent: reviews.filter((r) => r.status === "sent").length,
@@ -84,7 +83,6 @@ const Index = () => {
             />
 
             <StatsCards
-              newCount={stats.new}
               pendingCount={stats.pending}
               autoCount={stats.auto}
               sentCount={stats.sent}

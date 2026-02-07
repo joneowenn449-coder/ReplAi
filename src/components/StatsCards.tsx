@@ -1,26 +1,17 @@
-import { MessageSquare, Clock, Zap, Send } from "lucide-react";
+import { Clock, Zap, Send } from "lucide-react";
 
 interface StatsCardsProps {
-  newCount: number;
   pendingCount: number;
   autoCount: number;
   sentCount: number;
 }
 
 export const StatsCards = ({
-  newCount,
   pendingCount,
   autoCount,
   sentCount,
 }: StatsCardsProps) => {
   const stats = [
-    {
-      label: "Новые",
-      value: newCount,
-      icon: MessageSquare,
-      iconClass: "text-stat-new-icon",
-      bgClass: "bg-stat-new",
-    },
     {
       label: "Ожидают",
       value: pendingCount,
@@ -45,7 +36,7 @@ export const StatsCards = ({
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-3 gap-4">
       {stats.map((stat) => (
         <div key={stat.label} className="stat-card">
           <div className={`p-2 rounded-lg ${stat.bgClass}`}>

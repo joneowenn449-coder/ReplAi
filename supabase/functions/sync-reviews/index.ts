@@ -45,8 +45,46 @@ async function generateAIReply(
   productName: string,
   photoCount: number = 0,
   hasVideo: boolean = false,
-  authorName: string = ""
+  authorName: string = "",
+  isEmpty: boolean = false
 ) {
+  // For empty reviews with 4-5 stars, use a short gratitude prompt
+  if (isEmpty && rating >= 4) {
+    const nameInstruction = authorName && authorName !== "Покупатель"
+      ? ` Обратись к покупателю по имени: ${authorName}.`
+      : "";
+
+    const shortPrompt = `Покупатель оставил оценку ${rating} из 5 без текста. Напиши краткую благодарность за высокую оценку. Максимум 1-2 предложения. Без лишних деталей.${nameInstruction}`;
+
+    console.log(`[sync-reviews] Empty review with ${rating}★, using short gratitude prompt`);
+
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "user", content: shortPrompt },
+        ],
+        max_tokens: 200,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`OpenRouter error ${resp.status}: ${text}`);
+    }
+
+    const data = await resp.json();
+    const reply = data.choices?.[0]?.message?.content || "";
+    console.log(`[sync-reviews] Short gratitude response: ${reply}`);
+    return reply;
+  }
+
   // Build attachment info
   let attachmentInfo = "";
   if (photoCount > 0 || hasVideo) {
@@ -167,6 +205,9 @@ serve(async (req) => {
       const photoLinks = fb.photoLinks || [];
       const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
 
+      // Check if review is empty (no text, pros, cons)
+      const isEmptyReview = !fb.text && !fb.pros && !fb.cons;
+
       // Generate AI draft
       let aiDraft = "";
       try {
@@ -178,7 +219,8 @@ serve(async (req) => {
           fb.productDetails?.productName || fb.subjectName || "Товар",
           photoLinks.length,
           hasVideo,
-          fb.userName || ""
+          fb.userName || "",
+          isEmptyReview
         );
       } catch (e) {
         console.error(`AI generation failed for ${wbId}:`, e);

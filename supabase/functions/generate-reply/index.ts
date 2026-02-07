@@ -47,6 +47,61 @@ serve(async (req) => {
       settings?.ai_prompt_template ||
       "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
 
+    // Check if review is empty (no text, pros, cons)
+    const isEmptyReview = !review.text && !review.pros && !review.cons;
+    const isHighRating = review.rating >= 4;
+
+    // For empty reviews with 4-5 stars, use a short gratitude prompt
+    if (isEmptyReview && isHighRating) {
+      const authorName = review.author_name || "";
+      const nameInstruction = authorName && authorName !== "Покупатель"
+        ? ` Обратись к покупателю по имени: ${authorName}.`
+        : "";
+
+      const shortPrompt = `Покупатель оставил оценку ${review.rating} из 5 без текста. Напиши краткую благодарность за высокую оценку. Максимум 1-2 предложения. Без лишних деталей.${nameInstruction}`;
+
+      console.log(`[generate-reply] Empty review with ${review.rating}★, using short gratitude prompt`);
+
+      const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "user", content: shortPrompt },
+          ],
+          max_tokens: 200,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!aiResp.ok) {
+        const text = await aiResp.text();
+        throw new Error(`OpenRouter error ${aiResp.status}: ${text}`);
+      }
+
+      const aiData = await aiResp.json();
+      const newDraft = aiData.choices?.[0]?.message?.content || "";
+      console.log(`[generate-reply] Short gratitude response: ${newDraft}`);
+
+      if (!newDraft) throw new Error("AI returned empty response");
+
+      const { error: updateError } = await supabase
+        .from("reviews")
+        .update({ ai_draft: newDraft, status: "pending" })
+        .eq("id", review_id);
+
+      if (updateError) throw new Error(`DB update error: ${updateError.message}`);
+
+      return new Response(
+        JSON.stringify({ success: true, draft: newDraft }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Build attachment info
     const photoLinks = Array.isArray(review.photo_links) ? review.photo_links : [];
     const photoCount = photoLinks.length;

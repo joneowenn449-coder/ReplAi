@@ -1,39 +1,58 @@
 
-# Автоматическая синхронизация чатов каждые 5 минут
+# Исправление: диагностика и отображение новых сообщений в чатах
+
+## Обнаруженные проблемы
+
+### 1. Нет диагностики ответа WB Chat API
+Функция `sync-chats` логирует только `Fetched 0 chats from WB`, но не показывает сырой ответ от API. Если WB вернул ошибку в теле ответа (но с кодом 200), мы её не видим.
+
+### 2. Валидация ключа не проверяет Chat API
+Функция `validate-api-key` проверяет ключ только через Feedbacks API (`feedbacks-api.wildberries.ru`). Если новый токен не имеет прав категории "Buyers chat" (9), ключ проходит валидацию, но чаты не работают.
+
+### 3. Нет realtime-обновлений
+Даже если синхронизация заработает, новые сообщения появятся только после ручного обновления страницы или следующего цикла синхронизации (5 минут).
 
 ## Что будет сделано
 
-Добавить cron-задачу в базу данных, которая каждые 5 минут автоматически вызывает Edge Function `sync-chats`. Это полностью аналогично уже работающей автосинхронизации отзывов.
+### Шаг 1. Добавить детальное логирование в `sync-chats`
+Логировать полный ответ WB Chat API, чтобы видеть реальную причину пустого списка.
 
-## Как это работает
+**Файл:** `supabase/functions/sync-chats/index.ts`
+- В функции `fetchChats()` логировать HTTP-статус и тело ответа
+- Добавить логирование используемого ключа (первые/последние символы)
 
-Расширения `pg_cron` и `pg_net` уже установлены в проекте. Нужно только зарегистрировать новое расписание, которое будет каждые 5 минут отправлять HTTP-запрос к функции `sync-chats`.
+### Шаг 2. Добавить проверку Chat API при валидации ключа
+Расширить `validate-api-key` — после проверки Feedbacks API дополнительно проверять Chat API. Если Chat API недоступен — предупредить пользователя, что чаты работать не будут.
 
-## Изменения
+**Файл:** `supabase/functions/validate-api-key/index.ts`
+- Добавить тестовый запрос к `buyer-chat-api.wildberries.ru/api/v1/seller/chats`
+- В ответе возвращать статус доступа к чатам (`chat_access: true/false`)
+- Показывать предупреждение в UI, если Chat API недоступен
 
-### SQL-запрос для создания cron-задачи
+### Шаг 3. Включить Realtime для таблицы `chat_messages`
+Добавить `chat_messages` в realtime-публикацию, чтобы новые сообщения появлялись мгновенно.
 
-Выполнить SQL-запрос напрямую (не через миграцию, так как он содержит URL и ключ проекта):
-
-```sql
-SELECT cron.schedule(
-  'sync-chats-every-5-min',
-  '*/5 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://yzlrebnfslyvqscjmmwh.supabase.co/functions/v1/sync-chats',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bHJlYm5mc2x5dnFzY2ptbXdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNjgwMTAsImV4cCI6MjA4NTk0NDAxMH0.Ys-lY7wZ9EN82hkmzZXwcrREXHlmUzL4wxHXPRLM-6o"}'::jsonb,
-    body := concat('{"time": "', now(), '"}')::jsonb
-  ) AS request_id;
-  $$
-);
+**Файл:** SQL-миграция
+```
+ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
 ```
 
-Это единственное изменение -- никаких файлов создавать или менять не нужно.
+### Шаг 4. Добавить Realtime-подписку в хук `useChats`
+Подписаться на изменения в `chat_messages`, чтобы UI обновлялся автоматически.
 
-## Технические детали
+**Файл:** `src/hooks/useChats.ts`
+- Добавить Supabase Realtime подписку на `chat_messages`
+- При новом сообщении автоматически инвалидировать кеш запросов
 
-- Расписание: `*/5 * * * *` (каждые 5 минут)
-- Имя задачи: `sync-chats-every-5-min`
-- Используются уже установленные расширения `pg_cron` и `pg_net`
-- Запрос выполняется напрямую через SQL (аналогично sync-reviews), а не через миграцию
+## Затрагиваемые файлы
+
+| Файл | Действие |
+|------|----------|
+| `supabase/functions/sync-chats/index.ts` | Добавить логирование ответа API |
+| `supabase/functions/validate-api-key/index.ts` | Добавить проверку Chat API |
+| SQL-миграция | Включить realtime для chat_messages |
+| `src/hooks/useChats.ts` | Добавить Realtime-подписку |
+
+## Следующий шаг после реализации
+
+После деплоя обновлённой `sync-chats` нужно будет вызвать синхронизацию вручную и проверить логи — это покажет, что именно возвращает WB Chat API с текущим ключом.

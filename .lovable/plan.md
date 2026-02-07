@@ -1,77 +1,135 @@
 
 
-# Исправление: ИИ не обращается по имени к покупателю
+# Добавление полей "Плюсы" и "Недостатки" в отзывы
 
 ## Проблема
 
-Имя покупателя (`author_name`) хранится в базе данных, но не передаётся в запрос к ИИ при генерации ответа. Модель просто не знает, как зовут покупателя.
+API Wildberries возвращает три текстовых поля в отзыве: `text` (комментарий), `pros` (плюсы) и `cons` (недостатки). Сейчас в базу сохраняется и отображается только `text`, а два других поля полностью игнорируются.
 
-## Что будет исправлено
+## Что будет сделано
 
-### 1. generate-reply (для кнопки "Перегенерировать")
+### Шаг 1. Добавить колонки в базу данных
 
-**Файл:** `supabase/functions/generate-reply/index.ts`
-
-Добавить имя покупателя в пользовательское сообщение:
+Создать миграцию для добавления двух новых колонок в таблицу `reviews`:
 
 ```
-// Было (строка 65):
-const userMessage = `ВАЖНО: строго следуй...
-
-Отзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":
-
-${review.text || "(Без текста, только оценка)"}${attachmentInfo}`;
-
-// Станет:
-const authorName = review.author_name || "";
-const nameInstruction = authorName && authorName !== "Покупатель"
-  ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
-  : "";
-
-const userMessage = `ВАЖНО: строго следуй...
-
-Отзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":
-
-${review.text || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}`;
+ALTER TABLE reviews ADD COLUMN pros TEXT DEFAULT NULL;
+ALTER TABLE reviews ADD COLUMN cons TEXT DEFAULT NULL;
 ```
 
-Логика: если имя есть и оно не дефолтное "Покупатель" -- добавляется инструкция обратиться по имени.
-
-### 2. sync-reviews (для автоответов при синхронизации)
+### Шаг 2. Обновить sync-reviews
 
 **Файл:** `supabase/functions/sync-reviews/index.ts`
 
-- Добавить параметр `authorName` в функцию `generateAIReply`
-- Добавить ту же инструкцию с именем в пользовательское сообщение
-- Передать `fb.userName` при вызове функции
+При сохранении нового отзыва добавить поля `pros` и `cons`:
 
 ```
-// Сигнатура функции:
-async function generateAIReply(
-  apiKey, systemPrompt, reviewText, rating, productName,
-  photoCount, hasVideo, authorName  // <-- новый параметр
-)
+// Было:
+text: fb.text || null,
 
-// Внутри функции -- добавить в userMessage:
-const nameInstruction = authorName && authorName !== "Покупатель"
-  ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
-  : "";
-
-// При вызове (строка 160):
-aiDraft = await generateAIReply(
-  ...,
-  fb.userName || ""  // <-- передать имя
-);
+// Станет:
+text: fb.text || null,
+pros: fb.pros || null,
+cons: fb.cons || null,
 ```
+
+Также передавать все три поля в функцию `generateAIReply`, чтобы ИИ видел полный контент отзыва. Формат пользовательского сообщения изменится:
+
+```
+// Вместо просто review.text, будет составной текст:
+Отзыв (4 из 5 звёзд) на товар "Название":
+
+Комментарий: текст комментария
+
+Плюсы: текст плюсов
+
+Недостатки: текст недостатков
+```
+
+### Шаг 3. Обновить fetch-archive
+
+**Файл:** `supabase/functions/fetch-archive/index.ts`
+
+Аналогичное изменение -- добавить `pros` и `cons` при сохранении архивных отзывов.
+
+### Шаг 4. Обновить generate-reply
+
+**Файл:** `supabase/functions/generate-reply/index.ts`
+
+Формировать полный текст отзыва из всех трёх полей при отправке запроса к ИИ:
+
+```
+// Составить полный текст из трёх полей:
+let reviewContent = "";
+if (review.text) reviewContent += `Комментарий: ${review.text}`;
+if (review.pros) reviewContent += `\nПлюсы: ${review.pros}`;
+if (review.cons) reviewContent += `\nНедостатки: ${review.cons}`;
+if (!reviewContent) reviewContent = "(Без текста, только оценка)";
+```
+
+### Шаг 5. Обновить интерфейс Review
+
+**Файл:** `src/hooks/useReviews.ts`
+
+Добавить поля `pros` и `cons` в интерфейс `Review`:
+
+```
+export interface Review {
+  ...
+  text: string | null;
+  pros: string | null;   // новое
+  cons: string | null;   // новое
+  ...
+}
+```
+
+### Шаг 6. Обновить карточку отзыва
+
+**Файл:** `src/components/ReviewCard.tsx`
+
+Добавить пропсы `pros` и `cons` и отображать их с подписями:
+
+```
+// Вместо одного блока text -- три блока с подписями:
+
+{text && (
+  <div>
+    <span className="text-xs font-medium text-muted-foreground">Комментарий:</span>
+    <p className="text-sm">{text}</p>
+  </div>
+)}
+{pros && (
+  <div>
+    <span className="text-xs font-medium text-green-600">Плюсы:</span>
+    <p className="text-sm">{pros}</p>
+  </div>
+)}
+{cons && (
+  <div>
+    <span className="text-xs font-medium text-red-500">Недостатки:</span>
+    <p className="text-sm">{cons}</p>
+  </div>
+)}
+```
+
+### Шаг 7. Передать данные из Index.tsx
+
+**Файл:** `src/pages/Index.tsx`
+
+Передавать `pros` и `cons` в компонент `ReviewCard`.
 
 ## Затрагиваемые файлы
 
 | Файл | Изменение |
 |------|-----------|
-| `supabase/functions/generate-reply/index.ts` | Добавить имя покупателя и инструкцию в userMessage |
-| `supabase/functions/sync-reviews/index.ts` | Добавить параметр authorName в generateAIReply и передать его при вызове |
+| Миграция БД | Добавить колонки `pros` и `cons` |
+| `supabase/functions/sync-reviews/index.ts` | Сохранять `pros`, `cons`; передавать полный текст в ИИ |
+| `supabase/functions/fetch-archive/index.ts` | Сохранять `pros`, `cons` |
+| `supabase/functions/generate-reply/index.ts` | Формировать полный текст из трёх полей |
+| `src/hooks/useReviews.ts` | Добавить `pros`, `cons` в интерфейс |
+| `src/components/ReviewCard.tsx` | Отображать три поля с подписями |
+| `src/pages/Index.tsx` | Передавать `pros`, `cons` в ReviewCard |
 
-## Ожидаемый результат
+## Важно
 
-- Если у покупателя указано имя (например, "Гузяль") -- ИИ обратится по имени: "Гузяль, спасибо за ваш отзыв!"
-- Если имя не указано или стоит дефолтное "Покупатель" -- ИИ ответит без обращения по имени, чтобы ответ выглядел естественно
+Уже загруженные отзывы в базе не содержат `pros` и `cons` (они будут `null`). Чтобы получить эти поля для существующих отзывов, нужно будет пересинхронизировать данные. Новые отзывы после обновления будут сохранять все три поля автоматически.

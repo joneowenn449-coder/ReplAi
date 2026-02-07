@@ -96,6 +96,14 @@ async function generateAIReply(
   return reply;
 }
 
+function buildReviewText(text?: string, pros?: string, cons?: string): string {
+  const parts: string[] = [];
+  if (text) parts.push(`Комментарий: ${text}`);
+  if (pros) parts.push(`Плюсы: ${pros}`);
+  if (cons) parts.push(`Недостатки: ${cons}`);
+  return parts.length > 0 ? parts.join("\n\n") : "";
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -165,7 +173,7 @@ serve(async (req) => {
         aiDraft = await generateAIReply(
           OPENROUTER_API_KEY,
           promptTemplate,
-          fb.text || "",
+          buildReviewText(fb.text, fb.pros, fb.cons),
           fb.productValuation || 5,
           fb.productDetails?.productName || fb.subjectName || "Товар",
           photoLinks.length,
@@ -203,6 +211,8 @@ serve(async (req) => {
         rating: fb.productValuation || 5,
         author_name: fb.userName || "Покупатель",
         text: fb.text || null,
+        pros: fb.pros || null,
+        cons: fb.cons || null,
         product_name:
           fb.productDetails?.productName || fb.subjectName || "Товар",
         product_article:

@@ -120,6 +120,8 @@ const Index = () => {
                       ).filter(Boolean)
                     }
                     text={review.text}
+                    pros={review.pros}
+                    cons={review.cons}
                     aiDraft={review.ai_draft}
                     sentAnswer={review.sent_answer}
                   />

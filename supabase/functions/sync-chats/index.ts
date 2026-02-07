@@ -13,15 +13,26 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function maskKey(key: string): string {
+  if (key.length > 8) return key.slice(0, 4) + "****" + key.slice(-4);
+  return "****";
+}
+
 async function fetchChats(apiKey: string) {
+  console.log(`[sync-chats] Fetching chats with key: ${maskKey(apiKey)}`);
   const resp = await fetch(`${WB_CHAT_BASE}/api/v1/seller/chats`, {
     headers: { Authorization: apiKey },
   });
+  const rawBody = await resp.text();
+  console.log(`[sync-chats] WB Chats API response status: ${resp.status}, body: ${rawBody.slice(0, 500)}`);
   if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`WB Chats API error ${resp.status}: ${text}`);
+    throw new Error(`WB Chats API error ${resp.status}: ${rawBody}`);
   }
-  return resp.json();
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    throw new Error(`WB Chats API returned non-JSON: ${rawBody.slice(0, 200)}`);
+  }
 }
 
 async function fetchEvents(apiKey: string, next: number = 0) {

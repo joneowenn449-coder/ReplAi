@@ -72,6 +72,20 @@ serve(async (req) => {
       if (error) throw new Error(`DB error: ${error.message}`);
     }
 
+    // Test chat API access
+    let chatAccess = false;
+    try {
+      const chatResp = await fetch(
+        "https://buyer-chat-api.wildberries.ru/api/v1/seller/chats",
+        { headers: { Authorization: trimmedKey } }
+      );
+      const chatBody = await chatResp.text();
+      console.log(`Chat API test: status=${chatResp.status}, body=${chatBody.slice(0, 200)}`);
+      chatAccess = chatResp.ok;
+    } catch (chatErr) {
+      console.error("Chat API test failed:", chatErr);
+    }
+
     // Return masked key
     const masked =
       trimmedKey.length > 8
@@ -79,7 +93,7 @@ serve(async (req) => {
         : "****";
 
     return new Response(
-      JSON.stringify({ valid: true, masked_key: masked }),
+      JSON.stringify({ valid: true, masked_key: masked, chat_access: chatAccess }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

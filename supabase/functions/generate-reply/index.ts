@@ -62,7 +62,12 @@ serve(async (req) => {
       attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
     }
 
-    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${review.text || "(Без текста, только оценка)"}${attachmentInfo}`;
+    const authorName = review.author_name || "";
+    const nameInstruction = authorName && authorName !== "Покупатель"
+      ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
+      : "";
+
+    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${review.text || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}`;
 
     console.log(`[generate-reply] Using prompt (${promptTemplate.length} chars): ${promptTemplate.substring(0, 200)}...`);
     console.log(`[generate-reply] User message: ${userMessage}`);

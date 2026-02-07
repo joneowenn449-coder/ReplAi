@@ -1,79 +1,54 @@
 
 
-# Исправление: ИИ не следует правилам из промпта
+# Исправление ошибки отправки ответа на отзыв
 
-## Диагностика
+## Причина ошибки
 
-Промпт в базе данных сохранён корректно со всеми правилами (LUNERA, emoji, 50-100 слов, логика по рейтингам). Функция `generate-reply` правильно читает его из базы и передаёт в OpenRouter как системный промпт.
+Функция `send-reply` отправляет запрос на неправильный эндпоинт WB API:
 
-Однако есть несколько причин, почему модель может игнорировать правила:
+| | Сейчас (ошибка) | Нужно (правильно) |
+|---|---|---|
+| URL | `/api/v1/feedbacks` | `/api/v1/feedbacks/answer` |
+| Метод | `PATCH` | `POST` |
 
-1. **`max_tokens: 500`** -- ограничение на выход может заставить модель сокращать ответ и пропускать правила
-2. **Нет усиления промпта** -- правила передаются только как `system`, но не дублируются в пользовательском сообщении. Gemini Flash лучше следует инструкциям, если они явно напоминаются
-3. **Нет логирования** -- невозможно проверить, какой промпт реально дошёл до ИИ при перегенерации
-4. **Одна и та же модель** -- `google/gemini-2.5-flash` -- быстрая, но менее точная в следовании сложным инструкциям
+Эндпоинт `/api/v1/feedbacks` принимает только GET/HEAD (получение списка отзывов), поэтому WB возвращает 405 Method Not Allowed.
 
-## Что будет сделано
+По документации WB API:
+- `POST /api/v1/feedbacks/answer` -- отправить новый ответ на отзыв
+- `PATCH /api/v1/feedbacks/answer` -- отредактировать уже отправленный ответ
 
-### Шаг 1. Усилить передачу промпта в `generate-reply`
+## Что будет исправлено
 
-**Файл:** `supabase/functions/generate-reply/index.ts`
+**Файл:** `supabase/functions/send-reply/index.ts`
 
-- Увеличить `max_tokens` с 500 до 1000 (промпт требует 50-100 слов, но с запасом)
-- Добавить в пользовательское сообщение напоминание: "Строго следуй всем правилам из системного промпта"
-- Добавить параметр `temperature: 0.7` для более предсказуемого поведения
-- Добавить логирование: какой промпт используется, длина промпта, длина ответа
+Строка 51-52 -- изменить URL и метод:
 
-### Шаг 2. Усилить передачу промпта в `sync-reviews`
-
-**Файл:** `supabase/functions/sync-reviews/index.ts`
-
-Та же функция `generateAIReply` используется при синхронизации -- применить те же улучшения:
-- Увеличить `max_tokens` до 1000
-- Добавить напоминание о правилах в пользовательское сообщение
-- Добавить `temperature: 0.7`
-
-### Конкретные изменения в коде
-
-**generate-reply** -- формирование сообщения:
 ```text
 // Было:
-userMessage = `Отзыв (${rating} из 5 звёзд)...`
+fetch("https://feedbacks-api.wildberries.ru/api/v1/feedbacks", {
+  method: "PATCH",
+  ...
+  body: JSON.stringify({ id: review.wb_id, text: textToSend }),
+})
 
 // Станет:
-userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.
-
-Отзыв (${rating} из 5 звёзд)...`
+fetch("https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer", {
+  method: "POST",
+  ...
+  body: JSON.stringify({ id: review.wb_id, text: textToSend }),
+})
 ```
 
-**generate-reply** -- параметры запроса:
-```text
-// Было:
-{ model: "google/gemini-2.5-flash", max_tokens: 500 }
-
-// Станет:
-{ model: "google/gemini-2.5-flash", max_tokens: 1000, temperature: 0.7 }
-```
-
-**generate-reply** -- логирование:
-```text
-console.log(`[generate-reply] Using prompt (${promptTemplate.length} chars): ${promptTemplate.substring(0, 100)}...`);
-console.log(`[generate-reply] User message: ${userMessage}`);
-console.log(`[generate-reply] AI response (${newDraft.length} chars): ${newDraft.substring(0, 100)}...`);
-```
+Также нужно проверить `sync-reviews`, если в нём есть автоотправка через тот же неправильный URL -- и исправить его аналогично.
 
 ## Затрагиваемые файлы
 
 | Файл | Изменение |
 |------|-----------|
-| `supabase/functions/generate-reply/index.ts` | Усилить промпт, увеличить max_tokens, добавить temperature, логирование |
-| `supabase/functions/sync-reviews/index.ts` | Те же улучшения в функции `generateAIReply` |
+| `supabase/functions/send-reply/index.ts` | Исправить URL на `/api/v1/feedbacks/answer` и метод на `POST` |
+| `supabase/functions/sync-reviews/index.ts` | Проверить и исправить URL автоотправки, если он тоже неправильный |
 
 ## Ожидаемый результат
 
-После изменений при нажатии "Перегенерировать" ИИ будет:
-- Получать явное напоминание следовать правилам
-- Иметь больше токенов для полноценного ответа
-- Генерировать более предсказуемые ответы (temperature 0.7)
-- Оставлять логи для диагностики, если проблема повторится
+После исправления ответы на отзывы будут успешно отправляться в Wildberries.
 

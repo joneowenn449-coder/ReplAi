@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Header } from "@/components/Header";
 import { ApiStatus } from "@/components/ApiStatus";
+import { useChats } from "@/hooks/useChats";
 import { StatsCards } from "@/components/StatsCards";
 import { FilterTabs } from "@/components/FilterTabs";
 import { ReviewCard } from "@/components/ReviewCard";
@@ -22,8 +23,11 @@ const Index = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
+  const { data: chats = [] } = useChats();
   const { data: settings } = useSettings();
   const syncReviews = useSyncReviews();
+
+  const unreadChatsCount = chats.filter((c) => !c.is_read).length;
 
   const replyModes = settings?.reply_modes ?? DEFAULT_REPLY_MODES;
 
@@ -64,6 +68,7 @@ const Index = () => {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onSettingsClick={() => setSettingsOpen(true)}
+        unreadChatsCount={unreadChatsCount}
       />
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">

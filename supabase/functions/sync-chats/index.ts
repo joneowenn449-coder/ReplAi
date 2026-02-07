@@ -121,6 +121,7 @@ serve(async (req) => {
     let hasMore = true;
     let pagesProcessed = 0;
     const maxPages = 10; // Safety limit
+    const chatsWithNewClientMessages = new Set<string>();
 
     while (hasMore && pagesProcessed < maxPages) {
       const eventsData = await fetchEvents(WB_API_KEY, next);
@@ -171,8 +172,8 @@ serve(async (req) => {
         const messageText = typeof msgData === "string" ? msgData : (msgData?.text || event.text || null);
         const sentAt = event.createdAt || event.created_at || new Date().toISOString();
 
-        // Insert message (ignore duplicates via ON CONFLICT)
-        const { error: msgError } = await supabase
+        // Insert message — ignoreDuplicates: true means existing messages won't be overwritten
+        const { data: insertedRows, error: msgError } = await supabase
           .from("chat_messages")
           .upsert(
             {
@@ -183,14 +184,19 @@ serve(async (req) => {
               attachments: attachments.length > 0 ? attachments : [],
               sent_at: sentAt,
             },
-            { onConflict: "event_id" }
-          );
+            { onConflict: "event_id", ignoreDuplicates: true }
+          )
+          .select("event_id");
 
         if (msgError) {
           console.error(`Message insert error for event ${eventId}:`, msgError);
           errors.push(`Message error: ${msgError.message}`);
-        } else {
+        } else if (insertedRows && insertedRows.length > 0) {
+          // Row was actually inserted (not a duplicate)
           newMessages++;
+          if (sender === "client") {
+            chatsWithNewClientMessages.add(chatId);
+          }
         }
       }
 
@@ -204,10 +210,12 @@ serve(async (req) => {
       }
     }
 
+    console.log(`[sync-chats] New client messages in chats: ${[...chatsWithNewClientMessages].join(", ") || "none"}`);
+
     // Step 4: Update last_message_text, last_message_at, and is_read for each chat
     const { data: allChats } = await supabase
       .from("chats")
-      .select("chat_id, last_message_at");
+      .select("chat_id");
 
     if (allChats) {
       for (const chat of allChats) {
@@ -220,16 +228,13 @@ serve(async (req) => {
           .maybeSingle();
 
         if (lastMsg) {
-          const isNewClientMessage =
-            lastMsg.sender === "client" &&
-            (!chat.last_message_at || new Date(lastMsg.sent_at) > new Date(chat.last_message_at));
-
           const updatePayload: Record<string, unknown> = {
             last_message_text: lastMsg.text || "📎 Вложение",
             last_message_at: lastMsg.sent_at,
           };
 
-          if (isNewClientMessage) {
+          // Only mark as unread if there are genuinely new client messages
+          if (chatsWithNewClientMessages.has(chat.chat_id)) {
             updatePayload.is_read = false;
           }
 

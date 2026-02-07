@@ -44,7 +44,8 @@ async function generateAIReply(
   rating: number,
   productName: string,
   photoCount: number = 0,
-  hasVideo: boolean = false
+  hasVideo: boolean = false,
+  authorName: string = ""
 ) {
   // Build attachment info
   let attachmentInfo = "";
@@ -58,7 +59,11 @@ async function generateAIReply(
     attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
   }
 
-  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}`;
+  const nameInstruction = authorName && authorName !== "Покупатель"
+    ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
+    : "";
+
+  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}`;
 
   console.log(`[sync-reviews] AI prompt (${systemPrompt.length} chars): ${systemPrompt.substring(0, 200)}...`);
   console.log(`[sync-reviews] AI user message: ${userMessage}`);
@@ -164,7 +169,8 @@ serve(async (req) => {
           fb.productValuation || 5,
           fb.productDetails?.productName || fb.subjectName || "Товар",
           photoLinks.length,
-          hasVideo
+          hasVideo,
+          fb.userName || ""
         );
       } catch (e) {
         console.error(`AI generation failed for ${wbId}:`, e);

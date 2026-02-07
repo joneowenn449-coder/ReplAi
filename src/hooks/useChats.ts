@@ -1,0 +1,112 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+export interface Chat {
+  id: string;
+  chat_id: string;
+  reply_sign: string | null;
+  client_name: string;
+  product_nm_id: number | null;
+  product_name: string;
+  last_message_text: string | null;
+  last_message_at: string | null;
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  chat_id: string;
+  event_id: string;
+  sender: "client" | "seller";
+  text: string | null;
+  attachments: Array<{ type: string; id: string; name?: string }>;
+  sent_at: string;
+  created_at: string;
+}
+
+export function useChats() {
+  return useQuery({
+    queryKey: ["chats"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chats")
+        .select("*")
+        .order("last_message_at", { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return (data as unknown as Chat[]) || [];
+    },
+  });
+}
+
+export function useChatMessages(chatId: string | null) {
+  return useQuery({
+    queryKey: ["chat_messages", chatId],
+    queryFn: async () => {
+      if (!chatId) return [];
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("chat_id", chatId)
+        .order("sent_at", { ascending: true });
+      if (error) throw error;
+      return (data as unknown as ChatMessage[]) || [];
+    },
+    enabled: !!chatId,
+  });
+}
+
+export function useSyncChats() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("sync-chats");
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["chats"] });
+      queryClient.invalidateQueries({ queryKey: ["chat_messages"] });
+      const chats = data?.chats || 0;
+      const messages = data?.messages || 0;
+      toast.success(`Синхронизировано: ${chats} чатов, ${messages} сообщений`);
+    },
+    onError: (error) => {
+      toast.error(`Ошибка синхронизации чатов: ${error.message}`);
+    },
+  });
+}
+
+export function useSendChatMessage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      chatId,
+      message,
+    }: {
+      chatId: string;
+      message: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke(
+        "send-chat-message",
+        {
+          body: { chat_id: chatId, message },
+        }
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["chat_messages", variables.chatId] });
+      queryClient.invalidateQueries({ queryKey: ["chats"] });
+      toast.success("Сообщение отправлено");
+    },
+    onError: (error) => {
+      toast.error(`Ошибка отправки: ${error.message}`);
+    },
+  });
+}

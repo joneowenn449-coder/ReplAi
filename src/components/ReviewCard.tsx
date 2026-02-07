@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Star, ExternalLink, Send, RefreshCw, Pencil, ChevronDown, ChevronUp } from "lucide-react";
+import { Star, ExternalLink, Send, RefreshCw, Pencil, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ interface ReviewCardProps {
 date: string;
   productName: string;
   productArticle: string;
-  status: "new" | "pending" | "auto" | "sent" | "archived";
+  status: "pending" | "auto" | "sent" | "archived";
   images?: string[];
   text?: string | null;
   pros?: string | null;
@@ -44,7 +44,6 @@ export const ReviewCard = ({
   const generateReply = useGenerateReply();
 
   const statusLabels: Record<string, string> = {
-    new: "Новый",
     pending: "Ожидает",
     auto: "Автоответ",
     sent: "Отправлено",
@@ -52,7 +51,6 @@ export const ReviewCard = ({
   };
 
   const statusClasses: Record<string, string> = {
-    new: "badge-new",
     pending: "badge-pending",
     auto: "badge-auto",
     sent: "badge-sent",
@@ -110,20 +108,20 @@ export const ReviewCard = ({
       </a>
 
       {(text || pros || cons) && (
-        <div className="space-y-1.5 mb-3">
+        <div className="space-y-2 mb-3">
           {text && (
-            <p className="text-muted-foreground text-sm">{text}</p>
+            <p className="text-foreground text-sm">«{text}»</p>
           )}
           {pros && (
-            <div>
-              <span className="text-xs font-medium text-green-600">Плюсы: </span>
-              <span className="text-sm text-muted-foreground">{pros}</span>
+            <div className="flex items-start gap-1.5">
+              <ThumbsUp className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
+              <span className="text-sm text-foreground">{pros}</span>
             </div>
           )}
           {cons && (
-            <div>
-              <span className="text-xs font-medium text-red-500">Недостатки: </span>
-              <span className="text-sm text-muted-foreground">{cons}</span>
+            <div className="flex items-start gap-1.5">
+              <ThumbsDown className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <span className="text-sm text-foreground">{cons}</span>
             </div>
           )}
         </div>

@@ -8,6 +8,8 @@ export interface Review {
   rating: number;
   author_name: string;
   text: string | null;
+  pros: string | null;
+  cons: string | null;
   product_name: string;
   product_article: string;
   photo_links: string[];

@@ -87,6 +87,8 @@ serve(async (req) => {
           rating: fb.productValuation || 5,
           author_name: fb.userName || "Покупатель",
           text: fb.text || null,
+          pros: fb.pros || null,
+          cons: fb.cons || null,
           product_name:
             fb.productDetails?.productName || fb.subjectName || "Товар",
           product_article: String(

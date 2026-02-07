@@ -15,6 +15,8 @@ date: string;
   status: "new" | "pending" | "auto" | "sent" | "archived";
   images?: string[];
   text?: string | null;
+  pros?: string | null;
+  cons?: string | null;
   aiDraft?: string | null;
   sentAnswer?: string | null;
 }
@@ -29,6 +31,8 @@ export const ReviewCard = ({
   status,
   images = [],
   text,
+  pros,
+  cons,
   aiDraft,
   sentAnswer,
 }: ReviewCardProps) => {
@@ -105,8 +109,24 @@ export const ReviewCard = ({
         <ExternalLink className="w-3 h-3" />
       </a>
 
-      {text && (
-        <p className="text-muted-foreground text-sm mb-3">{text}</p>
+      {(text || pros || cons) && (
+        <div className="space-y-1.5 mb-3">
+          {text && (
+            <p className="text-muted-foreground text-sm">{text}</p>
+          )}
+          {pros && (
+            <div>
+              <span className="text-xs font-medium text-green-600">Плюсы: </span>
+              <span className="text-sm text-muted-foreground">{pros}</span>
+            </div>
+          )}
+          {cons && (
+            <div>
+              <span className="text-xs font-medium text-red-500">Недостатки: </span>
+              <span className="text-sm text-muted-foreground">{cons}</span>
+            </div>
+          )}
+        </div>
       )}
 
       {images.length > 0 && (

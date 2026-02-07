@@ -101,6 +101,7 @@ export type Database = {
         Row: {
           ai_draft: string | null
           author_name: string
+          cons: string | null
           created_date: string
           fetched_at: string
           has_video: boolean
@@ -108,6 +109,7 @@ export type Database = {
           photo_links: Json | null
           product_article: string
           product_name: string
+          pros: string | null
           rating: number
           sent_answer: string | null
           status: string
@@ -118,6 +120,7 @@ export type Database = {
         Insert: {
           ai_draft?: string | null
           author_name?: string
+          cons?: string | null
           created_date?: string
           fetched_at?: string
           has_video?: boolean
@@ -125,6 +128,7 @@ export type Database = {
           photo_links?: Json | null
           product_article?: string
           product_name?: string
+          pros?: string | null
           rating: number
           sent_answer?: string | null
           status?: string
@@ -135,6 +139,7 @@ export type Database = {
         Update: {
           ai_draft?: string | null
           author_name?: string
+          cons?: string | null
           created_date?: string
           fetched_at?: string
           has_video?: boolean
@@ -142,6 +147,7 @@ export type Database = {
           photo_links?: Json | null
           product_article?: string
           product_name?: string
+          pros?: string | null
           rating?: number
           sent_answer?: string | null
           status?: string

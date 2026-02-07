@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 export interface Chat {
   id: string;
@@ -28,6 +29,26 @@ export interface ChatMessage {
 }
 
 export function useChats() {
+  const queryClient = useQueryClient();
+
+  // Subscribe to realtime changes on chats table
+  useEffect(() => {
+    const channel = supabase
+      .channel("chats-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "chats" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["chats"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["chats"],
     queryFn: async () => {
@@ -42,6 +63,33 @@ export function useChats() {
 }
 
 export function useChatMessages(chatId: string | null) {
+  const queryClient = useQueryClient();
+
+  // Subscribe to realtime changes on chat_messages for this chat
+  useEffect(() => {
+    if (!chatId) return;
+
+    const channel = supabase
+      .channel(`chat-messages-${chatId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_messages",
+          filter: `chat_id=eq.${chatId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["chat_messages", chatId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [chatId, queryClient]);
+
   return useQuery({
     queryKey: ["chat_messages", chatId],
     queryFn: async () => {

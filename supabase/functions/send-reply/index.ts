@@ -48,8 +48,8 @@ serve(async (req) => {
     if (!textToSend) throw new Error("No answer text provided");
 
     // Send to WB
-    const resp = await fetch("https://feedbacks-api.wildberries.ru/api/v1/feedbacks", {
-      method: "PATCH",
+    const resp = await fetch("https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer", {
+      method: "POST",
       headers: {
         Authorization: WB_API_KEY,
         "Content-Type": "application/json",

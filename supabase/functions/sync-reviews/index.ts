@@ -22,8 +22,8 @@ async function fetchWBReviews(apiKey: string, skip = 0, take = 50) {
 }
 
 async function sendWBAnswer(apiKey: string, feedbackId: string, text: string) {
-  const resp = await fetch(`${WB_BASE_URL}/api/v1/feedbacks`, {
-    method: "PATCH",
+  const resp = await fetch(`${WB_BASE_URL}/api/v1/feedbacks/answer`, {
+    method: "POST",
     headers: {
       Authorization: apiKey,
       "Content-Type": "application/json",

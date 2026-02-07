@@ -114,7 +114,11 @@ const Index = () => {
                     productName={review.product_name}
                     productArticle={review.product_article}
                     status={review.status}
-                    images={review.photo_links}
+                    images={
+                      (Array.isArray(review.photo_links) ? review.photo_links : []).map((link: any) =>
+                        typeof link === "string" ? link : (link?.miniSize || link?.fullSize || "")
+                      ).filter(Boolean)
+                    }
                     text={review.text}
                     aiDraft={review.ai_draft}
                     sentAnswer={review.sent_answer}

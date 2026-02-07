@@ -106,6 +106,7 @@ export type Database = {
           fetched_at: string
           has_video: boolean
           id: string
+          is_edited: boolean
           photo_links: Json | null
           product_article: string
           product_name: string
@@ -125,6 +126,7 @@ export type Database = {
           fetched_at?: string
           has_video?: boolean
           id?: string
+          is_edited?: boolean
           photo_links?: Json | null
           product_article?: string
           product_name?: string
@@ -144,6 +146,7 @@ export type Database = {
           fetched_at?: string
           has_video?: boolean
           id?: string
+          is_edited?: boolean
           photo_links?: Json | null
           product_article?: string
           product_name?: string

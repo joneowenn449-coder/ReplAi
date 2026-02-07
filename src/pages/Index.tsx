@@ -122,6 +122,7 @@ const Index = () => {
                     cons={review.cons}
                     aiDraft={review.ai_draft}
                     sentAnswer={review.sent_answer}
+                    isEdited={review.is_edited}
                   />
                 ))}
 

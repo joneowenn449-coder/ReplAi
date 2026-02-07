@@ -62,12 +62,14 @@ serve(async (req) => {
       throw new Error(`WB API error ${resp.status}: ${body}`);
     }
 
-    // Update DB
+    // Update DB — mark as edited if answer was already sent before
+    const isEdited = !!review.sent_answer;
     const { error: updateError } = await supabase
       .from("reviews")
       .update({
         status: "sent",
         sent_answer: textToSend,
+        is_edited: isEdited,
       })
       .eq("id", review_id);
 

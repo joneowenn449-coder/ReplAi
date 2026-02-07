@@ -20,6 +20,7 @@ date: string;
   cons?: string | null;
   aiDraft?: string | null;
   sentAnswer?: string | null;
+  isEdited?: boolean;
 }
 
 export const ReviewCard = ({
@@ -36,6 +37,7 @@ export const ReviewCard = ({
   cons,
   aiDraft,
   sentAnswer,
+  isEdited,
 }: ReviewCardProps) => {
   const [showDraft, setShowDraft] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -241,6 +243,9 @@ export const ReviewCard = ({
             )}
             {status === "sent" && (
               <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0">Ручной</Badge>
+            )}
+            {isEdited && (
+              <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px] px-1.5 py-0">Редактировано</Badge>
             )}
           </div>
 

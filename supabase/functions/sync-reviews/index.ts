@@ -58,7 +58,10 @@ async function generateAIReply(
     attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
   }
 
-  const userMessage = `Отзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}`;
+  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}`;
+
+  console.log(`[sync-reviews] AI prompt (${systemPrompt.length} chars): ${systemPrompt.substring(0, 200)}...`);
+  console.log(`[sync-reviews] AI user message: ${userMessage}`);
 
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -72,7 +75,8 @@ async function generateAIReply(
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 500,
+      max_tokens: 1000,
+      temperature: 0.7,
     }),
   });
 
@@ -82,7 +86,9 @@ async function generateAIReply(
   }
 
   const data = await resp.json();
-  return data.choices?.[0]?.message?.content || "";
+  const reply = data.choices?.[0]?.message?.content || "";
+  console.log(`[sync-reviews] AI response (${reply.length} chars): ${reply.substring(0, 200)}...`);
+  return reply;
 }
 
 function delay(ms: number) {

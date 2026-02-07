@@ -249,7 +249,7 @@ export const ReviewCard = ({
             )}
           </div>
 
-          {sentEditMode ? (
+          {sentEditMode && !isEdited ? (
             <div className="space-y-3">
               <Textarea
                 value={editingSentText}
@@ -277,13 +277,18 @@ export const ReviewCard = ({
             </div>
           ) : (
             <div
-              onClick={() => setSentActionsOpen(!sentActionsOpen)}
-              className="cursor-pointer group"
+              {...(!isEdited ? {
+                onClick: () => setSentActionsOpen(!sentActionsOpen),
+                className: "cursor-pointer group",
+              } : {})}
             >
-              <p className="text-sm text-foreground bg-success/5 rounded-lg p-3 border border-success/20 group-hover:border-primary/30 transition-colors">
+              <p className={cn(
+                "text-sm text-foreground bg-success/5 rounded-lg p-3 border border-success/20 transition-colors",
+                !isEdited && "group-hover:border-primary/30"
+              )}>
                 {sentAnswer}
               </p>
-              {!sentActionsOpen && (
+              {!isEdited && !sentActionsOpen && (
                 <p className="text-[11px] text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   Нажмите, чтобы изменить ответ
                 </p>
@@ -291,7 +296,7 @@ export const ReviewCard = ({
             </div>
           )}
 
-          {sentActionsOpen && !sentEditMode && (
+          {!isEdited && sentActionsOpen && !sentEditMode && (
             <div className="flex gap-2 mt-2">
               <Button
                 size="sm"

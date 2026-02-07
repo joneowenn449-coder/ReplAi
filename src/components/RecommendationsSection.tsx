@@ -83,7 +83,7 @@ export const RecommendationsSection = () => {
           ) : (
             articles.map((a) => (
               <SelectItem key={a.article} value={a.article}>
-                {a.article} — {a.name}
+                {a.article}
               </SelectItem>
             ))
           )}

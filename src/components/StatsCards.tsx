@@ -1,15 +1,13 @@
-import { Clock, Zap, Send } from "lucide-react";
+import { Clock, Send } from "lucide-react";
 
 interface StatsCardsProps {
   pendingCount: number;
-  autoCount: number;
-  sentCount: number;
+  answeredCount: number;
 }
 
 export const StatsCards = ({
   pendingCount,
-  autoCount,
-  sentCount,
+  answeredCount,
 }: StatsCardsProps) => {
   const stats = [
     {
@@ -20,15 +18,8 @@ export const StatsCards = ({
       bgClass: "bg-warning/10",
     },
     {
-      label: "Автоответ",
-      value: autoCount,
-      icon: Zap,
-      iconClass: "text-primary",
-      bgClass: "bg-primary/10",
-    },
-    {
-      label: "Отправлено",
-      value: sentCount,
+      label: "Отвечено",
+      value: answeredCount,
       icon: Send,
       iconClass: "text-success",
       bgClass: "bg-success/10",
@@ -36,7 +27,7 @@ export const StatsCards = ({
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 gap-4">
       {stats.map((stat) => (
         <div key={stat.label} className="stat-card">
           <div className={`p-2 rounded-lg ${stat.bgClass}`}>

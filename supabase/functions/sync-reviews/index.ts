@@ -46,7 +46,8 @@ async function generateAIReply(
   photoCount: number = 0,
   hasVideo: boolean = false,
   authorName: string = "",
-  isEmpty: boolean = false
+  isEmpty: boolean = false,
+  recommendationInstruction: string = ""
 ) {
   // For empty reviews with 4-5 stars, use a short gratitude prompt
   if (isEmpty && rating >= 4) {
@@ -101,7 +102,7 @@ async function generateAIReply(
     ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
     : "";
 
-  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}`;
+  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
 
   console.log(`[sync-reviews] AI prompt (${systemPrompt.length} chars): ${systemPrompt.substring(0, 200)}...`);
   console.log(`[sync-reviews] AI user message: ${userMessage}`);
@@ -220,6 +221,24 @@ serve(async (req) => {
       // Check if review is empty (no text, pros, cons)
       const isEmptyReview = !fb.text && !fb.pros && !fb.cons;
 
+      // Fetch recommendations for this product article
+      const productArticle = String(fb.productDetails?.nmId || fb.nmId || "");
+      let recommendationInstruction = "";
+      if (productArticle) {
+        const { data: recommendations } = await supabase
+          .from("product_recommendations")
+          .select("target_article, target_name")
+          .eq("source_article", productArticle);
+
+        if (recommendations && recommendations.length > 0) {
+          const recList = recommendations
+            .map((r: any) => `- Артикул ${r.target_article}${r.target_name ? `: "${r.target_name}"` : ""}`)
+            .join("\n");
+          recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
+          console.log(`[sync-reviews] Adding ${recommendations.length} recommendations for article ${productArticle}`);
+        }
+      }
+
       // Generate AI draft
       let aiDraft = "";
       try {
@@ -232,12 +251,14 @@ serve(async (req) => {
           photoLinks.length,
           hasVideo,
           fb.userName || "",
-          isEmptyReview
+          isEmptyReview,
+          recommendationInstruction
         );
       } catch (e) {
         console.error(`AI generation failed for ${wbId}:`, e);
         errors.push(`AI error for ${wbId}: ${e.message}`);
       }
+
 
       let status = "pending";
       const rating = fb.productValuation || 5;

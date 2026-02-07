@@ -97,6 +97,30 @@ export type Database = {
         }
         Relationships: []
       }
+      product_recommendations: {
+        Row: {
+          created_at: string
+          id: string
+          source_article: string
+          target_article: string
+          target_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source_article: string
+          target_article: string
+          target_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source_article?: string
+          target_article?: string
+          target_name?: string | null
+        }
+        Relationships: []
+      }
       reviews: {
         Row: {
           ai_draft: string | null

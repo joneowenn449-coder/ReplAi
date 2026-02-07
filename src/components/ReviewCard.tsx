@@ -41,6 +41,11 @@ export const ReviewCard = ({
   const [editMode, setEditMode] = useState(false);
   const [editedText, setEditedText] = useState(aiDraft || "");
 
+  // Sent answer editing states
+  const [sentActionsOpen, setSentActionsOpen] = useState(false);
+  const [sentEditMode, setSentEditMode] = useState(false);
+  const [editingSentText, setEditingSentText] = useState(sentAnswer || "");
+
   const sendReply = useSendReply();
   const generateReply = useGenerateReply();
 
@@ -58,14 +63,32 @@ export const ReviewCard = ({
     archived: "badge-sent",
   };
 
-  const handleSend = () => {
-    const textToSend = editMode ? editedText : undefined;
+  const handleSend = (customText?: string) => {
+    const textToSend = customText || (editMode ? editedText : undefined);
     sendReply.mutate({ reviewId: id, answerText: textToSend });
     setEditMode(false);
   };
 
   const handleRegenerate = () => {
     generateReply.mutate(id);
+    setSentActionsOpen(false);
+    setSentEditMode(false);
+  };
+
+  const handleSentEdit = () => {
+    setSentEditMode(true);
+    setEditingSentText(sentAnswer || "");
+  };
+
+  const handleSentSend = () => {
+    sendReply.mutate({ reviewId: id, answerText: editingSentText });
+    setSentEditMode(false);
+    setSentActionsOpen(false);
+  };
+
+  const handleSentCancel = () => {
+    setSentEditMode(false);
+    setEditingSentText(sentAnswer || "");
   };
 
   const isArchived = status === "archived";
@@ -173,7 +196,7 @@ export const ReviewCard = ({
               <div className="flex gap-2">
                 <Button
                   size="sm"
-                  onClick={handleSend}
+                  onClick={() => handleSend()}
                   disabled={sendReply.isPending}
                   className="gap-1"
                 >
@@ -220,9 +243,72 @@ export const ReviewCard = ({
               <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0">Ручной</Badge>
             )}
           </div>
-          <p className="text-sm text-foreground bg-success/5 rounded-lg p-3 border border-success/20">
-            {sentAnswer}
-          </p>
+
+          {sentEditMode ? (
+            <div className="space-y-3">
+              <Textarea
+                value={editingSentText}
+                onChange={(e) => setEditingSentText(e.target.value)}
+                className="min-h-[80px] text-sm"
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleSentSend}
+                  disabled={sendReply.isPending || !editingSentText.trim()}
+                  className="gap-1"
+                >
+                  <Send className="w-3 h-3" />
+                  {sendReply.isPending ? "Отправка..." : "Отправить"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSentCancel}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onClick={() => setSentActionsOpen(!sentActionsOpen)}
+              className="cursor-pointer group"
+            >
+              <p className="text-sm text-foreground bg-success/5 rounded-lg p-3 border border-success/20 group-hover:border-primary/30 transition-colors">
+                {sentAnswer}
+              </p>
+              {!sentActionsOpen && (
+                <p className="text-[11px] text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  Нажмите, чтобы изменить ответ
+                </p>
+              )}
+            </div>
+          )}
+
+          {sentActionsOpen && !sentEditMode && (
+            <div className="flex gap-2 mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => { e.stopPropagation(); handleRegenerate(); }}
+                disabled={generateReply.isPending}
+                className="gap-1"
+              >
+                <RefreshCw className={cn("w-3 h-3", generateReply.isPending && "animate-spin")} />
+                Перегенерировать
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => { e.stopPropagation(); handleSentEdit(); }}
+                className="gap-1"
+              >
+                <Pencil className="w-3 h-3" />
+                Редактировать
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

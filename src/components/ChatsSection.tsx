@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useChats, useSyncChats } from "@/hooks/useChats";
+import { useState, useCallback } from "react";
+import { useChats, useSyncChats, useMarkChatRead } from "@/hooks/useChats";
 import { ChatList } from "@/components/ChatList";
 import { ChatWindow } from "@/components/ChatWindow";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,20 @@ export const ChatsSection = () => {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const { data: chats = [], isLoading } = useChats();
   const syncChats = useSyncChats();
+  const markRead = useMarkChatRead();
 
   const selectedChat = chats.find((c) => c.chat_id === selectedChatId) ?? null;
+
+  const handleSelectChat = useCallback(
+    (chatId: string) => {
+      setSelectedChatId(chatId);
+      const chat = chats.find((c) => c.chat_id === chatId);
+      if (chat && !chat.is_read) {
+        markRead.mutate(chatId);
+      }
+    },
+    [chats, markRead]
+  );
 
   return (
     <div className="space-y-4">
@@ -47,7 +59,7 @@ export const ChatsSection = () => {
             <ChatList
               chats={chats}
               selectedChatId={selectedChatId}
-              onSelectChat={setSelectedChatId}
+              onSelectChat={handleSelectChat}
             />
           )}
         </div>

@@ -128,6 +128,22 @@ export function useSyncChats() {
   });
 }
 
+export function useMarkChatRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (chatId: string) => {
+      const { error } = await supabase
+        .from("chats")
+        .update({ is_read: true })
+        .eq("chat_id", chatId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chats"] });
+    },
+  });
+}
+
 export function useSendChatMessage() {
   const queryClient = useQueryClient();
 

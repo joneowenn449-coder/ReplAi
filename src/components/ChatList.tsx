@@ -48,16 +48,21 @@ export const ChatList = ({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-sm truncate">
+                  <span className={cn("text-sm truncate", chat.is_read ? "font-medium" : "font-semibold")}>
                     {chat.client_name}
                   </span>
-                  {chat.last_message_at && (
-                    <span className="text-[11px] text-muted-foreground shrink-0">
-                      {format(new Date(chat.last_message_at), "d MMM", {
-                        locale: ru,
-                      })}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {chat.last_message_at && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {format(new Date(chat.last_message_at), "d MMM", {
+                          locale: ru,
+                        })}
+                      </span>
+                    )}
+                    {!chat.is_read && (
+                      <span className="w-2 h-2 rounded-full bg-primary" />
+                    )}
+                  </div>
                 </div>
                 {chat.product_name && (
                   <p className="text-xs text-muted-foreground truncate">
@@ -65,7 +70,7 @@ export const ChatList = ({
                   </p>
                 )}
                 {chat.last_message_text && (
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  <p className={cn("text-xs truncate mt-0.5", chat.is_read ? "text-muted-foreground" : "text-foreground")}>
                     {chat.last_message_text}
                   </p>
                 )}

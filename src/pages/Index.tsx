@@ -7,6 +7,7 @@ import { FilterTabs } from "@/components/FilterTabs";
 import { ReviewCard } from "@/components/ReviewCard";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ChatsSection } from "@/components/ChatsSection";
+import { AiAssistant } from "@/components/AiAssistant";
 import {
   useReviews,
   useSettings,
@@ -72,7 +73,9 @@ const Index = () => {
       />
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
-        {activeTab === "chats" ? (
+        {activeTab === "ai" ? (
+          <AiAssistant />
+        ) : activeTab === "chats" ? (
           <ChatsSection />
         ) : (
           <>

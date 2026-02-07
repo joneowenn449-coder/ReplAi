@@ -92,8 +92,41 @@ serve(async (req) => {
         ? trimmedKey.slice(0, 4) + "****...****" + trimmedKey.slice(-4)
         : "****";
 
+    // Check if this is first setup (no reviews yet) — auto-import archive
+    let archiveImported = false;
+    try {
+      const { count, error: countError } = await supabase
+        .from("reviews")
+        .select("id", { count: "exact", head: true });
+
+      if (!countError && (count === null || count === 0)) {
+        console.log("First setup detected — triggering archive import");
+        const archiveResp = await fetch(
+          `${SUPABASE_URL}/functions/v1/fetch-archive`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({}),
+          }
+        );
+        const archiveData = await archiveResp.json();
+        console.log("Archive import result:", archiveData);
+        archiveImported = archiveResp.ok && archiveData?.success;
+      }
+    } catch (archiveErr) {
+      console.error("Archive auto-import failed (non-critical):", archiveErr);
+    }
+
     return new Response(
-      JSON.stringify({ valid: true, masked_key: masked, chat_access: chatAccess }),
+      JSON.stringify({
+        valid: true,
+        masked_key: masked,
+        chat_access: chatAccess,
+        archive_imported: archiveImported,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

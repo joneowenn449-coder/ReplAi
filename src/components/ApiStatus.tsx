@@ -1,4 +1,4 @@
-import { RefreshCw, Archive } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ReplyModes, DEFAULT_REPLY_MODES } from "@/hooks/useReviews";
@@ -9,8 +9,6 @@ interface ApiStatusProps {
   replyModes: ReplyModes;
   onSync: () => void;
   isSyncing?: boolean;
-  onFetchArchive?: () => void;
-  isFetchingArchive?: boolean;
 }
 
 function formatReplyModesSummary(modes: ReplyModes): string {
@@ -49,8 +47,6 @@ export const ApiStatus = ({
   replyModes,
   onSync,
   isSyncing = false,
-  onFetchArchive,
-  isFetchingArchive = false,
 }: ApiStatusProps) => {
   const summary = formatReplyModesSummary(replyModes);
 
@@ -73,16 +69,6 @@ export const ApiStatus = ({
       </div>
       <div className="flex items-center gap-4">
         <span className="text-sm text-muted-foreground">{summary}</span>
-        {isConnected && onFetchArchive && (
-          <Button
-            onClick={onFetchArchive}
-            variant="outline"
-            disabled={isFetchingArchive}
-          >
-            <Archive className={cn("w-4 h-4 mr-2", isFetchingArchive && "animate-pulse")} />
-            {isFetchingArchive ? "Загрузка..." : "Загрузить архив"}
-          </Button>
-        )}
         <Button
           onClick={onSync}
           variant="outline"

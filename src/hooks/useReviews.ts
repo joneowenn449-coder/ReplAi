@@ -97,28 +97,6 @@ export function useSyncReviews() {
   });
 }
 
-export function useFetchArchive() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("fetch-archive");
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["reviews"] });
-      const inserted = data?.inserted || 0;
-      const fetched = data?.fetched || 0;
-      toast.success(
-        `Архив загружен: ${inserted} новых из ${fetched} отзывов`
-      );
-    },
-    onError: (error) => {
-      toast.error(`Ошибка загрузки архива: ${error.message}`);
-    },
-  });
-}
 
 export function useSendReply() {
   const queryClient = useQueryClient();
@@ -212,11 +190,17 @@ export function useValidateApiKey() {
       if (!data?.valid) {
         throw new Error(data?.error || "Ключ не прошёл проверку");
       }
-      return data as { valid: boolean; masked_key: string };
+      return data as { valid: boolean; masked_key: string; archive_imported?: boolean };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
+      queryClient.invalidateQueries({ queryKey: ["reviews"] });
       toast.success("API-ключ подтверждён и сохранён");
+      if (data?.archive_imported) {
+        toast.success("Архив отзывов загружен автоматически", {
+          duration: 5000,
+        });
+      }
     },
     onError: (error) => {
       toast.error(`Ошибка проверки: ${error.message}`);

@@ -5,7 +5,6 @@ interface FilterTabsProps {
   onFilterChange: (filter: string) => void;
   counts: {
     all: number;
-    new: number;
     pending: number;
     auto: number;
     sent: number;
@@ -20,7 +19,6 @@ export const FilterTabs = ({
 }: FilterTabsProps) => {
   const filters = [
     { id: "all", label: "Все", count: counts.all },
-    { id: "new", label: "Новые", count: counts.new },
     { id: "pending", label: "Ожидают", count: counts.pending },
     { id: "auto", label: "Автоответ", count: counts.auto },
     { id: "sent", label: "Отправлено", count: counts.sent },

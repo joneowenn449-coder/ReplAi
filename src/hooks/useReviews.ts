@@ -15,7 +15,7 @@ export interface Review {
   photo_links: string[];
   has_video: boolean;
   created_date: string;
-  status: "new" | "pending" | "auto" | "sent" | "archived";
+  status: "pending" | "auto" | "sent" | "archived";
   ai_draft: string | null;
   sent_answer: string | null;
   fetched_at: string;

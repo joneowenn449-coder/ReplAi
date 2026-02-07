@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Star, ExternalLink, Send, RefreshCw, Pencil, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,7 +70,7 @@ export const ReviewCard = ({
 
   const isArchived = status === "archived";
   const hasDraft = aiDraft && status !== "sent" && !isArchived;
-  const hasAnswer = sentAnswer && (status === "sent" || isArchived);
+  const hasAnswer = sentAnswer && (status === "sent" || status === "auto" || isArchived);
 
   return (
     <div className="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow">
@@ -210,7 +211,15 @@ export const ReviewCard = ({
       {/* Sent answer */}
       {hasAnswer && (
         <div className="mt-3 border-t border-border pt-3">
-          <p className="text-xs font-medium text-success mb-1">Отправленный ответ:</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-xs font-medium text-success">Отправленный ответ:</p>
+            {status === "auto" && (
+              <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0">Автоответ</Badge>
+            )}
+            {status === "sent" && (
+              <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0">Ручной</Badge>
+            )}
+          </div>
           <p className="text-sm text-foreground bg-success/5 rounded-lg p-3 border border-success/20">
             {sentAnswer}
           </p>

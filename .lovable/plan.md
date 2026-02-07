@@ -1,68 +1,127 @@
 
-# Учёт фото/видео контента в ответах ИИ
+# Интеграция чата с покупателями Wildberries
 
-## Проблема
+## Что даёт API
 
-Сейчас при генерации ответа на отзыв ИИ не знает, что покупатель приложил фотографии или видео. Из-за этого ИИ не благодарит за визуальный контент и не упоминает его в ответе.
+Wildberries предоставляет полный API для работы с чатами покупателей:
+- Получение списка чатов и истории сообщений
+- Отправка текстовых сообщений и файлов (JPEG, PDF, PNG)
+- Скачивание вложений из сообщений покупателей
 
-## Что нужно сделать
+Базовый URL: `buyer-chat-api.wildberries.ru` (отличается от feedbacks-api)
 
-Передавать информацию о наличии фото/видео в промпт для ИИ, чтобы модель учитывала это при генерации ответа.
+## Важный момент: токен доступа
 
-## Изменения
+Для чатов нужен токен с правами категории **"Buyers chat" (9)**, а для отзывов -- категория **"Feedbacks and Questions" (7)**. Это могут быть разные токены. Если текущий ключ не имеет доступа к чатам, понадобится пересоздать токен с нужными правами.
 
-### 1. Добавить хранение видео в БД
+## План реализации
 
-Wildberries API возвращает поле `video` (объект с `previewImage`, `link`, `durationSec`). Сейчас мы его не сохраняем.
+### 1. База данных -- 2 новые таблицы
 
-**Миграция**: добавить колонку `has_video` (boolean, default false) в таблицу `reviews`. Это проще и надёжнее, чем хранить полный объект видео -- нам нужно только знать, есть ли видео.
+**Таблица `chats`** -- список чатов:
+- `id` (uuid, PK)
+- `chat_id` (text, unique) -- ID чата из WB API
+- `reply_sign` (text) -- подпись для ответа
+- `client_name` (text) -- имя покупателя
+- `product_nm_id` (integer) -- артикул товара
+- `product_name` (text) -- название товара (если доступно)
+- `last_message_text` (text) -- текст последнего сообщения
+- `last_message_at` (timestamptz) -- время последнего сообщения
+- `is_read` (boolean, default false) -- прочитан ли чат
+- `created_at`, `updated_at` (timestamptz)
 
-### 2. Обновить `supabase/functions/sync-reviews/index.ts`
+**Таблица `chat_messages`** -- сообщения в чатах:
+- `id` (uuid, PK)
+- `chat_id` (text, FK -> chats.chat_id) -- ссылка на чат
+- `event_id` (text, unique) -- ID события из WB API
+- `sender` (text) -- "client" или "seller"
+- `text` (text) -- текст сообщения
+- `attachments` (jsonb) -- вложения (images, files)
+- `sent_at` (timestamptz) -- время отправки
+- `created_at` (timestamptz)
 
-- При сохранении нового отзыва: проверять `fb.video` и записывать `has_video: true/false`.
-- В функции `generateAIReply`: добавить параметры `photoCount` и `hasVideo`.
-- Дополнить `userMessage` строкой вида:
-  - "К отзыву приложено 3 фотографии." (если есть фото)
-  - "К отзыву приложено видео." (если есть видео)
-  - "К отзыву приложено 3 фотографии и видео." (если есть и то, и другое)
+RLS-политики: аналогичные существующим для reviews/settings (SELECT/INSERT/UPDATE для anon).
 
-### 3. Обновить `supabase/functions/generate-reply/index.ts`
+### 2. Edge Function: `sync-chats`
 
-При построении `userMessage` -- считать количество элементов в `review.photo_links` и проверять `review.has_video`, добавлять соответствующую информацию в промпт перед отправкой в OpenRouter.
+Новая функция для синхронизации чатов:
 
-### 4. Обновить `supabase/functions/fetch-archive/index.ts`
+1. Получить список чатов через `GET /api/v1/seller/chats`
+2. Сохранить/обновить записи в таблице `chats`
+3. Получить события (сообщения) через `GET /api/v1/seller/events` с пагинацией через `next`
+4. Сохранить новые сообщения в `chat_messages`
+5. Обновить `last_message_text` и `last_message_at` в таблице `chats`
 
-При загрузке архивных отзывов: также сохранять `has_video` из данных WB API.
+Задержки между запросами: 1 секунда (лимит 10 запросов за 10 сек).
 
-### 5. Обновить `src/hooks/useReviews.ts`
+### 3. Edge Function: `send-chat-message`
 
-Добавить поле `has_video: boolean` в интерфейс `Review`.
+Функция для отправки сообщения продавца:
+
+1. Принимает `chat_id` и `message` (текст)
+2. Получает `reply_sign` из таблицы `chats`
+3. Отправляет через `POST /api/v1/seller/message` (multipart/form-data)
+4. Сохраняет отправленное сообщение в `chat_messages`
+
+### 4. Frontend -- вкладка "Чаты"
+
+Добавить новую вкладку в навигации (рядом с "Отзывы" и "AI"):
+
+**Левая панель** -- список чатов:
+- Имя покупателя
+- Последнее сообщение (превью)
+- Время последнего сообщения
+- Индикатор непрочитанных
+
+**Правая панель** -- история сообщения выбранного чата:
+- Сообщения покупателя (слева, серый фон)
+- Сообщения продавца (справа, цветной фон)
+- Вложения (превью картинок, ссылки на файлы)
+- Поле ввода и кнопка отправки внизу
+
+**Новая страница** `src/pages/Chats.tsx` или секция внутри `Index.tsx` по переключению вкладки.
+
+### 5. Хуки
+
+**`src/hooks/useChats.ts`**:
+- `useChats()` -- список чатов из БД
+- `useChatMessages(chatId)` -- сообщения конкретного чата
+- `useSyncChats()` -- мутация для синхронизации
+- `useSendChatMessage()` -- мутация для отправки сообщения
+
+### 6. Периодическая синхронизация (опционально)
+
+Добавить cron-задачу для `sync-chats` аналогично `sync-reviews` (каждые 5 минут) или синхронизировать вручную по кнопке.
 
 ## Технические детали
 
-### Миграция БД
-
-```sql
-ALTER TABLE reviews ADD COLUMN has_video boolean NOT NULL DEFAULT false;
-```
-
-### Формат дополнения к промпту
-
-В `userMessage` перед текстом отзыва или после него добавляется блок:
+### API эндпоинты WB Buyers Chat
 
 ```text
-Отзыв (5 из 5 звёзд) на товар "Название":
+Base URL: https://buyer-chat-api.wildberries.ru
 
-Текст отзыва...
-
-[Покупатель приложил 3 фотографии и видео к отзыву.]
+GET  /api/v1/seller/chats        -- список чатов
+GET  /api/v1/seller/events?next=  -- события/сообщения (пагинация)
+POST /api/v1/seller/message      -- отправка (multipart/form-data: replySign, message, file[])
+GET  /api/v1/seller/download/{id} -- скачивание файла
 ```
 
-Это позволит ИИ естественно упомянуть визуальный контент и поблагодарить покупателя за подробный отзыв с фото/видео.
+### Лимиты
+- 10 запросов за 10 секунд (1 запрос в секунду)
+- Сообщение до 1000 символов
+- Файлы: JPEG/PDF/PNG, до 5 МБ каждый, суммарно до 30 МБ
 
-### Файлы для изменения
+### Файлы для создания/изменения
 
-- `src/hooks/useReviews.ts` -- добавить `has_video` в интерфейс
-- `supabase/functions/sync-reviews/index.ts` -- передавать фото/видео в промпт, сохранять `has_video`
-- `supabase/functions/generate-reply/index.ts` -- передавать фото/видео в промпт
-- `supabase/functions/fetch-archive/index.ts` -- сохранять `has_video`
+| Файл | Действие |
+|------|----------|
+| Миграция БД (chats, chat_messages) | Создать |
+| `supabase/functions/sync-chats/index.ts` | Создать |
+| `supabase/functions/send-chat-message/index.ts` | Создать |
+| `src/hooks/useChats.ts` | Создать |
+| `src/components/ChatList.tsx` | Создать |
+| `src/components/ChatWindow.tsx` | Создать |
+| `src/components/ChatMessage.tsx` | Создать |
+| `src/pages/Index.tsx` | Изменить (добавить вкладку чатов) |
+| `src/components/NavTabs.tsx` | Изменить (добавить таб "Чаты") |
+| `supabase/config.toml` | Изменить (verify_jwt для новых функций) |

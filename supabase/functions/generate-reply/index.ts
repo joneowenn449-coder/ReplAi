@@ -62,7 +62,10 @@ serve(async (req) => {
       attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
     }
 
-    const userMessage = `Отзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${review.text || "(Без текста, только оценка)"}${attachmentInfo}`;
+    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${review.text || "(Без текста, только оценка)"}${attachmentInfo}`;
+
+    console.log(`[generate-reply] Using prompt (${promptTemplate.length} chars): ${promptTemplate.substring(0, 200)}...`);
+    console.log(`[generate-reply] User message: ${userMessage}`);
 
     // Call OpenRouter
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -77,7 +80,8 @@ serve(async (req) => {
           { role: "system", content: promptTemplate },
           { role: "user", content: userMessage },
         ],
-        max_tokens: 500,
+        max_tokens: 1000,
+        temperature: 0.7,
       }),
     });
 
@@ -88,6 +92,8 @@ serve(async (req) => {
 
     const aiData = await aiResp.json();
     const newDraft = aiData.choices?.[0]?.message?.content || "";
+
+    console.log(`[generate-reply] AI response (${newDraft.length} chars): ${newDraft.substring(0, 200)}...`);
 
     if (!newDraft) throw new Error("AI returned empty response");
 

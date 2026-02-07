@@ -18,6 +18,7 @@ export interface Review {
   status: "pending" | "auto" | "sent" | "archived";
   ai_draft: string | null;
   sent_answer: string | null;
+  is_edited: boolean;
   fetched_at: string;
   updated_at: string;
 }

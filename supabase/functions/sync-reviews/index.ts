@@ -211,6 +211,42 @@ serve(async (req) => {
       }
     }
 
+    // === Retry pending reviews that should be auto-sent ===
+    console.log("[sync-reviews] Checking for pending reviews to auto-send...");
+    const { data: pendingReviews } = await supabase
+      .from("reviews")
+      .select("id, wb_id, rating, ai_draft")
+      .eq("status", "pending")
+      .not("ai_draft", "is", null);
+
+    if (pendingReviews && pendingReviews.length > 0) {
+      console.log(`[sync-reviews] Found ${pendingReviews.length} pending reviews with AI drafts`);
+      for (const pr of pendingReviews) {
+        const ratingKey = String(pr.rating);
+        const modeForRating = replyModes[ratingKey] || "manual";
+        console.log(`[sync-reviews] Review ${pr.wb_id}: rating=${pr.rating}, mode=${modeForRating}`);
+
+        if (modeForRating === "auto" && pr.ai_draft) {
+          try {
+            console.log(`[sync-reviews] Auto-sending reply for pending review ${pr.wb_id}...`);
+            await sendWBAnswer(WB_API_KEY, pr.wb_id, pr.ai_draft);
+            await supabase
+              .from("reviews")
+              .update({ status: "auto", sent_answer: pr.ai_draft, updated_at: new Date().toISOString() })
+              .eq("id", pr.id);
+            autoSentCount++;
+            console.log(`[sync-reviews] Successfully auto-sent reply for ${pr.wb_id}`);
+            await delay(350);
+          } catch (e) {
+            console.error(`[sync-reviews] Auto-retry failed for ${pr.wb_id}:`, e);
+            errors.push(`Auto-retry error for ${pr.wb_id}: ${e.message}`);
+          }
+        }
+      }
+    } else {
+      console.log("[sync-reviews] No pending reviews to auto-send");
+    }
+
     // Update last_sync_at
     if (settings?.id) {
       await supabase

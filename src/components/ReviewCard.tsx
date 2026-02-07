@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Star, ExternalLink, Send, RefreshCw, Pencil, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,13 @@ export const ReviewCard = ({
   const sendReply = useSendReply();
   const generateReply = useGenerateReply();
 
+  // Sync editedText when aiDraft changes (e.g. after regeneration)
+  useEffect(() => {
+    if (!editMode) {
+      setEditedText(aiDraft || "");
+    }
+  }, [aiDraft]);
+
   const statusLabels: Record<string, string> = {
     pending: "Ожидает",
     auto: "Автоответ",
@@ -66,7 +73,7 @@ export const ReviewCard = ({
   };
 
   const handleSend = (customText?: string) => {
-    const textToSend = customText || (editMode ? editedText : undefined);
+    const textToSend = customText || (editMode ? editedText : aiDraft) || undefined;
     sendReply.mutate({ reviewId: id, answerText: textToSend });
     setEditMode(false);
   };
@@ -199,7 +206,7 @@ export const ReviewCard = ({
                 <Button
                   size="sm"
                   onClick={() => handleSend()}
-                  disabled={sendReply.isPending}
+                  disabled={sendReply.isPending || generateReply.isPending}
                   className="gap-1"
                 >
                   <Send className="w-3 h-3" />
@@ -260,7 +267,7 @@ export const ReviewCard = ({
                 <Button
                   size="sm"
                   onClick={handleSentSend}
-                  disabled={sendReply.isPending || !editingSentText.trim()}
+                  disabled={sendReply.isPending || generateReply.isPending || !editingSentText.trim()}
                   className="gap-1"
                 >
                   <Send className="w-3 h-3" />

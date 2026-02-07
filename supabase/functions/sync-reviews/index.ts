@@ -180,11 +180,23 @@ serve(async (req) => {
       settings?.ai_prompt_template ||
       "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
 
-    // Fetch unanswered reviews from WB
-    const wbData = await fetchWBReviews(WB_API_KEY);
-    const feedbacks = wbData?.data?.feedbacks || [];
+    // Fetch ALL unanswered reviews from WB with pagination
+    const allFeedbacks: any[] = [];
+    let skip = 0;
+    const take = 50;
+    while (true) {
+      const wbData = await fetchWBReviews(WB_API_KEY, skip, take);
+      const feedbacks = wbData?.data?.feedbacks || [];
+      console.log(`[sync-reviews] WB page skip=${skip}: got ${feedbacks.length} reviews`);
+      if (feedbacks.length === 0) break;
+      allFeedbacks.push(...feedbacks);
+      if (feedbacks.length < take) break; // last page
+      skip += take;
+      await delay(350); // respect rate limit between pages
+    }
+    const feedbacks = allFeedbacks;
 
-    console.log(`Fetched ${feedbacks.length} unanswered reviews from WB`);
+    console.log(`Fetched ${feedbacks.length} total unanswered reviews from WB`);
 
     let newCount = 0;
     let autoSentCount = 0;

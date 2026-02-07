@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Bot } from "lucide-react";
+import { Bot, MessageCircle } from "lucide-react";
 
 interface NavTabsProps {
   activeTab: string;
@@ -19,6 +19,18 @@ export const NavTabs = ({ activeTab, onTabChange }: NavTabsProps) => {
         )}
       >
         Отзывы
+      </button>
+      <button
+        onClick={() => onTabChange("chats")}
+        className={cn(
+          "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+          activeTab === "chats"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+        )}
+      >
+        <MessageCircle className="w-4 h-4" />
+        Чаты
       </button>
       <button
         onClick={() => onTabChange("ai")}

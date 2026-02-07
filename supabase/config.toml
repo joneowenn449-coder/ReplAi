@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.fetch-archive]
 verify_jwt = false
+
+[functions.sync-chats]
+verify_jwt = false
+
+[functions.send-chat-message]
+verify_jwt = false

@@ -14,6 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_messages: {
+        Row: {
+          attachments: Json | null
+          chat_id: string
+          created_at: string
+          event_id: string
+          id: string
+          sender: string
+          sent_at: string
+          text: string | null
+        }
+        Insert: {
+          attachments?: Json | null
+          chat_id: string
+          created_at?: string
+          event_id: string
+          id?: string
+          sender?: string
+          sent_at?: string
+          text?: string | null
+        }
+        Update: {
+          attachments?: Json | null
+          chat_id?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          sender?: string
+          sent_at?: string
+          text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "chats"
+            referencedColumns: ["chat_id"]
+          },
+        ]
+      }
+      chats: {
+        Row: {
+          chat_id: string
+          client_name: string
+          created_at: string
+          id: string
+          is_read: boolean
+          last_message_at: string | null
+          last_message_text: string | null
+          product_name: string
+          product_nm_id: number | null
+          reply_sign: string | null
+          updated_at: string
+        }
+        Insert: {
+          chat_id: string
+          client_name?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          last_message_at?: string | null
+          last_message_text?: string | null
+          product_name?: string
+          product_nm_id?: number | null
+          reply_sign?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chat_id?: string
+          client_name?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          last_message_at?: string | null
+          last_message_text?: string | null
+          product_name?: string
+          product_nm_id?: number | null
+          reply_sign?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reviews: {
         Row: {
           ai_draft: string | null

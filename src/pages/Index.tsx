@@ -5,6 +5,7 @@ import { StatsCards } from "@/components/StatsCards";
 import { FilterTabs } from "@/components/FilterTabs";
 import { ReviewCard } from "@/components/ReviewCard";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { ChatsSection } from "@/components/ChatsSection";
 import {
   useReviews,
   useSettings,
@@ -68,62 +69,68 @@ const Index = () => {
       />
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
-        <ApiStatus
-          isConnected={!!settings?.wb_api_key}
-          lastSync={lastSyncFormatted}
-          replyModes={replyModes}
-          onSync={handleSync}
-          isSyncing={syncReviews.isPending}
-          onFetchArchive={() => fetchArchive.mutate()}
-          isFetchingArchive={fetchArchive.isPending}
-        />
-
-        <StatsCards
-          newCount={stats.new}
-          pendingCount={stats.pending}
-          autoCount={stats.auto}
-          sentCount={stats.sent}
-        />
-
-        <FilterTabs
-          activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
-          counts={counts}
-        />
-
-        {reviewsLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
+        {activeTab === "chats" ? (
+          <ChatsSection />
         ) : (
-          <div className="space-y-4">
-            {filteredReviews.map((review) => (
-              <ReviewCard
-                key={review.id}
-                id={review.id}
-                rating={review.rating}
-                authorName={review.author_name}
-                date={format(new Date(review.created_date), "d MMM yyyy", {
-                  locale: ru,
-                })}
-                productName={review.product_name}
-                productArticle={review.product_article}
-                status={review.status}
-                images={review.photo_links}
-                text={review.text}
-                aiDraft={review.ai_draft}
-                sentAnswer={review.sent_answer}
-              />
-            ))}
+          <>
+            <ApiStatus
+              isConnected={!!settings?.wb_api_key}
+              lastSync={lastSyncFormatted}
+              replyModes={replyModes}
+              onSync={handleSync}
+              isSyncing={syncReviews.isPending}
+              onFetchArchive={() => fetchArchive.mutate()}
+              isFetchingArchive={fetchArchive.isPending}
+            />
 
-            {filteredReviews.length === 0 && !reviewsLoading && (
-              <div className="text-center py-12 text-muted-foreground">
-                {reviews.length === 0
-                  ? "Нажмите «Синхронизировать» чтобы загрузить отзывы с WB"
-                  : "Нет отзывов в этой категории"}
+            <StatsCards
+              newCount={stats.new}
+              pendingCount={stats.pending}
+              autoCount={stats.auto}
+              sentCount={stats.sent}
+            />
+
+            <FilterTabs
+              activeFilter={activeFilter}
+              onFilterChange={setActiveFilter}
+              counts={counts}
+            />
+
+            {reviewsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredReviews.map((review) => (
+                  <ReviewCard
+                    key={review.id}
+                    id={review.id}
+                    rating={review.rating}
+                    authorName={review.author_name}
+                    date={format(new Date(review.created_date), "d MMM yyyy", {
+                      locale: ru,
+                    })}
+                    productName={review.product_name}
+                    productArticle={review.product_article}
+                    status={review.status}
+                    images={review.photo_links}
+                    text={review.text}
+                    aiDraft={review.ai_draft}
+                    sentAnswer={review.sent_answer}
+                  />
+                ))}
+
+                {filteredReviews.length === 0 && !reviewsLoading && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    {reviews.length === 0
+                      ? "Нажмите «Синхронизировать» чтобы загрузить отзывы с WB"
+                      : "Нет отзывов в этой категории"}
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
       </main>
 

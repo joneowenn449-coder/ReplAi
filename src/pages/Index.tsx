@@ -10,7 +10,6 @@ import {
   useReviews,
   useSettings,
   useSyncReviews,
-  useFetchArchive,
   DEFAULT_REPLY_MODES,
 } from "@/hooks/useReviews";
 import { format } from "date-fns";
@@ -25,7 +24,6 @@ const Index = () => {
   const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
   const { data: settings } = useSettings();
   const syncReviews = useSyncReviews();
-  const fetchArchive = useFetchArchive();
 
   const replyModes = settings?.reply_modes ?? DEFAULT_REPLY_MODES;
 
@@ -79,8 +77,6 @@ const Index = () => {
               replyModes={replyModes}
               onSync={handleSync}
               isSyncing={syncReviews.isPending}
-              onFetchArchive={() => fetchArchive.mutate()}
-              isFetchingArchive={fetchArchive.isPending}
             />
 
             <StatsCards

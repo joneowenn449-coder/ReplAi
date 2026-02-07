@@ -102,7 +102,7 @@ const Index = () => {
                     id={review.id}
                     rating={review.rating}
                     authorName={review.author_name}
-                    date={format(new Date(review.created_date), "d MMM yyyy", {
+                    date={format(new Date(review.created_date), "d MMM yyyy 'в' HH:mm", {
                       locale: ru,
                     })}
                     productName={review.product_name}

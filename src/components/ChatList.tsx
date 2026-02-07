@@ -39,7 +39,8 @@ export const ChatList = ({
             onClick={() => onSelectChat(chat.chat_id)}
             className={cn(
               "w-full text-left px-4 py-3 transition-colors hover:bg-secondary/50",
-              selectedChatId === chat.chat_id && "bg-secondary"
+              selectedChatId === chat.chat_id && "bg-secondary",
+              !chat.is_read && selectedChatId !== chat.chat_id && "bg-primary/5"
             )}
           >
             <div className="flex items-start gap-3">
@@ -48,7 +49,7 @@ export const ChatList = ({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={cn("text-sm truncate", chat.is_read ? "font-medium" : "font-semibold")}>
+                  <span className={cn("text-sm truncate", chat.is_read ? "font-normal" : "font-bold")}>
                     {chat.client_name}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -70,7 +71,7 @@ export const ChatList = ({
                   </p>
                 )}
                 {chat.last_message_text && (
-                  <p className={cn("text-xs truncate mt-0.5", chat.is_read ? "text-muted-foreground" : "text-foreground")}>
+                  <p className={cn("text-xs truncate mt-0.5", chat.is_read ? "text-muted-foreground font-normal" : "text-foreground font-semibold")}>
                     {chat.last_message_text}
                   </p>
                 )}

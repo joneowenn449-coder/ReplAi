@@ -1,38 +1,46 @@
 
-# Исправление кнопки "Админ-панель" в меню профиля
+# Исправление навигации на Админ-панель
 
-## Проблема
+## Корневая причина
 
-Radix UI `DropdownMenuItem` при закрытии меню вызывает `event.preventDefault()` на событии клика, что блокирует переход по React Router `Link`. В результате при нажатии "Админ-панель" меню просто закрывается, но навигация не происходит.
+`useAuth` реализован как обычный React hook, а не как Context. Каждый компонент, который вызывает `useAuth()`, создаёт свою независимую копию состояния авторизации. При переходе на `/admin`:
+
+1. `AdminRoute` монтируется и вызывает свой `useAuth()`
+2. Новый экземпляр хука начинает с `loading: true`, `user: null`
+3. Происходит гонка между `onAuthStateChange` и `getSession()`
+4. Если `loading` становится `false` раньше, чем `user` получит значение, `AdminRoute` видит `user = null` и редиректит на `/auth`
 
 ## Решение
 
-Заменить подход `asChild` + `Link` на `onClick` + `useNavigate` из React Router. Это надёжный способ, который не конфликтует с поведением Radix UI.
+Превратить `useAuth` в контекст (React Context + Provider), чтобы состояние авторизации было единым для всего приложения. Тогда при переходе на `/admin` компонент `AdminRoute` получит уже загруженное состояние, а не будет ждать нового запроса.
 
 ## Что изменится
 
-### Файл: `src/components/Header.tsx`
+### 1. Новый файл: `src/contexts/AuthContext.tsx`
 
-1. Добавить импорт `useNavigate` из `react-router-dom`
-2. Убрать `Link` из импортов (если больше нигде не используется)
-3. Заменить пункт "Админ-панель" с `DropdownMenuItem asChild` + `Link` на обычный `DropdownMenuItem` с `onClick={() => navigate('/admin')}`
+Создать React Context и Provider для авторизации:
+- `AuthProvider` оборачивает приложение
+- Подписывается на `onAuthStateChange` один раз при монтировании
+- Хранит `user`, `session`, `loading`, `signOut` в контексте
+- `useAuth()` теперь просто читает из контекста (а не создаёт новое состояние)
 
-### Было:
-```tsx
-<DropdownMenuItem asChild className="cursor-pointer">
-  <Link to="/admin" className="flex items-center">
-    <Shield className="w-4 h-4 mr-2" />
-    Админ-панель
-  </Link>
-</DropdownMenuItem>
-```
+### 2. Файл: `src/App.tsx`
 
-### Станет:
-```tsx
-<DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
-  <Shield className="w-4 h-4 mr-2" />
-  Админ-панель
-</DropdownMenuItem>
-```
+- Обернуть `BrowserRouter` в `AuthProvider`
+- Порядок: `QueryClientProvider` -> `AuthProvider` -> `BrowserRouter` -> ...
 
-Минимальное изменение -- всего несколько строк в одном файле.
+### 3. Файл: `src/hooks/useAuth.ts`
+
+- Заменить содержимое на реэкспорт из контекста: `export { useAuth } from "@/contexts/AuthContext"`
+- Все существующие импорты `useAuth` продолжат работать без изменений
+
+### 4. Файлы `AdminRoute.tsx`, `ProtectedRoute.tsx`, `Header.tsx` и остальные
+
+- Не нужно менять. Они уже импортируют `useAuth` из `@/hooks/useAuth`, который теперь будет реэкспортировать хук из контекста.
+
+## Результат
+
+- Состояние авторизации инициализируется один раз при запуске приложения
+- Все компоненты (Index, AdminRoute, Header) видят одно и то же состояние
+- При переходе на `/admin` компонент `AdminRoute` сразу видит `user` -- без повторного запроса к серверу, без race condition
+- Навигация на админ-панель будет работать корректно

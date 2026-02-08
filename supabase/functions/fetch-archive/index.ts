@@ -40,14 +40,41 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Get settings for WB API key
+    // Resolve user_id: from body (internal call) or from auth header
+    let userId: string;
+    const body = await req.json().catch(() => ({}));
+
+    if (body.user_id) {
+      // Called internally from validate-api-key with service role
+      userId = body.user_id;
+    } else {
+      // Called directly by user
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      userId = user.id;
+    }
+
+    // Get settings for this user's WB API key
     const { data: settings } = await supabase
       .from("settings")
       .select("*")
-      .limit(1)
+      .eq("user_id", userId)
       .maybeSingle();
 
-    const WB_API_KEY = settings?.wb_api_key || Deno.env.get("WB_API_KEY");
+    const WB_API_KEY = settings?.wb_api_key;
     if (!WB_API_KEY) {
       throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
     }
@@ -59,7 +86,7 @@ serve(async (req) => {
     let hasMore = true;
 
     while (hasMore) {
-      console.log(`Fetching archive page: skip=${skip}, take=${take}`);
+      console.log(`[fetch-archive] user=${userId} Fetching page: skip=${skip}, take=${take}`);
 
       const wbData = await fetchAnsweredReviews(WB_API_KEY, skip, take);
       const feedbacks = wbData?.data?.feedbacks || [];
@@ -71,11 +98,12 @@ serve(async (req) => {
 
       totalFetched += feedbacks.length;
 
-      // Collect wb_ids to check for existing
+      // Check for existing reviews for this user
       const wbIds = feedbacks.map((fb: any) => fb.id);
       const { data: existingRows } = await supabase
         .from("reviews")
         .select("wb_id")
+        .eq("user_id", userId)
         .in("wb_id", wbIds);
 
       const existingIds = new Set((existingRows || []).map((r: any) => r.wb_id));
@@ -84,6 +112,7 @@ serve(async (req) => {
         .filter((fb: any) => !existingIds.has(fb.id))
         .map((fb: any) => ({
           wb_id: fb.id,
+          user_id: userId,
           rating: fb.productValuation || 5,
           author_name: fb.userName || "Покупатель",
           text: fb.text || null,
@@ -114,18 +143,16 @@ serve(async (req) => {
         totalInserted += newRows.length;
       }
 
-      // If we got fewer than `take`, there are no more pages
       if (feedbacks.length < take) {
         hasMore = false;
       } else {
         skip += take;
-        // Rate limit: 350ms between requests
         await delay(350);
       }
     }
 
     console.log(
-      `Archive fetch complete: ${totalFetched} fetched, ${totalInserted} inserted`
+      `[fetch-archive] user=${userId} Complete: ${totalFetched} fetched, ${totalInserted} inserted`
     );
 
     return new Response(

@@ -21,33 +21,53 @@ serve(async (req) => {
     if (!SUPABASE_URL) throw new Error("SUPABASE_URL is not configured");
     if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
 
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Extract user_id from auth
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const userId = user.id;
+
     const { review_id } = await req.json();
     if (!review_id) throw new Error("review_id is required");
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Get review
+    // Get review scoped to this user
     const { data: review, error: fetchError } = await supabase
       .from("reviews")
       .select("*")
       .eq("id", review_id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (fetchError) throw new Error(`DB error: ${fetchError.message}`);
     if (!review) throw new Error("Review not found");
 
-    // Get settings for prompt template
+    // Get settings for this user's prompt template
     const { data: settings } = await supabase
       .from("settings")
       .select("ai_prompt_template")
-      .limit(1)
+      .eq("user_id", userId)
       .maybeSingle();
 
-    // Fetch recommendations for this product article
+    // Fetch recommendations scoped to this user
     const { data: recommendations } = await supabase
       .from("product_recommendations")
       .select("target_article, target_name")
-      .eq("source_article", review.product_article);
+      .eq("source_article", review.product_article)
+      .eq("user_id", userId);
 
     let recommendationInstruction = "";
     if (recommendations && recommendations.length > 0) {
@@ -62,7 +82,7 @@ serve(async (req) => {
       settings?.ai_prompt_template ||
       "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
 
-    // Check if review is empty (no text, pros, cons)
+    // Check if review is empty
     const isEmptyReview = !review.text && !review.pros && !review.cons;
     const isHighRating = review.rating >= 4;
 
@@ -75,8 +95,6 @@ serve(async (req) => {
 
       const shortPrompt = `Покупатель оставил оценку ${review.rating} из 5 без текста. Напиши краткую благодарность за высокую оценку. Максимум 1-2 предложения. Без лишних деталей.${nameInstruction}`;
 
-      console.log(`[generate-reply] Empty review with ${review.rating}★, using short gratitude prompt`);
-
       const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -85,9 +103,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "user", content: shortPrompt },
-          ],
+          messages: [{ role: "user", content: shortPrompt }],
           max_tokens: 200,
           temperature: 0.7,
         }),
@@ -100,14 +116,14 @@ serve(async (req) => {
 
       const aiData = await aiResp.json();
       const newDraft = aiData.choices?.[0]?.message?.content || "";
-      console.log(`[generate-reply] Short gratitude response: ${newDraft}`);
 
       if (!newDraft) throw new Error("AI returned empty response");
 
       const { error: updateError } = await supabase
         .from("reviews")
         .update({ ai_draft: newDraft, status: "pending" })
-        .eq("id", review_id);
+        .eq("id", review_id)
+        .eq("user_id", userId);
 
       if (updateError) throw new Error(`DB update error: ${updateError.message}`);
 
@@ -132,7 +148,7 @@ serve(async (req) => {
       attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
     }
 
-    // Build full review content from all text fields
+    // Build full review content
     let reviewContent = "";
     const contentParts: string[] = [];
     if (review.text) contentParts.push(`Комментарий: ${review.text}`);
@@ -146,9 +162,6 @@ serve(async (req) => {
       : "";
 
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
-
-    console.log(`[generate-reply] Using prompt (${promptTemplate.length} chars): ${promptTemplate.substring(0, 200)}...`);
-    console.log(`[generate-reply] User message: ${userMessage}`);
 
     // Call OpenRouter
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -176,15 +189,14 @@ serve(async (req) => {
     const aiData = await aiResp.json();
     const newDraft = aiData.choices?.[0]?.message?.content || "";
 
-    console.log(`[generate-reply] AI response (${newDraft.length} chars): ${newDraft.substring(0, 200)}...`);
-
     if (!newDraft) throw new Error("AI returned empty response");
 
-    // Update review with new draft
+    // Update review with new draft (scoped to user)
     const { error: updateError } = await supabase
       .from("reviews")
       .update({ ai_draft: newDraft, status: "pending" })
-      .eq("id", review_id);
+      .eq("id", review_id)
+      .eq("user_id", userId);
 
     if (updateError) throw new Error(`DB update error: ${updateError.message}`);
 

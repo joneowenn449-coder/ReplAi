@@ -49,15 +49,12 @@ async function generateAIReply(
   isEmpty: boolean = false,
   recommendationInstruction: string = ""
 ) {
-  // For empty reviews with 4-5 stars, use a short gratitude prompt
   if (isEmpty && rating >= 4) {
     const nameInstruction = authorName && authorName !== "Покупатель"
       ? ` Обратись к покупателю по имени: ${authorName}.`
       : "";
 
     const shortPrompt = `Покупатель оставил оценку ${rating} из 5 без текста. Напиши краткую благодарность за высокую оценку. Максимум 1-2 предложения. Без лишних деталей.${nameInstruction}`;
-
-    console.log(`[sync-reviews] Empty review with ${rating}★, using short gratitude prompt`);
 
     const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -67,9 +64,7 @@ async function generateAIReply(
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "user", content: shortPrompt },
-        ],
+        messages: [{ role: "user", content: shortPrompt }],
         max_tokens: 200,
         temperature: 0.7,
       }),
@@ -81,12 +76,9 @@ async function generateAIReply(
     }
 
     const data = await resp.json();
-    const reply = data.choices?.[0]?.message?.content || "";
-    console.log(`[sync-reviews] Short gratitude response: ${reply}`);
-    return reply;
+    return data.choices?.[0]?.message?.content || "";
   }
 
-  // Build attachment info
   let attachmentInfo = "";
   if (photoCount > 0 || hasVideo) {
     const parts: string[] = [];
@@ -103,9 +95,6 @@ async function generateAIReply(
     : "";
 
   const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
-
-  console.log(`[sync-reviews] AI prompt (${systemPrompt.length} chars): ${systemPrompt.substring(0, 200)}...`);
-  console.log(`[sync-reviews] AI user message: ${userMessage}`);
 
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -130,9 +119,7 @@ async function generateAIReply(
   }
 
   const data = await resp.json();
-  const reply = data.choices?.[0]?.message?.content || "";
-  console.log(`[sync-reviews] AI response (${reply.length} chars): ${reply.substring(0, 200)}...`);
-  return reply;
+  return data.choices?.[0]?.message?.content || "";
 }
 
 function buildReviewText(text?: string, pros?: string, cons?: string): string {
@@ -145,6 +132,195 @@ function buildReviewText(text?: string, pros?: string, cons?: string): string {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+interface UserSettings {
+  id: string;
+  user_id: string;
+  wb_api_key: string;
+  ai_prompt_template: string;
+  reply_modes: Record<string, string>;
+  auto_reply_enabled: boolean;
+}
+
+async function processUserReviews(
+  supabase: any,
+  userSettings: UserSettings,
+  OPENROUTER_API_KEY: string
+) {
+  const userId = userSettings.user_id;
+  const WB_API_KEY = userSettings.wb_api_key;
+  const defaultModes = { "1": "manual", "2": "manual", "3": "manual", "4": "manual", "5": "manual" };
+  const replyModes = userSettings.reply_modes || defaultModes;
+  const promptTemplate = userSettings.ai_prompt_template ||
+    "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
+
+  // Fetch ALL unanswered reviews from WB with pagination
+  const allFeedbacks: any[] = [];
+  let skip = 0;
+  const take = 50;
+  while (true) {
+    const wbData = await fetchWBReviews(WB_API_KEY, skip, take);
+    const feedbacks = wbData?.data?.feedbacks || [];
+    console.log(`[sync-reviews] user=${userId} WB page skip=${skip}: got ${feedbacks.length} reviews`);
+    if (feedbacks.length === 0) break;
+    allFeedbacks.push(...feedbacks);
+    if (feedbacks.length < take) break;
+    skip += take;
+    await delay(350);
+  }
+
+  console.log(`[sync-reviews] user=${userId} Fetched ${allFeedbacks.length} total unanswered reviews`);
+
+  let newCount = 0;
+  let autoSentCount = 0;
+  const errors: string[] = [];
+
+  for (const fb of allFeedbacks) {
+    const wbId = fb.id;
+
+    // Check if already exists for this user
+    const { data: existing } = await supabase
+      .from("reviews")
+      .select("id")
+      .eq("wb_id", wbId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existing) continue;
+
+    const photoLinks = fb.photoLinks || [];
+    const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
+    const isEmptyReview = !fb.text && !fb.pros && !fb.cons;
+
+    // Fetch recommendations for this product article (scoped to user)
+    const productArticle = String(fb.productDetails?.nmId || fb.nmId || "");
+    let recommendationInstruction = "";
+    if (productArticle) {
+      const { data: recommendations } = await supabase
+        .from("product_recommendations")
+        .select("target_article, target_name")
+        .eq("source_article", productArticle)
+        .eq("user_id", userId);
+
+      if (recommendations && recommendations.length > 0) {
+        const recList = recommendations
+          .map((r: any) => `- Артикул ${r.target_article}${r.target_name ? `: "${r.target_name}"` : ""}`)
+          .join("\n");
+        recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
+      }
+    }
+
+    // Generate AI draft
+    let aiDraft = "";
+    try {
+      aiDraft = await generateAIReply(
+        OPENROUTER_API_KEY,
+        promptTemplate,
+        buildReviewText(fb.text, fb.pros, fb.cons),
+        fb.productValuation || 5,
+        fb.productDetails?.productName || fb.subjectName || "Товар",
+        photoLinks.length,
+        hasVideo,
+        fb.userName || "",
+        isEmptyReview,
+        recommendationInstruction
+      );
+    } catch (e) {
+      console.error(`AI generation failed for ${wbId}:`, e);
+      errors.push(`AI error for ${wbId}: ${e.message}`);
+    }
+
+    let status = "pending";
+    const rating = fb.productValuation || 5;
+    const ratingKey = String(rating);
+    const modeForRating = replyModes[ratingKey] || "manual";
+
+    // Auto-reply if mode is "auto" for this rating and draft generated
+    if (modeForRating === "auto" && aiDraft) {
+      try {
+        await sendWBAnswer(WB_API_KEY, wbId, aiDraft);
+        status = "auto";
+        autoSentCount++;
+        await delay(350);
+      } catch (e) {
+        console.error(`Auto-reply failed for ${wbId}:`, e);
+        errors.push(`Send error for ${wbId}: ${e.message}`);
+        status = "pending";
+      }
+    }
+
+    // Save to DB with user_id
+    const { error: insertError } = await supabase.from("reviews").insert({
+      wb_id: wbId,
+      user_id: userId,
+      rating: fb.productValuation || 5,
+      author_name: fb.userName || "Покупатель",
+      text: fb.text || null,
+      pros: fb.pros || null,
+      cons: fb.cons || null,
+      product_name: fb.productDetails?.productName || fb.subjectName || "Товар",
+      product_article: String(fb.productDetails?.nmId || fb.nmId || ""),
+      photo_links: photoLinks,
+      has_video: hasVideo,
+      created_date: fb.createdDate || new Date().toISOString(),
+      status,
+      ai_draft: aiDraft || null,
+      sent_answer: status === "auto" ? aiDraft : null,
+    });
+
+    if (insertError) {
+      console.error(`Insert error for ${wbId}:`, insertError);
+      errors.push(`DB error for ${wbId}: ${insertError.message}`);
+    } else {
+      newCount++;
+    }
+  }
+
+  // Retry pending reviews that should be auto-sent (scoped to user)
+  const { data: pendingReviews } = await supabase
+    .from("reviews")
+    .select("id, wb_id, rating, ai_draft")
+    .eq("status", "pending")
+    .eq("user_id", userId)
+    .not("ai_draft", "is", null);
+
+  if (pendingReviews && pendingReviews.length > 0) {
+    console.log(`[sync-reviews] user=${userId} Found ${pendingReviews.length} pending reviews with AI drafts`);
+    for (const pr of pendingReviews) {
+      const ratingKey = String(pr.rating);
+      const modeForRating = replyModes[ratingKey] || "manual";
+
+      if (modeForRating === "auto" && pr.ai_draft) {
+        try {
+          await sendWBAnswer(WB_API_KEY, pr.wb_id, pr.ai_draft);
+          await supabase
+            .from("reviews")
+            .update({ status: "auto", sent_answer: pr.ai_draft, updated_at: new Date().toISOString() })
+            .eq("id", pr.id);
+          autoSentCount++;
+          await delay(350);
+        } catch (e) {
+          console.error(`[sync-reviews] Auto-retry failed for ${pr.wb_id}:`, e);
+          errors.push(`Auto-retry error for ${pr.wb_id}: ${e.message}`);
+        }
+      }
+    }
+  }
+
+  // Update last_sync_at
+  await supabase
+    .from("settings")
+    .update({ last_sync_at: new Date().toISOString() })
+    .eq("id", userSettings.id);
+
+  return {
+    userId,
+    fetched: allFeedbacks.length,
+    new: newCount,
+    autoSent: autoSentCount,
+    errors: errors.length > 0 ? errors : undefined,
+  };
 }
 
 serve(async (req) => {
@@ -163,207 +339,70 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Get settings
-    const { data: settings } = await supabase
-      .from("settings")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
+    // Determine mode: single user (auth header) or cron (all users)
+    const authHeader = req.headers.get("Authorization");
+    let userId: string | null = null;
 
-    // Resolve WB API key: DB first, then env fallback
-    const WB_API_KEY = settings?.wb_api_key || Deno.env.get("WB_API_KEY");
-    if (!WB_API_KEY) throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
-
-    // Per-rating reply modes: default all to "manual"
-    const defaultModes = { "1": "manual", "2": "manual", "3": "manual", "4": "manual", "5": "manual" };
-    const replyModes = settings?.reply_modes || defaultModes;
-    const promptTemplate =
-      settings?.ai_prompt_template ||
-      "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
-
-    // Fetch ALL unanswered reviews from WB with pagination
-    const allFeedbacks: any[] = [];
-    let skip = 0;
-    const take = 50;
-    while (true) {
-      const wbData = await fetchWBReviews(WB_API_KEY, skip, take);
-      const feedbacks = wbData?.data?.feedbacks || [];
-      console.log(`[sync-reviews] WB page skip=${skip}: got ${feedbacks.length} reviews`);
-      if (feedbacks.length === 0) break;
-      allFeedbacks.push(...feedbacks);
-      if (feedbacks.length < take) break; // last page
-      skip += take;
-      await delay(350); // respect rate limit between pages
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) {
+        userId = user.id;
+      }
     }
-    const feedbacks = allFeedbacks;
 
-    console.log(`Fetched ${feedbacks.length} total unanswered reviews from WB`);
-
-    let newCount = 0;
-    let autoSentCount = 0;
-    const errors: string[] = [];
-
-    for (const fb of feedbacks) {
-      const wbId = fb.id;
-
-      // Check if already exists
-      const { data: existing } = await supabase
-        .from("reviews")
-        .select("id")
-        .eq("wb_id", wbId)
+    if (userId) {
+      // Single user mode
+      const { data: settings } = await supabase
+        .from("settings")
+        .select("*")
+        .eq("user_id", userId)
         .maybeSingle();
 
-      if (existing) continue;
-
-      const photoLinks = fb.photoLinks || [];
-      const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
-
-      // Check if review is empty (no text, pros, cons)
-      const isEmptyReview = !fb.text && !fb.pros && !fb.cons;
-
-      // Fetch recommendations for this product article
-      const productArticle = String(fb.productDetails?.nmId || fb.nmId || "");
-      let recommendationInstruction = "";
-      if (productArticle) {
-        const { data: recommendations } = await supabase
-          .from("product_recommendations")
-          .select("target_article, target_name")
-          .eq("source_article", productArticle);
-
-        if (recommendations && recommendations.length > 0) {
-          const recList = recommendations
-            .map((r: any) => `- Артикул ${r.target_article}${r.target_name ? `: "${r.target_name}"` : ""}`)
-            .join("\n");
-          recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
-          console.log(`[sync-reviews] Adding ${recommendations.length} recommendations for article ${productArticle}`);
-        }
+      if (!settings?.wb_api_key) {
+        throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
       }
 
-      // Generate AI draft
-      let aiDraft = "";
-      try {
-        aiDraft = await generateAIReply(
-          OPENROUTER_API_KEY,
-          promptTemplate,
-          buildReviewText(fb.text, fb.pros, fb.cons),
-          fb.productValuation || 5,
-          fb.productDetails?.productName || fb.subjectName || "Товар",
-          photoLinks.length,
-          hasVideo,
-          fb.userName || "",
-          isEmptyReview,
-          recommendationInstruction
-        );
-      } catch (e) {
-        console.error(`AI generation failed for ${wbId}:`, e);
-        errors.push(`AI error for ${wbId}: ${e.message}`);
-      }
+      const result = await processUserReviews(supabase, settings as UserSettings, OPENROUTER_API_KEY);
 
-
-      let status = "pending";
-      const rating = fb.productValuation || 5;
-      const ratingKey = String(rating);
-      const modeForRating = replyModes[ratingKey] || "manual";
-
-      // Auto-reply if mode is "auto" for this rating and draft generated
-      if (modeForRating === "auto" && aiDraft) {
-        try {
-          await sendWBAnswer(WB_API_KEY, wbId, aiDraft);
-          status = "auto";
-          autoSentCount++;
-          // Rate limit: max 3 req/sec
-          await delay(350);
-        } catch (e) {
-          console.error(`Auto-reply failed for ${wbId}:`, e);
-          errors.push(`Send error for ${wbId}: ${e.message}`);
-          status = "pending";
-        }
-      }
-
-      // Save to DB
-      const { error: insertError } = await supabase.from("reviews").insert({
-        wb_id: wbId,
-        rating: fb.productValuation || 5,
-        author_name: fb.userName || "Покупатель",
-        text: fb.text || null,
-        pros: fb.pros || null,
-        cons: fb.cons || null,
-        product_name:
-          fb.productDetails?.productName || fb.subjectName || "Товар",
-        product_article:
-          String(fb.productDetails?.nmId || fb.nmId || ""),
-        photo_links: photoLinks,
-        has_video: hasVideo,
-        created_date: fb.createdDate || new Date().toISOString(),
-        status,
-        ai_draft: aiDraft || null,
-        sent_answer: status === "auto" ? aiDraft : null,
-      });
-
-      if (insertError) {
-        console.error(`Insert error for ${wbId}:`, insertError);
-        errors.push(`DB error for ${wbId}: ${insertError.message}`);
-      } else {
-        newCount++;
-      }
-    }
-
-    // === Retry pending reviews that should be auto-sent ===
-    console.log("[sync-reviews] Checking for pending reviews to auto-send...");
-    const { data: pendingReviews } = await supabase
-      .from("reviews")
-      .select("id, wb_id, rating, ai_draft")
-      .eq("status", "pending")
-      .not("ai_draft", "is", null);
-
-    if (pendingReviews && pendingReviews.length > 0) {
-      console.log(`[sync-reviews] Found ${pendingReviews.length} pending reviews with AI drafts`);
-      for (const pr of pendingReviews) {
-        const ratingKey = String(pr.rating);
-        const modeForRating = replyModes[ratingKey] || "manual";
-        console.log(`[sync-reviews] Review ${pr.wb_id}: rating=${pr.rating}, mode=${modeForRating}`);
-
-        if (modeForRating === "auto" && pr.ai_draft) {
-          try {
-            console.log(`[sync-reviews] Auto-sending reply for pending review ${pr.wb_id}...`);
-            await sendWBAnswer(WB_API_KEY, pr.wb_id, pr.ai_draft);
-            await supabase
-              .from("reviews")
-              .update({ status: "auto", sent_answer: pr.ai_draft, updated_at: new Date().toISOString() })
-              .eq("id", pr.id);
-            autoSentCount++;
-            console.log(`[sync-reviews] Successfully auto-sent reply for ${pr.wb_id}`);
-            await delay(350);
-          } catch (e) {
-            console.error(`[sync-reviews] Auto-retry failed for ${pr.wb_id}:`, e);
-            errors.push(`Auto-retry error for ${pr.wb_id}: ${e.message}`);
-          }
-        }
-      }
+      return new Response(
+        JSON.stringify({ success: true, ...result }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     } else {
-      console.log("[sync-reviews] No pending reviews to auto-send");
-    }
-
-    // Update last_sync_at
-    if (settings?.id) {
-      await supabase
+      // Cron mode — process ALL users with API keys
+      console.log("[sync-reviews] Cron mode — processing all users");
+      const { data: allSettings } = await supabase
         .from("settings")
-        .update({ last_sync_at: new Date().toISOString() })
-        .eq("id", settings.id);
-    }
+        .select("*")
+        .not("wb_api_key", "is", null);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        fetched: feedbacks.length,
-        new: newCount,
-        autoSent: autoSentCount,
-        errors: errors.length > 0 ? errors : undefined,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (!allSettings || allSettings.length === 0) {
+        console.log("[sync-reviews] No users with API keys configured");
+        return new Response(
+          JSON.stringify({ success: true, message: "No users to process" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-    );
+
+      const results = [];
+      for (const settings of allSettings) {
+        if (!settings.user_id) continue;
+        try {
+          console.log(`[sync-reviews] Processing user ${settings.user_id}`);
+          const result = await processUserReviews(supabase, settings as UserSettings, OPENROUTER_API_KEY);
+          results.push(result);
+        } catch (e) {
+          console.error(`[sync-reviews] Error processing user ${settings.user_id}:`, e);
+          results.push({ userId: settings.user_id, error: e.message });
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, results }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
   } catch (e) {
     console.error("sync-reviews error:", e);
     return new Response(

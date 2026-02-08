@@ -20,6 +20,26 @@ serve(async (req) => {
       throw new Error("Server configuration error");
     }
 
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Extract user_id from auth
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ valid: false, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ valid: false, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const userId = user.id;
+
     const { api_key } = await req.json();
     if (!api_key || typeof api_key !== "string" || api_key.trim().length < 10) {
       throw new Error("Некорректный API-ключ");
@@ -50,13 +70,11 @@ serve(async (req) => {
     // Consume response body
     await testResp.text();
 
-    // Key is valid — save to settings
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
+    // Key is valid — save to settings for this user
     const { data: settings } = await supabase
       .from("settings")
       .select("id")
-      .limit(1)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (settings) {
@@ -68,7 +86,7 @@ serve(async (req) => {
     } else {
       const { error } = await supabase
         .from("settings")
-        .insert({ wb_api_key: trimmedKey });
+        .insert({ wb_api_key: trimmedKey, user_id: userId });
       if (error) throw new Error(`DB error: ${error.message}`);
     }
 
@@ -92,15 +110,16 @@ serve(async (req) => {
         ? trimmedKey.slice(0, 4) + "****...****" + trimmedKey.slice(-4)
         : "****";
 
-    // Check if this is first setup (no reviews yet) — auto-import archive
+    // Check if this is first setup (no reviews for this user) — auto-import archive
     let archiveImported = false;
     try {
       const { count, error: countError } = await supabase
         .from("reviews")
-        .select("id", { count: "exact", head: true });
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
 
       if (!countError && (count === null || count === 0)) {
-        console.log("First setup detected — triggering archive import");
+        console.log(`First setup detected for user ${userId} — triggering archive import`);
         const archiveResp = await fetch(
           `${SUPABASE_URL}/functions/v1/fetch-archive`,
           {
@@ -109,7 +128,7 @@ serve(async (req) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ user_id: userId }),
           }
         );
         const archiveData = await archiveResp.json();

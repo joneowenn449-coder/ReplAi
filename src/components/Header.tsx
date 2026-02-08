@@ -1,10 +1,18 @@
-import { Settings, LogOut, Coins, Shield } from "lucide-react";
+import { Settings, LogOut, Coins, Shield, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavTabs } from "./NavTabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useAdminRole } from "@/hooks/useAdmin";
 import { Link } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface HeaderProps {
   activeTab: string;
@@ -18,10 +26,13 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
   const { data: tokenBalance } = useTokenBalance();
   const { data: isAdmin } = useAdminRole();
 
+  const userInitial = user?.email ? user.email[0].toUpperCase() : "?";
+
   return (
     <div className="bg-card border-b border-border">
       <div className="max-w-6xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between mb-4">
+          {/* Logo */}
           <div className="flex items-center gap-2">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect width="32" height="32" rx="8" fill="hsl(var(--primary))" />
@@ -33,52 +44,62 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Token Balance */}
-            {tokenBalance !== null && tokenBalance !== undefined && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-sm font-medium">
-                <Coins className="w-4 h-4 text-primary" />
-                <span>{tokenBalance}</span>
-                <span className="text-muted-foreground">токенов</span>
-              </div>
-            )}
-
-            {/* Admin link */}
-            {isAdmin && (
-              <Button variant="ghost" size="sm" asChild className="gap-1.5">
-                <Link to="/admin">
-                  <Shield className="w-4 h-4" />
-                  <span className="hidden sm:inline">Админ</span>
-                </Link>
+          {/* Profile Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
+                <span className="text-sm font-semibold">{userInitial}</span>
               </Button>
-            )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 bg-popover z-50">
+              <DropdownMenuLabel className="font-normal">
+                <p className="text-sm font-medium leading-none">{user?.email ?? "—"}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
 
-            {/* User email */}
-            {user?.email && (
-              <span className="text-sm text-muted-foreground hidden sm:block">
-                {user.email}
-              </span>
-            )}
+              {/* Token balance */}
+              {tokenBalance !== null && tokenBalance !== undefined && (
+                <>
+                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
+                    <Coins className="w-4 h-4 text-primary" />
+                    <span className="font-medium">{tokenBalance}</span>
+                    <span className="text-muted-foreground">токенов</span>
+                  </div>
+                  <DropdownMenuSeparator />
+                </>
+              )}
 
-            <Button variant="ghost" size="icon" onClick={signOut} title="Выйти">
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
+              <DropdownMenuItem onClick={onSettingsClick} className="cursor-pointer">
+                <Settings className="w-4 h-4 mr-2" />
+                Настройки
+              </DropdownMenuItem>
+
+              {isAdmin && (
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link to="/admin" className="flex items-center">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Админ-панель
+                  </Link>
+                </DropdownMenuItem>
+              )}
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem onClick={signOut} className="cursor-pointer text-destructive focus:text-destructive">
+                <LogOut className="w-4 h-4 mr-2" />
+                Выйти
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <NavTabs activeTab={activeTab} onTabChange={onTabChange} unreadChatsCount={unreadChatsCount} />
-        
-        <div className="flex items-start justify-between mt-6">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Отзывы Wildberries</h1>
-            <p className="text-muted-foreground mt-1">
-              Управление отзывами и автоответами с помощью ИИ
-            </p>
-          </div>
-          <Button variant="outline" onClick={onSettingsClick} className="gap-2">
-            <Settings className="w-4 h-4" />
-            Настройки
-          </Button>
+
+        <div className="mt-6">
+          <h1 className="text-2xl font-bold text-foreground">Отзывы Wildberries</h1>
+          <p className="text-muted-foreground mt-1">
+            Управление отзывами и автоответами с помощью ИИ
+          </p>
         </div>
       </div>
     </div>

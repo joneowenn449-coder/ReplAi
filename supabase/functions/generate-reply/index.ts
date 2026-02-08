@@ -96,55 +96,15 @@ serve(async (req) => {
       settings?.ai_prompt_template ||
       "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
 
-    // Check if review is empty
+    // Check if review is empty and build special instruction
     const isEmptyReview = !review.text && !review.pros && !review.cons;
-    const isHighRating = review.rating >= 4;
-
-    // For empty reviews with 4-5 stars, use a short gratitude prompt
-    if (isEmptyReview && isHighRating) {
-      const authorName = review.author_name || "";
-      const nameInstruction = authorName && authorName !== "Покупатель"
-        ? ` Обратись к покупателю по имени: ${authorName}.`
-        : "";
-
-      const shortPrompt = `Покупатель оставил оценку ${review.rating} из 5 без текста. Напиши краткую благодарность за высокую оценку. Максимум 1-2 предложения. Без лишних деталей.${nameInstruction}`;
-
-      const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [{ role: "user", content: shortPrompt }],
-          max_tokens: 200,
-          temperature: 0.7,
-        }),
-      });
-
-      if (!aiResp.ok) {
-        const text = await aiResp.text();
-        throw new Error(`OpenRouter error ${aiResp.status}: ${text}`);
+    let emptyInstruction = "";
+    if (isEmptyReview) {
+      if (review.rating >= 4) {
+        emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил только оценку ${review.rating} из 5.\nНапиши КОРОТКУЮ благодарность за отзыв и высокую оценку. Максимум 1-2 предложения.\nНе задавай вопросов. Не фантазируй о товаре.]`;
+      } else {
+        emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил низкую оценку ${review.rating} из 5 без пояснения.\nВырази сожаление, что опыт не оправдал ожиданий.\nПредложи написать в чат с продавцом, чтобы разобраться в ситуации и помочь.\nМаксимум 1-2 предложения. Не задавай лишних вопросов.]`;
       }
-
-      const aiData = await aiResp.json();
-      const newDraft = aiData.choices?.[0]?.message?.content || "";
-
-      if (!newDraft) throw new Error("AI returned empty response");
-
-      const { error: updateError } = await supabase
-        .from("reviews")
-        .update({ ai_draft: newDraft, status: "pending" })
-        .eq("id", review_id)
-        .eq("user_id", userId);
-
-      if (updateError) throw new Error(`DB update error: ${updateError.message}`);
-
-      return new Response(
-        JSON.stringify({ success: true, draft: newDraft }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     // Build attachment info
@@ -190,7 +150,7 @@ serve(async (req) => {
       ? `\n\nНазвание бренда продавца: ${brandName}. Используй это название при обращении к покупателю.`
       : "";
 
-    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
+    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
     // Call OpenRouter
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -205,7 +165,7 @@ serve(async (req) => {
           { role: "system", content: promptTemplate },
           { role: "user", content: userMessage },
         ],
-        max_tokens: 1000,
+        max_tokens: isEmptyReview ? 300 : 1000,
         temperature: 0.7,
       }),
     });

@@ -65,34 +65,14 @@ async function generateAIReply(
   isRefusal: boolean = false,
   brandName: string = ""
 ) {
-  if (isEmpty && rating >= 4) {
-    const nameInstruction = authorName && authorName !== "Покупатель"
-      ? ` Обратись к покупателю по имени: ${authorName}.`
-      : "";
-
-    const shortPrompt = `Покупатель оставил оценку ${rating} из 5 без текста. Напиши краткую благодарность за высокую оценку. Максимум 1-2 предложения. Без лишних деталей.${nameInstruction}`;
-
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "user", content: shortPrompt }],
-        max_tokens: 200,
-        temperature: 0.7,
-      }),
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`OpenRouter error ${resp.status}: ${text}`);
+  // Build empty review instruction if needed
+  let emptyInstruction = "";
+  if (isEmpty) {
+    if (rating >= 4) {
+      emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил только оценку ${rating} из 5.\nНапиши КОРОТКУЮ благодарность за отзыв и высокую оценку. Максимум 1-2 предложения.\nНе задавай вопросов. Не фантазируй о товаре.]`;
+    } else {
+      emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил низкую оценку ${rating} из 5 без пояснения.\nВырази сожаление, что опыт не оправдал ожиданий.\nПредложи написать в чат с продавцом, чтобы разобраться в ситуации и помочь.\nМаксимум 1-2 предложения. Не задавай лишних вопросов.]`;
     }
-
-    const data = await resp.json();
-    return data.choices?.[0]?.message?.content || "";
   }
 
   let attachmentInfo = "";
@@ -118,7 +98,7 @@ async function generateAIReply(
     ? `\n\nНазвание бренда продавца: ${brandName}. Используй это название при обращении к покупателю.`
     : "";
 
-  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
+  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -131,7 +111,7 @@ async function generateAIReply(
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 1000,
+      max_tokens: isEmpty ? 300 : 1000,
       temperature: 0.7,
     }),
   });

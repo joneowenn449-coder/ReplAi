@@ -35,7 +35,7 @@ const Auth = () => {
           },
         });
         if (error) throw error;
-        toast.success("Проверьте почту для подтверждения регистрации");
+        toast.success("Регистрация успешна!");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,

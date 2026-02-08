@@ -1,8 +1,10 @@
-import { Settings, LogOut, Coins } from "lucide-react";
+import { Settings, LogOut, Coins, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavTabs } from "./NavTabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
+import { useAdminRole } from "@/hooks/useAdmin";
+import { Link } from "react-router-dom";
 
 interface HeaderProps {
   activeTab: string;
@@ -14,6 +16,7 @@ interface HeaderProps {
 export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCount }: HeaderProps) => {
   const { user, signOut } = useAuth();
   const { data: tokenBalance } = useTokenBalance();
+  const { data: isAdmin } = useAdminRole();
 
   return (
     <div className="bg-card border-b border-border">
@@ -38,6 +41,16 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
                 <span>{tokenBalance}</span>
                 <span className="text-muted-foreground">токенов</span>
               </div>
+            )}
+
+            {/* Admin link */}
+            {isAdmin && (
+              <Button variant="ghost" size="sm" asChild className="gap-1.5">
+                <Link to="/admin">
+                  <Shield className="w-4 h-4" />
+                  <span className="hidden sm:inline">Админ</span>
+                </Link>
+              </Button>
             )}
 
             {/* User email */}

@@ -99,7 +99,7 @@ async function generateAIReply(
     : "";
 
   const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
-  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -118,7 +118,7 @@ async function generateAIReply(
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`OpenRouter error ${resp.status}: ${text}`);
+    throw new Error(`AI gateway error ${resp.status}: ${text}`);
   }
 
   const data = await resp.json();
@@ -346,11 +346,11 @@ serve(async (req) => {
   }
 
   try {
-    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
     if (!SUPABASE_URL) throw new Error("SUPABASE_URL is not configured");
     if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
 
@@ -380,7 +380,7 @@ serve(async (req) => {
         throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
       }
 
-      const result = await processUserReviews(supabase, settings as UserSettings, OPENROUTER_API_KEY);
+      const result = await processUserReviews(supabase, settings as UserSettings, LOVABLE_API_KEY);
 
       return new Response(
         JSON.stringify({ success: true, ...result }),
@@ -407,7 +407,7 @@ serve(async (req) => {
         if (!settings.user_id) continue;
         try {
           console.log(`[sync-reviews] Processing user ${settings.user_id}`);
-          const result = await processUserReviews(supabase, settings as UserSettings, OPENROUTER_API_KEY);
+          const result = await processUserReviews(supabase, settings as UserSettings, LOVABLE_API_KEY);
           results.push(result);
         } catch (e) {
           console.error(`[sync-reviews] Error processing user ${settings.user_id}:`, e);

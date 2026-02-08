@@ -7,6 +7,20 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const REFUSAL_KEYWORDS = [
+  "отказ", "вернул", "вернула", "возврат",
+  "не выкупил", "не выкупила", "не забрал", "не забрала",
+  "отдал предпочтение", "отдала предпочтение",
+  "не подошёл", "не подошла", "не подошло", "не подошел",
+  "отправил обратно", "отправила обратно",
+  "выбрал другой", "выбрала другую", "выбрала другой",
+];
+
+function detectRefusal(text?: string | null, pros?: string | null, cons?: string | null): boolean {
+  const combined = [text, pros, cons].filter(Boolean).join(" ").toLowerCase();
+  return REFUSAL_KEYWORDS.some((kw) => combined.includes(kw));
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -161,7 +175,16 @@ serve(async (req) => {
       ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
       : "";
 
-    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
+    const isRefusal = detectRefusal(review.text, review.pros, review.cons);
+    const refusalWarning = isRefusal
+      ? `\n\n[ВНИМАНИЕ: Покупатель НЕ выкупил товар (обнаружены признаки отказа/возврата). НЕ благодари за покупку или выбор товара. Поблагодари за внимание к бренду, вырази сожаление, что модель не подошла, и пригласи вернуться.]`
+      : "";
+
+    if (isRefusal) {
+      console.log(`[generate-reply] Refusal detected for review ${review_id}`);
+    }
+
+    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
 
     // Call OpenRouter
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {

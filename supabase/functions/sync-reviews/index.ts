@@ -9,6 +9,20 @@ const corsHeaders = {
 
 const WB_BASE_URL = "https://feedbacks-api.wildberries.ru";
 
+const REFUSAL_KEYWORDS = [
+  "отказ", "вернул", "вернула", "возврат",
+  "не выкупил", "не выкупила", "не забрал", "не забрала",
+  "отдал предпочтение", "отдала предпочтение",
+  "не подошёл", "не подошла", "не подошло", "не подошел",
+  "отправил обратно", "отправила обратно",
+  "выбрал другой", "выбрала другую", "выбрала другой",
+];
+
+function detectRefusal(text?: string | null, pros?: string | null, cons?: string | null): boolean {
+  const combined = [text, pros, cons].filter(Boolean).join(" ").toLowerCase();
+  return REFUSAL_KEYWORDS.some((kw) => combined.includes(kw));
+}
+
 async function fetchWBReviews(apiKey: string, skip = 0, take = 50) {
   const url = `${WB_BASE_URL}/api/v1/feedbacks?isAnswered=false&take=${take}&skip=${skip}`;
   const resp = await fetch(url, {
@@ -47,7 +61,8 @@ async function generateAIReply(
   hasVideo: boolean = false,
   authorName: string = "",
   isEmpty: boolean = false,
-  recommendationInstruction: string = ""
+  recommendationInstruction: string = "",
+  isRefusal: boolean = false
 ) {
   if (isEmpty && rating >= 4) {
     const nameInstruction = authorName && authorName !== "Покупатель"
@@ -94,7 +109,11 @@ async function generateAIReply(
     ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
     : "";
 
-  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
+  const refusalWarning = isRefusal
+    ? `\n\n[ВНИМАНИЕ: Покупатель НЕ выкупил товар (обнаружены признаки отказа/возврата). НЕ благодари за покупку или выбор товара. Поблагодари за внимание к бренду, вырази сожаление, что модель не подошла, и пригласи вернуться.]`
+    : "";
+
+  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
 
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -211,6 +230,12 @@ async function processUserReviews(
       }
     }
 
+    // Detect refusal
+    const isRefusal = detectRefusal(fb.text, fb.pros, fb.cons);
+    if (isRefusal) {
+      console.log(`[sync-reviews] Refusal detected for review ${wbId}`);
+    }
+
     // Generate AI draft
     let aiDraft = "";
     try {
@@ -224,7 +249,8 @@ async function processUserReviews(
         hasVideo,
         fb.userName || "",
         isEmptyReview,
-        recommendationInstruction
+        recommendationInstruction,
+        isRefusal
       );
     } catch (e) {
       console.error(`AI generation failed for ${wbId}:`, e);

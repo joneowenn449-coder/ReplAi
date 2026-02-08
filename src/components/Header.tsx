@@ -4,7 +4,7 @@ import { NavTabs } from "./NavTabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useAdminRole } from "@/hooks/useAdmin";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +22,7 @@ interface HeaderProps {
 }
 
 export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCount }: HeaderProps) => {
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { data: tokenBalance } = useTokenBalance();
   const { data: isAdmin } = useAdminRole();
@@ -75,12 +76,10 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
               </DropdownMenuItem>
 
               {isAdmin && (
-                <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link to="/admin" className="flex items-center">
-                    <Shield className="w-4 h-4 mr-2" />
-                    Админ-панель
-                  </Link>
-                </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
+                <Shield className="w-4 h-4 mr-2" />
+                Админ-панель
+              </DropdownMenuItem>
               )}
 
               <DropdownMenuSeparator />

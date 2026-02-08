@@ -155,6 +155,7 @@ export type Database = {
         Row: {
           ai_draft: string | null
           author_name: string
+          brand_name: string
           cons: string | null
           created_date: string
           fetched_at: string
@@ -176,6 +177,7 @@ export type Database = {
         Insert: {
           ai_draft?: string | null
           author_name?: string
+          brand_name?: string
           cons?: string | null
           created_date?: string
           fetched_at?: string
@@ -197,6 +199,7 @@ export type Database = {
         Update: {
           ai_draft?: string | null
           author_name?: string
+          brand_name?: string
           cons?: string | null
           created_date?: string
           fetched_at?: string
@@ -221,6 +224,7 @@ export type Database = {
         Row: {
           ai_prompt_template: string
           auto_reply_enabled: boolean
+          brand_name: string
           id: string
           last_sync_at: string | null
           reply_modes: Json
@@ -230,6 +234,7 @@ export type Database = {
         Insert: {
           ai_prompt_template?: string
           auto_reply_enabled?: boolean
+          brand_name?: string
           id?: string
           last_sync_at?: string | null
           reply_modes?: Json
@@ -239,6 +244,7 @@ export type Database = {
         Update: {
           ai_prompt_template?: string
           auto_reply_enabled?: boolean
+          brand_name?: string
           id?: string
           last_sync_at?: string | null
           reply_modes?: Json

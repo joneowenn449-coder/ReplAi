@@ -22,6 +22,26 @@ serve(async (req) => {
       throw new Error("Missing Supabase credentials");
     }
 
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Extract user_id from auth
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const userId = user.id;
+
     const { chat_id, message } = await req.json();
     if (!chat_id) throw new Error("chat_id is required");
     if (!message || !message.trim()) throw new Error("message is required");
@@ -30,25 +50,24 @@ serve(async (req) => {
       throw new Error("Сообщение не должно превышать 1000 символов");
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Resolve WB API key
+    // Get WB API key for this user
     const { data: settings } = await supabase
       .from("settings")
       .select("wb_api_key")
-      .limit(1)
+      .eq("user_id", userId)
       .maybeSingle();
 
-    const WB_API_KEY = settings?.wb_api_key || Deno.env.get("WB_API_KEY");
+    const WB_API_KEY = settings?.wb_api_key;
     if (!WB_API_KEY) {
       throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
     }
 
-    // Get chat to obtain reply_sign
+    // Get chat scoped to this user
     const { data: chat, error: chatError } = await supabase
       .from("chats")
       .select("reply_sign")
       .eq("chat_id", chat_id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (chatError) throw new Error(`DB error: ${chatError.message}`);
@@ -73,13 +92,14 @@ serve(async (req) => {
       throw new Error(`WB Chat API error ${resp.status}: ${body}`);
     }
 
-    // Save sent message to DB
+    // Save sent message with user_id
     const eventId = `seller_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const { error: insertError } = await supabase
       .from("chat_messages")
       .insert({
         chat_id,
+        user_id: userId,
         event_id: eventId,
         sender: "seller",
         text: message.trim(),
@@ -91,14 +111,15 @@ serve(async (req) => {
       console.error("Failed to save sent message:", insertError);
     }
 
-    // Update chat's last message
+    // Update chat's last message (scoped to user)
     await supabase
       .from("chats")
       .update({
         last_message_text: message.trim(),
         last_message_at: new Date().toISOString(),
       })
-      .eq("chat_id", chat_id);
+      .eq("chat_id", chat_id)
+      .eq("user_id", userId);
 
     return new Response(
       JSON.stringify({ success: true }),

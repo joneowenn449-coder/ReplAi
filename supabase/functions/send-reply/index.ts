@@ -19,26 +19,45 @@ serve(async (req) => {
     if (!SUPABASE_URL) throw new Error("SUPABASE_URL is not configured");
     if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
 
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Extract user_id from auth
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const userId = user.id;
+
     const { review_id, answer_text } = await req.json();
     if (!review_id) throw new Error("review_id is required");
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Resolve WB API key: DB first, then env fallback
+    // Get WB API key for this user
     const { data: settings } = await supabase
       .from("settings")
       .select("wb_api_key")
-      .limit(1)
+      .eq("user_id", userId)
       .maybeSingle();
 
-    const WB_API_KEY = settings?.wb_api_key || Deno.env.get("WB_API_KEY");
+    const WB_API_KEY = settings?.wb_api_key;
     if (!WB_API_KEY) throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
 
-    // Get review from DB
+    // Get review scoped to this user
     const { data: review, error: fetchError } = await supabase
       .from("reviews")
       .select("*")
       .eq("id", review_id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (fetchError) throw new Error(`DB error: ${fetchError.message}`);
@@ -62,7 +81,7 @@ serve(async (req) => {
       throw new Error(`WB API error ${resp.status}: ${body}`);
     }
 
-    // Update DB — mark as edited if answer was already sent before
+    // Update DB
     const isEdited = !!review.sent_answer;
     const { error: updateError } = await supabase
       .from("reviews")
@@ -71,7 +90,8 @@ serve(async (req) => {
         sent_answer: textToSend,
         is_edited: isEdited,
       })
-      .eq("id", review_id);
+      .eq("id", review_id)
+      .eq("user_id", userId);
 
     if (updateError) throw new Error(`DB update error: ${updateError.message}`);
 

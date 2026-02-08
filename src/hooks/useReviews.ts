@@ -42,6 +42,7 @@ export interface Settings {
   ai_prompt_template: string;
   last_sync_at: string | null;
   wb_api_key: string | null;
+  brand_name: string;
 }
 
 export function useReviews() {

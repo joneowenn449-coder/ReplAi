@@ -62,7 +62,8 @@ async function generateAIReply(
   authorName: string = "",
   isEmpty: boolean = false,
   recommendationInstruction: string = "",
-  isRefusal: boolean = false
+  isRefusal: boolean = false,
+  brandName: string = ""
 ) {
   if (isEmpty && rating >= 4) {
     const nameInstruction = authorName && authorName !== "Покупатель"
@@ -113,8 +114,11 @@ async function generateAIReply(
     ? `\n\n[ВНИМАНИЕ: Покупатель НЕ выкупил товар (обнаружены признаки отказа/возврата). НЕ благодари за покупку или выбор товара. Поблагодари за внимание к бренду, вырази сожаление, что модель не подошла, и пригласи вернуться.]`
     : "";
 
-  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
+  const brandInstruction = brandName
+    ? `\n\nНазвание бренда продавца: ${brandName}. Используй это название при обращении к покупателю.`
+    : "";
 
+  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -160,6 +164,7 @@ interface UserSettings {
   ai_prompt_template: string;
   reply_modes: Record<string, string>;
   auto_reply_enabled: boolean;
+  brand_name: string;
 }
 
 async function processUserReviews(
@@ -230,6 +235,10 @@ async function processUserReviews(
       }
     }
 
+    // Extract brand name from WB API
+    const reviewBrandName = fb.productDetails?.brandName || "";
+    const effectiveBrand = reviewBrandName || userSettings.brand_name || "";
+
     // Detect refusal
     const isRefusal = detectRefusal(fb.text, fb.pros, fb.cons);
     if (isRefusal) {
@@ -250,7 +259,8 @@ async function processUserReviews(
         fb.userName || "",
         isEmptyReview,
         recommendationInstruction,
-        isRefusal
+        isRefusal,
+        effectiveBrand
       );
     } catch (e) {
       console.error(`AI generation failed for ${wbId}:`, e);
@@ -287,6 +297,7 @@ async function processUserReviews(
       cons: fb.cons || null,
       product_name: fb.productDetails?.productName || fb.subjectName || "Товар",
       product_article: String(fb.productDetails?.nmId || fb.nmId || ""),
+      brand_name: reviewBrandName,
       photo_links: photoLinks,
       has_video: hasVideo,
       created_date: fb.createdDate || new Date().toISOString(),

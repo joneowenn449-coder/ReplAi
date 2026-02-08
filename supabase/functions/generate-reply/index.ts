@@ -69,10 +69,10 @@ serve(async (req) => {
     if (fetchError) throw new Error(`DB error: ${fetchError.message}`);
     if (!review) throw new Error("Review not found");
 
-    // Get settings for this user's prompt template
+    // Get settings for this user's prompt template and brand
     const { data: settings } = await supabase
       .from("settings")
-      .select("ai_prompt_template")
+      .select("ai_prompt_template, brand_name")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -184,7 +184,13 @@ serve(async (req) => {
       console.log(`[generate-reply] Refusal detected for review ${review_id}`);
     }
 
-    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
+    // Determine brand name: review-level > settings-level
+    const brandName = review.brand_name || settings?.brand_name || "";
+    const brandInstruction = brandName
+      ? `\n\nНазвание бренда продавца: ${brandName}. Используй это название при обращении к покупателю.`
+      : "";
+
+    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}`;
 
     // Call OpenRouter
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {

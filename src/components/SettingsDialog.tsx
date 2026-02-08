@@ -28,6 +28,7 @@ import {
   DEFAULT_REPLY_MODES,
   ReplyModes,
   ReplyMode,
+  Settings,
 } from "@/hooks/useReviews";
 import { toast } from "sonner";
 import { Check, Pencil, Trash2, Loader2, KeyRound, Star } from "lucide-react";
@@ -50,6 +51,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   const deleteApiKey = useDeleteApiKey();
 
   const [prompt, setPrompt] = useState("");
+  const [brandName, setBrandName] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [isEditingKey, setIsEditingKey] = useState(false);
   const [replyModes, setReplyModes] = useState<ReplyModes>(DEFAULT_REPLY_MODES);
@@ -60,7 +62,10 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
     if (settings?.ai_prompt_template) {
       setPrompt(settings.ai_prompt_template);
     }
-  }, [settings?.ai_prompt_template]);
+    if (settings?.brand_name !== undefined) {
+      setBrandName(settings.brand_name);
+    }
+  }, [settings?.ai_prompt_template, settings?.brand_name]);
 
   useEffect(() => {
     if (settings?.reply_modes) {
@@ -77,7 +82,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
 
   const handleSaveSettings = () => {
     updateSettings.mutate(
-      { ai_prompt_template: prompt },
+      { ai_prompt_template: prompt, brand_name: brandName } as Partial<Settings>,
       {
         onSuccess: () => {
           toast.success("Настройки сохранены");
@@ -283,6 +288,22 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
 
           {/* Recommendations Section */}
           <RecommendationsSection />
+
+          {/* Brand Name Section */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground block">
+              Название бренда (по умолчанию)
+            </label>
+            <Input
+              value={brandName}
+              onChange={(e) => setBrandName(e.target.value)}
+              placeholder="Например: LUNÉRA"
+              className="text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Бренд автоматически определяется из WB для каждого отзыва. Это значение используется как запасное, если бренд не определён.
+            </p>
+          </div>
 
           {/* AI Prompt Section */}
           <div className="space-y-2">

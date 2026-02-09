@@ -1,28 +1,28 @@
 import { useState } from "react";
-import { useAdminTransactions } from "@/hooks/useAdmin";
+import { useAdminTransactions, useAdminAiTransactions } from "@/hooks/useAdmin";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 
-const typeLabels: Record<string, string> = {
+const tokenTypeLabels: Record<string, string> = {
   bonus: "Бонус",
   deduct: "Списание",
+  purchase: "Покупка",
+  admin_topup: "Пополнение (админ)",
+  admin_deduct: "Списание (админ)",
+};
+
+const aiTypeLabels: Record<string, string> = {
+  bonus: "Бонус",
+  usage: "Использование",
   purchase: "Покупка",
   admin_topup: "Пополнение (админ)",
   admin_deduct: "Списание (админ)",
@@ -31,14 +31,45 @@ const typeLabels: Record<string, string> = {
 const typeColors: Record<string, string> = {
   bonus: "default",
   deduct: "destructive",
+  usage: "destructive",
   purchase: "default",
   admin_topup: "default",
   admin_deduct: "destructive",
 };
 
 export const TransactionsTable = () => {
+  const [tab, setTab] = useState<"tokens" | "ai">("tokens");
   const [typeFilter, setTypeFilter] = useState("all");
-  const { data: transactions, isLoading } = useAdminTransactions(typeFilter);
+
+  const { data: tokenTx, isLoading: tokenLoading } = useAdminTransactions(tab === "tokens" ? typeFilter : undefined);
+  const { data: aiTx, isLoading: aiLoading } = useAdminAiTransactions(tab === "ai" ? typeFilter : undefined);
+
+  const transactions = tab === "tokens" ? tokenTx : aiTx;
+  const isLoading = tab === "tokens" ? tokenLoading : aiLoading;
+  const labels = tab === "tokens" ? tokenTypeLabels : aiTypeLabels;
+
+  const filterOptions = tab === "tokens"
+    ? [
+        { value: "all", label: "Все" },
+        { value: "bonus", label: "Бонус" },
+        { value: "deduct", label: "Списание" },
+        { value: "purchase", label: "Покупка" },
+        { value: "admin_topup", label: "Пополнение (админ)" },
+        { value: "admin_deduct", label: "Списание (админ)" },
+      ]
+    : [
+        { value: "all", label: "Все" },
+        { value: "bonus", label: "Бонус" },
+        { value: "usage", label: "Использование" },
+        { value: "purchase", label: "Покупка" },
+        { value: "admin_topup", label: "Пополнение (админ)" },
+        { value: "admin_deduct", label: "Списание (админ)" },
+      ];
+
+  const handleTabChange = (v: string) => {
+    setTab(v as "tokens" | "ai");
+    setTypeFilter("all");
+  };
 
   if (isLoading) {
     return (
@@ -52,21 +83,27 @@ export const TransactionsTable = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-muted-foreground">Тип:</label>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Все</SelectItem>
-            <SelectItem value="bonus">Бонус</SelectItem>
-            <SelectItem value="deduct">Списание</SelectItem>
-            <SelectItem value="purchase">Покупка</SelectItem>
-            <SelectItem value="admin_topup">Пополнение (админ)</SelectItem>
-            <SelectItem value="admin_deduct">Списание (админ)</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex items-center gap-4 flex-wrap">
+        <Tabs value={tab} onValueChange={handleTabChange}>
+          <TabsList>
+            <TabsTrigger value="tokens">Токены</TabsTrigger>
+            <TabsTrigger value="ai">AI запросы</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground">Тип:</label>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {filterOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="rounded-lg border border-border overflow-hidden">
@@ -95,7 +132,7 @@ export const TransactionsTable = () => {
                 </TableCell>
                 <TableCell>
                   <Badge variant={(typeColors[tx.type] as "default" | "destructive") || "secondary"}>
-                    {typeLabels[tx.type] || tx.type}
+                    {labels[tx.type] || tx.type}
                   </Badge>
                 </TableCell>
                 <TableCell className={`text-right font-semibold ${tx.amount > 0 ? "text-success" : "text-destructive"}`}>

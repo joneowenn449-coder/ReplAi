@@ -1,91 +1,59 @@
 
-# Списание токенов при отправке ответа на отзыв
+# Баланс токенов и кнопка "Пополнить" в шапке
 
 ## Что будет сделано
 
-При отправке ответа на отзыв (кнопка "Отправить") система будет проверять баланс токенов пользователя. Если токенов нет -- покажет понятное сообщение. Если есть -- отправит ответ и спишет 1 токен.
+Баланс токенов будет вынесен из выпадающего меню профиля прямо в шапку -- слева от аватарки. Рядом с балансом появится яркая фиолетовая кнопка "Пополнить". Кнопка пока будет фиктивной (показывает toast "Скоро будет доступно"), но визуально готовой к подключению оплаты.
+
+## Визуальная структура шапки
+
+```text
+[Логотип ReplAi]                    [Coins 42 токена] [Пополнить] [Аватарка]
+```
 
 ## Изменения
 
-### 1. Edge Function `send-reply` (бэкенд)
+### Файл: `src/components/Header.tsx`
 
-Добавить три шага перед отправкой ответа на Wildberries:
+1. **Добавить блок баланса перед аватаркой** -- между логотипом и DropdownMenu вставить `div` с:
+   - Иконка `Coins` (фиолетовая)
+   - Число токенов (жирным)
+   - Текст "токенов"
+   - Кнопка "Пополнить" -- стиль `bg-primary text-white`, компактный размер `sm`
 
-1. **Проверка баланса** -- запрос в таблицу `token_balances` по `user_id`
-2. **Отказ при нулевом балансе** -- возврат HTTP 402 с сообщением "Недостаточно токенов"
-3. **После успешной отправки** -- уменьшение баланса на 1 и запись в `token_transactions` с типом `usage` и ссылкой на `review_id`
+2. **Кнопка "Пополнить"** -- при нажатии показывает `toast.info("Раздел оплаты скоро будет доступен")`
 
-Порядок действий в функции:
-```
-Авторизация -> Проверка баланса -> Получение отзыва -> Отправка на WB -> Списание токена -> Ответ
-```
+3. **Убрать баланс из DropdownMenu** -- он больше не нужен внутри меню, так как уже виден в шапке
 
-Токен списывается только после успешной отправки на WB, чтобы пользователь не терял токены при ошибках API.
+4. Добавить импорт `toast` из `sonner`
 
-### 2. Фронтенд: `src/hooks/useReviews.ts`
+### Итоговый JSX (область между логотипом и меню профиля):
 
-Обновить хук `useSendReply`:
-- В `onError` проверять, содержит ли ошибка текст о нехватке токенов (или код 402)
-- Показывать специальное сообщение: "Недостаточно токенов для отправки ответа. Пополните баланс."
-- После успешной отправки инвалидировать кэш `token_balance`, чтобы счётчик в шапке обновился
+```tsx
+<div className="flex items-center gap-3">
+  {/* Token balance */}
+  {tokenBalance !== null && tokenBalance !== undefined && (
+    <div className="flex items-center gap-2 mr-1">
+      <div className="flex items-center gap-1.5 text-sm">
+        <Coins className="w-4 h-4 text-primary" />
+        <span className="font-semibold">{tokenBalance}</span>
+        <span className="text-muted-foreground">токенов</span>
+      </div>
+      <Button
+        size="sm"
+        className="bg-primary hover:bg-primary/90 text-white text-xs h-8 px-3"
+        onClick={() => toast.info("Раздел оплаты скоро будет доступен")}
+      >
+        Пополнить
+      </Button>
+    </div>
+  )}
 
----
-
-## Технические детали
-
-### Edge Function -- новый блок кода (вставляется после авторизации, перед получением отзыва):
-
-```typescript
-// Check token balance
-const { data: balance } = await supabase
-  .from("token_balances")
-  .select("balance")
-  .eq("user_id", userId)
-  .maybeSingle();
-
-if (!balance || balance.balance < 1) {
-  return new Response(
-    JSON.stringify({ error: "Недостаточно токенов. Пополните баланс." }),
-    { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
-```
-
-### Edge Function -- списание (вставляется после успешного обновления статуса отзыва):
-
-```typescript
-// Deduct 1 token
-await supabase
-  .from("token_balances")
-  .update({ balance: balance.balance - 1 })
-  .eq("user_id", userId);
-
-// Log transaction
-await supabase
-  .from("token_transactions")
-  .insert({
-    user_id: userId,
-    amount: -1,
-    type: "usage",
-    description: "Отправка ответа на отзыв",
-    review_id: review_id,
-  });
+  {/* Profile Dropdown */}
+  <DropdownMenu>
+    ...
+  </DropdownMenu>
+</div>
 ```
 
-### Фронтенд -- обновление `useSendReply`:
-
-```typescript
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ["reviews"] });
-  queryClient.invalidateQueries({ queryKey: ["token_balance"] });
-  toast.success("Ответ отправлен на WB");
-},
-onError: (error) => {
-  const msg = error.message || "";
-  if (msg.includes("токенов") || msg.includes("402")) {
-    toast.error("Недостаточно токенов для отправки. Пополните баланс.");
-  } else {
-    toast.error(`Ошибка отправки: ${msg}`);
-  }
-},
-```
+Баланс внутри DropdownMenu (строки 61-71) будет удалён.

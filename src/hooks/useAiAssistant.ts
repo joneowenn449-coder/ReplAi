@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export type AiMessage = {
   role: "user" | "assistant";
@@ -11,6 +13,7 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant
 export function useAiAssistant() {
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   const sendMessage = useCallback(
     async (input: string) => {
@@ -35,11 +38,15 @@ export function useAiAssistant() {
       };
 
       try {
+        // Get current session token for auth
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+
         const resp = await fetch(CHAT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${accessToken || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: JSON.stringify({ messages: allMessages }),
         });
@@ -50,7 +57,12 @@ export function useAiAssistant() {
           return;
         }
         if (resp.status === 402) {
-          toast.error("Необходимо пополнить баланс AI-кредитов.");
+          toast.error("У вас закончились запросы AI аналитика. Приобретите пакет запросов.");
+          setIsLoading(false);
+          return;
+        }
+        if (resp.status === 401) {
+          toast.error("Необходимо авторизоваться для использования AI аналитика.");
           setIsLoading(false);
           return;
         }
@@ -116,6 +128,9 @@ export function useAiAssistant() {
             }
           }
         }
+
+        // Invalidate AI request balance cache after successful response
+        queryClient.invalidateQueries({ queryKey: ["ai-request-balance"] });
       } catch (e) {
         console.error("AI assistant error:", e);
         toast.error("Ошибка при получении ответа от ИИ");
@@ -123,7 +138,7 @@ export function useAiAssistant() {
         setIsLoading(false);
       }
     },
-    [messages]
+    [messages, queryClient]
   );
 
   const clearMessages = useCallback(() => {

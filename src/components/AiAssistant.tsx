@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useAiAssistant } from "@/hooks/useAiAssistant";
+import { useAiRequestBalance } from "@/hooks/useAiRequestBalance";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +11,7 @@ import {
   Loader2,
   Sparkles,
   Trash2,
+  Zap,
 } from "lucide-react";
 
 const QUICK_QUESTIONS = [
@@ -22,9 +24,13 @@ const QUICK_QUESTIONS = [
 
 export function AiAssistant() {
   const { messages, isLoading, sendMessage, clearMessages } = useAiAssistant();
+  const { data: aiBalance, isLoading: balanceLoading } = useAiRequestBalance();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const hasBalance = aiBalance !== null && aiBalance !== undefined && aiBalance > 0;
+  const balanceExhausted = aiBalance !== null && aiBalance !== undefined && aiBalance <= 0 && !balanceLoading;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -34,10 +40,9 @@ export function AiAssistant() {
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || !hasBalance) return;
     setInput("");
     sendMessage(text);
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -51,7 +56,7 @@ export function AiAssistant() {
   };
 
   const handleQuickQuestion = (q: string) => {
-    if (isLoading) return;
+    if (isLoading || !hasBalance) return;
     sendMessage(q);
   };
 
@@ -82,18 +87,34 @@ export function AiAssistant() {
             </p>
           </div>
         </div>
-        {messages.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearMessages}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <Trash2 className="w-4 h-4 mr-1" />
-            Очистить
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {!balanceLoading && aiBalance !== null && aiBalance !== undefined && (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-xs text-muted-foreground">
+              <Zap className="w-3 h-3" />
+              <span>{aiBalance} запросов</span>
+            </div>
+          )}
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearMessages}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              Очистить
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Balance exhausted warning */}
+      {balanceExhausted && (
+        <div className="px-4 py-2 bg-destructive/10 border-b border-destructive/20 text-sm text-destructive flex items-center gap-2">
+          <Zap className="w-4 h-4" />
+          У вас закончились запросы AI аналитика. Приобретите пакет запросов для продолжения.
+        </div>
+      )}
 
       {/* Messages */}
       <ScrollArea className="flex-1" ref={scrollRef}>
@@ -117,7 +138,8 @@ export function AiAssistant() {
                   <button
                     key={q}
                     onClick={() => handleQuickQuestion(q)}
-                    className="px-3 py-2 text-sm rounded-lg border border-border bg-secondary/50 text-foreground hover:bg-secondary transition-colors"
+                    disabled={!hasBalance}
+                    className="px-3 py-2 text-sm rounded-lg border border-border bg-secondary/50 text-foreground hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {q}
                   </button>
@@ -180,14 +202,14 @@ export function AiAssistant() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onInput={handleTextareaInput}
-            placeholder="Задайте вопрос о товарах и отзывах..."
+            placeholder={balanceExhausted ? "Запросы закончились — приобретите пакет" : "Задайте вопрос о товарах и отзывах..."}
             className="resize-none min-h-[40px] max-h-[120px] text-sm"
             rows={1}
-            disabled={isLoading}
+            disabled={isLoading || balanceExhausted}
           />
           <Button
             onClick={handleSend}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || !hasBalance}
             size="icon"
             className="flex-shrink-0 h-10 w-10"
           >

@@ -168,16 +168,105 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Extract intent from the last user message
+    // --- Auth & balance check ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userSupabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await userSupabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const userId = claimsData.claims.sub as string;
+
+    // Use service role for balance operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check AI request balance
+    const { data: aiBalance } = await supabase
+      .from("ai_request_balances")
+      .select("balance")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!aiBalance || aiBalance.balance < 1) {
+      return new Response(
+        JSON.stringify({ error: "У вас закончились запросы AI аналитика. Приобретите пакет запросов." }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Deduct 1 request BEFORE streaming
+    await supabase
+      .from("ai_request_balances")
+      .update({ balance: aiBalance.balance - 1, updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
+
+    await supabase.from("ai_request_transactions").insert({
+      user_id: userId,
+      amount: -1,
+      type: "usage",
+      description: "Запрос к AI аналитику",
+    });
+
+    // --- RAG context (use service role supabase which has user's reviews via service role) ---
+    // Fetch reviews scoped to user
+    const userServiceSupabase = supabase; // service role sees all; filter by user_id
+
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user");
     const userText = lastUserMessage?.content || "";
     const { articles, wantsNegative, wantsPositive } = detectIntent(userText);
 
-    // Always fetch product stats
-    const productStats = await getProductStats(supabase);
+    // Fetch product stats for this user
+    const { data: allReviews, error: revErr } = await userServiceSupabase
+      .from("reviews")
+      .select("product_article, product_name, rating")
+      .eq("user_id", userId)
+      .order("created_date", { ascending: false });
+
+    if (revErr) throw revErr;
+
+    const statsMap = new Map<string, ProductStats>();
+    for (const r of allReviews || []) {
+      let s = statsMap.get(r.product_article);
+      if (!s) {
+        s = {
+          product_article: r.product_article,
+          product_name: r.product_name,
+          count: 0,
+          avg_rating: 0,
+          ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        };
+        statsMap.set(r.product_article, s);
+      }
+      s.count++;
+      s.ratings[r.rating] = (s.ratings[r.rating] || 0) + 1;
+    }
+
+    for (const s of statsMap.values()) {
+      const total = Object.entries(s.ratings).reduce(
+        (sum, [star, cnt]) => sum + Number(star) * cnt,
+        0
+      );
+      s.avg_rating = Math.round((total / s.count) * 100) / 100;
+    }
+
+    const productStats = Array.from(statsMap.values());
+
     const statsBlock = productStats
       .map(
         (s) =>
@@ -185,39 +274,55 @@ serve(async (req) => {
       )
       .join("\n");
 
-    // Build context parts
     const contextParts: string[] = [
       `Товары в базе (всего ${productStats.reduce((s, p) => s + p.count, 0)} отзывов):\n${statsBlock}`,
     ];
 
-    // Fetch article-specific reviews
     for (const article of articles) {
-      const reviews = await getReviewsByArticle(supabase, article);
-      if (reviews.length > 0) {
+      const { data, error } = await userServiceSupabase
+        .from("reviews")
+        .select("rating, author_name, text, pros, cons, product_name, product_article, created_date")
+        .eq("user_id", userId)
+        .eq("product_article", article)
+        .order("created_date", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      if (data && data.length > 0) {
         contextParts.push(
-          `\nОтзывы по артикулу ${article} (последние ${reviews.length}):\n${formatReviews(reviews)}`
+          `\nОтзывы по артикулу ${article} (последние ${data.length}):\n${formatReviews(data)}`
         );
       } else {
         contextParts.push(`\nАртикул ${article} не найден в базе.`);
       }
     }
 
-    // Fetch negative reviews if intent detected and no specific article
     if (wantsNegative && articles.length === 0) {
-      const negReviews = await getNegativeReviews(supabase);
-      if (negReviews.length > 0) {
+      const { data } = await userServiceSupabase
+        .from("reviews")
+        .select("rating, author_name, text, pros, cons, product_name, product_article, created_date")
+        .eq("user_id", userId)
+        .lte("rating", 3)
+        .order("created_date", { ascending: false })
+        .limit(30);
+      if (data && data.length > 0) {
         contextParts.push(
-          `\nОтзывы с низким рейтингом (1-3 звезды, последние ${negReviews.length}):\n${formatReviews(negReviews)}`
+          `\nОтзывы с низким рейтингом (1-3 звезды, последние ${data.length}):\n${formatReviews(data)}`
         );
       }
     }
 
-    // Fetch positive reviews if intent detected and no specific article
     if (wantsPositive && articles.length === 0) {
-      const posReviews = await getPositiveReviews(supabase);
-      if (posReviews.length > 0) {
+      const { data } = await userServiceSupabase
+        .from("reviews")
+        .select("rating, author_name, text, pros, cons, product_name, product_article, created_date")
+        .eq("user_id", userId)
+        .gte("rating", 4)
+        .not("pros", "is", null)
+        .order("created_date", { ascending: false })
+        .limit(30);
+      if (data && data.length > 0) {
         contextParts.push(
-          `\nПоложительные отзывы (4-5 звёзд, последние ${posReviews.length}):\n${formatReviews(posReviews)}`
+          `\nПоложительные отзывы (4-5 звёзд, последние ${data.length}):\n${formatReviews(data)}`
         );
       }
     }
@@ -267,12 +372,6 @@ ${contextParts.join("\n")}`;
         return new Response(
           JSON.stringify({ error: "Превышен лимит запросов. Попробуйте позже." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Необходимо пополнить баланс AI-кредитов." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const t = await response.text();

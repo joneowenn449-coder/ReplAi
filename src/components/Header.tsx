@@ -1,10 +1,11 @@
-import { Settings, LogOut, Coins, Shield, User } from "lucide-react";
+import { Settings, LogOut, Coins, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavTabs } from "./NavTabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useAdminRole } from "@/hooks/useAdmin";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,9 +46,28 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
             </span>
           </div>
 
-          {/* Profile Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <div className="flex items-center gap-3">
+            {/* Token balance in header */}
+            {tokenBalance !== null && tokenBalance !== undefined && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 text-sm">
+                  <Coins className="w-4 h-4 text-primary" />
+                  <span className="font-semibold">{tokenBalance}</span>
+                  <span className="text-muted-foreground">токенов</span>
+                </div>
+                <Button
+                  size="sm"
+                  className="text-xs h-8 px-3"
+                  onClick={() => toast.info("Раздел оплаты скоро будет доступен")}
+                >
+                  Пополнить
+                </Button>
+              </div>
+            )}
+
+            {/* Profile Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
                 <span className="text-sm font-semibold">{userInitial}</span>
               </Button>
@@ -57,18 +77,6 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
                 <p className="text-sm font-medium leading-none">{user?.email ?? "—"}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-
-              {/* Token balance */}
-              {tokenBalance !== null && tokenBalance !== undefined && (
-                <>
-                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
-                    <Coins className="w-4 h-4 text-primary" />
-                    <span className="font-medium">{tokenBalance}</span>
-                    <span className="text-muted-foreground">токенов</span>
-                  </div>
-                  <DropdownMenuSeparator />
-                </>
-              )}
 
               <DropdownMenuItem onClick={onSettingsClick} className="cursor-pointer">
                 <Settings className="w-4 h-4 mr-2" />
@@ -88,8 +96,9 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
                 <LogOut className="w-4 h-4 mr-2" />
                 Выйти
               </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <NavTabs activeTab={activeTab} onTabChange={onTabChange} unreadChatsCount={unreadChatsCount} />

@@ -39,6 +39,20 @@ serve(async (req) => {
     }
     const userId = user.id;
 
+    // Check token balance
+    const { data: tokenBalance } = await supabase
+      .from("token_balances")
+      .select("balance")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!tokenBalance || tokenBalance.balance < 1) {
+      return new Response(
+        JSON.stringify({ error: "Недостаточно токенов. Пополните баланс." }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { review_id, answer_text } = await req.json();
     if (!review_id) throw new Error("review_id is required");
 
@@ -94,6 +108,23 @@ serve(async (req) => {
       .eq("user_id", userId);
 
     if (updateError) throw new Error(`DB update error: ${updateError.message}`);
+
+    // Deduct 1 token
+    await supabase
+      .from("token_balances")
+      .update({ balance: tokenBalance.balance - 1 })
+      .eq("user_id", userId);
+
+    // Log transaction
+    await supabase
+      .from("token_transactions")
+      .insert({
+        user_id: userId,
+        amount: -1,
+        type: "usage",
+        description: "Отправка ответа на отзыв",
+        review_id: review_id,
+      });
 
     return new Response(
       JSON.stringify({ success: true }),

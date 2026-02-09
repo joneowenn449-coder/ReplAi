@@ -130,10 +130,16 @@ export function useSendReply() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      queryClient.invalidateQueries({ queryKey: ["token-balance"] });
       toast.success("Ответ отправлен на WB");
     },
     onError: (error) => {
-      toast.error(`Ошибка отправки: ${error.message}`);
+      const msg = error.message || "";
+      if (msg.includes("токенов") || msg.includes("402")) {
+        toast.error("Недостаточно токенов для отправки. Пополните баланс.");
+      } else {
+        toast.error(`Ошибка отправки: ${msg}`);
+      }
     },
   });
 }

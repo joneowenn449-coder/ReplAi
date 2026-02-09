@@ -1,46 +1,91 @@
 
-# Исправление навигации на Админ-панель
+# Списание токенов при отправке ответа на отзыв
 
-## Корневая причина
+## Что будет сделано
 
-`useAuth` реализован как обычный React hook, а не как Context. Каждый компонент, который вызывает `useAuth()`, создаёт свою независимую копию состояния авторизации. При переходе на `/admin`:
+При отправке ответа на отзыв (кнопка "Отправить") система будет проверять баланс токенов пользователя. Если токенов нет -- покажет понятное сообщение. Если есть -- отправит ответ и спишет 1 токен.
 
-1. `AdminRoute` монтируется и вызывает свой `useAuth()`
-2. Новый экземпляр хука начинает с `loading: true`, `user: null`
-3. Происходит гонка между `onAuthStateChange` и `getSession()`
-4. Если `loading` становится `false` раньше, чем `user` получит значение, `AdminRoute` видит `user = null` и редиректит на `/auth`
+## Изменения
 
-## Решение
+### 1. Edge Function `send-reply` (бэкенд)
 
-Превратить `useAuth` в контекст (React Context + Provider), чтобы состояние авторизации было единым для всего приложения. Тогда при переходе на `/admin` компонент `AdminRoute` получит уже загруженное состояние, а не будет ждать нового запроса.
+Добавить три шага перед отправкой ответа на Wildberries:
 
-## Что изменится
+1. **Проверка баланса** -- запрос в таблицу `token_balances` по `user_id`
+2. **Отказ при нулевом балансе** -- возврат HTTP 402 с сообщением "Недостаточно токенов"
+3. **После успешной отправки** -- уменьшение баланса на 1 и запись в `token_transactions` с типом `usage` и ссылкой на `review_id`
 
-### 1. Новый файл: `src/contexts/AuthContext.tsx`
+Порядок действий в функции:
+```
+Авторизация -> Проверка баланса -> Получение отзыва -> Отправка на WB -> Списание токена -> Ответ
+```
 
-Создать React Context и Provider для авторизации:
-- `AuthProvider` оборачивает приложение
-- Подписывается на `onAuthStateChange` один раз при монтировании
-- Хранит `user`, `session`, `loading`, `signOut` в контексте
-- `useAuth()` теперь просто читает из контекста (а не создаёт новое состояние)
+Токен списывается только после успешной отправки на WB, чтобы пользователь не терял токены при ошибках API.
 
-### 2. Файл: `src/App.tsx`
+### 2. Фронтенд: `src/hooks/useReviews.ts`
 
-- Обернуть `BrowserRouter` в `AuthProvider`
-- Порядок: `QueryClientProvider` -> `AuthProvider` -> `BrowserRouter` -> ...
+Обновить хук `useSendReply`:
+- В `onError` проверять, содержит ли ошибка текст о нехватке токенов (или код 402)
+- Показывать специальное сообщение: "Недостаточно токенов для отправки ответа. Пополните баланс."
+- После успешной отправки инвалидировать кэш `token_balance`, чтобы счётчик в шапке обновился
 
-### 3. Файл: `src/hooks/useAuth.ts`
+---
 
-- Заменить содержимое на реэкспорт из контекста: `export { useAuth } from "@/contexts/AuthContext"`
-- Все существующие импорты `useAuth` продолжат работать без изменений
+## Технические детали
 
-### 4. Файлы `AdminRoute.tsx`, `ProtectedRoute.tsx`, `Header.tsx` и остальные
+### Edge Function -- новый блок кода (вставляется после авторизации, перед получением отзыва):
 
-- Не нужно менять. Они уже импортируют `useAuth` из `@/hooks/useAuth`, который теперь будет реэкспортировать хук из контекста.
+```typescript
+// Check token balance
+const { data: balance } = await supabase
+  .from("token_balances")
+  .select("balance")
+  .eq("user_id", userId)
+  .maybeSingle();
 
-## Результат
+if (!balance || balance.balance < 1) {
+  return new Response(
+    JSON.stringify({ error: "Недостаточно токенов. Пополните баланс." }),
+    { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+```
 
-- Состояние авторизации инициализируется один раз при запуске приложения
-- Все компоненты (Index, AdminRoute, Header) видят одно и то же состояние
-- При переходе на `/admin` компонент `AdminRoute` сразу видит `user` -- без повторного запроса к серверу, без race condition
-- Навигация на админ-панель будет работать корректно
+### Edge Function -- списание (вставляется после успешного обновления статуса отзыва):
+
+```typescript
+// Deduct 1 token
+await supabase
+  .from("token_balances")
+  .update({ balance: balance.balance - 1 })
+  .eq("user_id", userId);
+
+// Log transaction
+await supabase
+  .from("token_transactions")
+  .insert({
+    user_id: userId,
+    amount: -1,
+    type: "usage",
+    description: "Отправка ответа на отзыв",
+    review_id: review_id,
+  });
+```
+
+### Фронтенд -- обновление `useSendReply`:
+
+```typescript
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["reviews"] });
+  queryClient.invalidateQueries({ queryKey: ["token_balance"] });
+  toast.success("Ответ отправлен на WB");
+},
+onError: (error) => {
+  const msg = error.message || "";
+  if (msg.includes("токенов") || msg.includes("402")) {
+    toast.error("Недостаточно токенов для отправки. Пополните баланс.");
+  } else {
+    toast.error(`Ошибка отправки: ${msg}`);
+  }
+},
+```

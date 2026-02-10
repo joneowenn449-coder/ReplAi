@@ -106,24 +106,33 @@ export const UsersTable = () => {
                   <Badge variant={user.role === "admin" ? "default" : "secondary"}>{user.role}</Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-0.5">
-                    <Button variant="ghost" size="icon" title="Пополнить токены"
-                      onClick={() => openDialog(user.id, userName(user), "admin_topup", "token")}>
-                      <Plus className="w-3.5 h-3.5 text-success" />
-                    </Button>
-                    <Button variant="ghost" size="icon" title="Списать токены"
-                      onClick={() => openDialog(user.id, userName(user), "admin_deduct", "token")}>
-                      <Minus className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
-                    <div className="w-px h-5 bg-border mx-1" />
-                    <Button variant="ghost" size="icon" title="Пополнить AI запросы"
-                      onClick={() => openDialog(user.id, userName(user), "admin_topup", "ai")}>
-                      <Plus className="w-3.5 h-3.5 text-primary" />
-                    </Button>
-                    <Button variant="ghost" size="icon" title="Списать AI запросы"
-                      onClick={() => openDialog(user.id, userName(user), "admin_deduct", "ai")}>
-                      <Minus className="w-3.5 h-3.5 text-muted-foreground" />
-                    </Button>
+                  <div className="flex items-center justify-end gap-3">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-[10px] text-muted-foreground leading-none">Токены</span>
+                      <div className="flex items-center gap-0.5">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Пополнить токены"
+                          onClick={() => openDialog(user.id, userName(user), "admin_topup", "token")}>
+                          <Plus className="w-3.5 h-3.5 text-success" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Списать токены"
+                          onClick={() => openDialog(user.id, userName(user), "admin_deduct", "token")}>
+                          <Minus className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-[10px] text-muted-foreground leading-none">AI</span>
+                      <div className="flex items-center gap-0.5">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Пополнить AI запросы"
+                          onClick={() => openDialog(user.id, userName(user), "admin_topup", "ai")}>
+                          <Plus className="w-3.5 h-3.5 text-primary" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Списать AI запросы"
+                          onClick={() => openDialog(user.id, userName(user), "admin_deduct", "ai")}>
+                          <Minus className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </TableCell>
               </TableRow>

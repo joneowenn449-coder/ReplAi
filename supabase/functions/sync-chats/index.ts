@@ -151,10 +151,47 @@ async function processUserChats(supabase: any, userSettings: UserSettings) {
         }
       }
 
-      const sender = event.isManager || event.is_manager ? "seller" : "client";
+      // Improved sender detection: check multiple WB API fields
+      const sender =
+        event.isManager || event.is_manager ||
+        event.senderType === "seller" ||
+        event.direction === "out" ||
+        event.message?.senderType === "seller"
+          ? "seller"
+          : "client";
       const msgData = event.message;
       const messageText = typeof msgData === "string" ? msgData : (msgData?.text || event.text || null);
       const sentAt = event.createdAt || event.created_at || new Date().toISOString();
+
+      // Dedup: if this is a seller message, check if we already saved it via send-chat-message
+      if (sender === "seller" && messageText) {
+        const sentAtMs = new Date(sentAt).getTime();
+        const windowStart = new Date(sentAtMs - 120000).toISOString();
+        const windowEnd = new Date(sentAtMs + 120000).toISOString();
+
+        const { data: existing } = await supabase
+          .from("chat_messages")
+          .select("id, event_id")
+          .eq("chat_id", chatId)
+          .eq("user_id", userId)
+          .eq("sender", "seller")
+          .eq("text", messageText)
+          .gte("sent_at", windowStart)
+          .lte("sent_at", windowEnd)
+          .limit(1)
+          .maybeSingle();
+
+        if (existing) {
+          // Update to real WB event_id so future syncs skip via upsert
+          if (existing.event_id.startsWith("seller_")) {
+            await supabase
+              .from("chat_messages")
+              .update({ event_id: String(eventId) })
+              .eq("id", existing.id);
+          }
+          continue; // Already have this message
+        }
+      }
 
       // Insert message with user_id
       const { data: insertedRows, error: msgError } = await supabase

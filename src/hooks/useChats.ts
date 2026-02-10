@@ -101,7 +101,18 @@ export function useChatMessages(chatId: string | null) {
         .eq("chat_id", chatId)
         .order("sent_at", { ascending: true });
       if (error) throw error;
-      return (data as unknown as ChatMessage[]) || [];
+      const messages = (data as unknown as ChatMessage[]) || [];
+      // Client-side dedup: remove duplicate seller messages within 2-min window
+      return messages.filter((msg, index, arr) => {
+        if (index === 0) return true;
+        return !arr.slice(0, index).some(
+          (prev) =>
+            prev.sender === msg.sender &&
+            prev.text === msg.text &&
+            prev.text !== null &&
+            Math.abs(new Date(prev.sent_at).getTime() - new Date(msg.sent_at).getTime()) < 120000
+        );
+      });
     },
     enabled: !!chatId,
   });

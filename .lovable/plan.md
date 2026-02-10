@@ -1,75 +1,38 @@
 
-# Списание токенов при автоответах
+# Исправления в админ-панели: иконка и пополнение AI-запросов
 
-## Проблема
+## Проблема 1: Иконка
+Для кнопки "Пополнить AI запросы" используется иконка `BrainCircuit` (фиолетовый мозг) вместо `Plus`. Нужно заменить на `Plus` с другим цветом, чтобы визуально отличать от токенов.
 
-Функция `sync-reviews` отправляет автоответы на WB, но не списывает токены и не записывает транзакции. Списание реализовано только в `send-reply` (ручная отправка). В результате автоответы бесплатны, что противоречит модели монетизации (1 ответ = 1 токен).
+## Проблема 2: Ошибка при пополнении AI-запросов
+Таблица `ai_request_balances` пуста. При попытке пополнить баланс вызывается `.single()`, который падает с ошибкой, если записи нет. Нужно использовать `.maybeSingle()` и создавать запись при её отсутствии (upsert).
 
-## Решение
+## Изменения
 
-Добавить в `sync-reviews` (функция `processUserReviews`) логику:
+### Файл: `src/components/admin/UsersTable.tsx`
+- Строка 119-121: заменить `BrainCircuit` на `Plus` для кнопки пополнения AI-запросов (оставить цвет `text-primary` для отличия от токенов).
 
-1. **Проверка баланса перед автоответом** -- если токенов < 1, пропустить автоответ и оставить отзыв в статусе `pending`.
-2. **Списание токена после успешной отправки** -- уменьшить `balance` на 1 в `token_balances`.
-3. **Запись транзакции** -- вставить запись в `token_transactions` с `type: 'usage'` и описанием "Автоответ на отзыв".
-4. Та же логика для retry pending-отзывов (строки 305-325).
+### Файл: `src/hooks/useAdmin.ts`
+- Функция `useUpdateAiBalance` (строка 217-222): заменить `.single()` на `.maybeSingle()` и добавить upsert-логику -- если запись не найдена, создать новую с начальным балансом равным `amount`.
+- Аналогично проверить `useUpdateBalance` (строка 162-167) на тот же случай и добавить upsert.
 
-## Технические детали
-
-**Файл**: `supabase/functions/sync-reviews/index.ts`
-
-### Изменение 1: Получить баланс пользователя в начале `processUserReviews`
-
+### Техническая деталь upsert:
 ```typescript
-const { data: tokenBalance } = await supabase
-  .from("token_balances")
+const { data: current } = await supabase
+  .from("ai_request_balances")
   .select("balance")
   .eq("user_id", userId)
   .maybeSingle();
 
-let currentBalance = tokenBalance?.balance ?? 0;
-```
-
-### Изменение 2: Проверка и списание при автоответе (строка ~256)
-
-Перед `sendWBAnswer` добавить проверку баланса. После успешной отправки -- списать токен:
-
-```typescript
-if (modeForRating === "auto" && aiDraft) {
-  if (currentBalance < 1) {
-    console.log(`[sync-reviews] user=${userId} insufficient tokens, skipping auto-reply for ${wbId}`);
-    status = "pending";
-  } else {
-    try {
-      await sendWBAnswer(WB_API_KEY, wbId, aiDraft);
-      status = "auto";
-      autoSentCount++;
-
-      // Deduct token
-      currentBalance -= 1;
-      await supabase
-        .from("token_balances")
-        .update({ balance: currentBalance })
-        .eq("user_id", userId);
-
-      await supabase.from("token_transactions").insert({
-        user_id: userId,
-        amount: -1,
-        type: "usage",
-        description: "Автоответ на отзыв",
-        review_id: null, // will be set after insert
-      });
-
-      await delay(350);
-    } catch (e) { ... }
-  }
+if (!current) {
+  // Создать запись
+  const newBalance = type === "admin_topup" ? amount : 0;
+  await supabase.from("ai_request_balances").insert({ user_id: userId, balance: newBalance });
+  delta = type === "admin_topup" ? amount : -amount; // но deduct при 0 = ошибка
+} else {
+  const delta = type === "admin_topup" ? amount : -amount;
+  const newBalance = current.balance + delta;
+  if (newBalance < 0) throw new Error("Баланс не может быть отрицательным");
+  await supabase.from("ai_request_balances").update({ balance: newBalance }).eq("user_id", userId);
 }
 ```
-
-### Изменение 3: Та же логика для retry pending (строка ~311)
-
-Добавить аналогичную проверку баланса и списание для блока retry pending-отзывов.
-
-### Изменение 4: Привязка review_id к транзакции
-
-После insert отзыва, если статус `auto`, обновить транзакцию с `review_id`. Альтернативно -- вставлять транзакцию после insert отзыва, когда `id` уже известен.

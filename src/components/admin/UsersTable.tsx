@@ -118,7 +118,7 @@ export const UsersTable = () => {
                     <div className="w-px h-5 bg-border mx-1" />
                     <Button variant="ghost" size="icon" title="Пополнить AI запросы"
                       onClick={() => openDialog(user.id, userName(user), "admin_topup", "ai")}>
-                      <BrainCircuit className="w-3.5 h-3.5 text-primary" />
+                      <Plus className="w-3.5 h-3.5 text-primary" />
                     </Button>
                     <Button variant="ghost" size="icon" title="Списать AI запросы"
                       onClick={() => openDialog(user.id, userName(user), "admin_deduct", "ai")}>

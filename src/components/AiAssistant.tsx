@@ -54,8 +54,8 @@ export function AiAssistant() {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-    await ensureConversation();
-    sendMessage(text);
+    const convId = await ensureConversation();
+    sendMessage(text, convId);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

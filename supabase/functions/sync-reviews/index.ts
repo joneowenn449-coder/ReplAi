@@ -156,6 +156,16 @@ async function processUserReviews(
   const WB_API_KEY = userSettings.wb_api_key;
   const defaultModes = { "1": "manual", "2": "manual", "3": "manual", "4": "manual", "5": "manual" };
   const replyModes = userSettings.reply_modes || defaultModes;
+
+  // Fetch token balance for this user
+  const { data: tokenBalance } = await supabase
+    .from("token_balances")
+    .select("balance")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  let currentBalance = tokenBalance?.balance ?? 0;
+  console.log(`[sync-reviews] user=${userId} token balance: ${currentBalance}`);
   const promptTemplate = userSettings.ai_prompt_template ||
     "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
 
@@ -254,20 +264,33 @@ async function processUserReviews(
 
     // Auto-reply if mode is "auto" for this rating and draft generated
     if (modeForRating === "auto" && aiDraft) {
-      try {
-        await sendWBAnswer(WB_API_KEY, wbId, aiDraft);
-        status = "auto";
-        autoSentCount++;
-        await delay(350);
-      } catch (e) {
-        console.error(`Auto-reply failed for ${wbId}:`, e);
-        errors.push(`Send error for ${wbId}: ${e.message}`);
+      if (currentBalance < 1) {
+        console.log(`[sync-reviews] user=${userId} insufficient tokens (${currentBalance}), skipping auto-reply for ${wbId}`);
         status = "pending";
+      } else {
+        try {
+          await sendWBAnswer(WB_API_KEY, wbId, aiDraft);
+          status = "auto";
+          autoSentCount++;
+
+          // Deduct token
+          currentBalance -= 1;
+          await supabase
+            .from("token_balances")
+            .update({ balance: currentBalance })
+            .eq("user_id", userId);
+
+          await delay(350);
+        } catch (e) {
+          console.error(`Auto-reply failed for ${wbId}:`, e);
+          errors.push(`Send error for ${wbId}: ${e.message}`);
+          status = "pending";
+        }
       }
     }
 
     // Save to DB with user_id
-    const { error: insertError } = await supabase.from("reviews").insert({
+    const { data: insertedReview, error: insertError } = await supabase.from("reviews").insert({
       wb_id: wbId,
       user_id: userId,
       rating: fb.productValuation || 5,
@@ -284,13 +307,24 @@ async function processUserReviews(
       status,
       ai_draft: aiDraft || null,
       sent_answer: status === "auto" ? aiDraft : null,
-    });
+    }).select("id").single();
 
     if (insertError) {
       console.error(`Insert error for ${wbId}:`, insertError);
       errors.push(`DB error for ${wbId}: ${insertError.message}`);
     } else {
       newCount++;
+
+      // Record token transaction for auto-replies
+      if (status === "auto" && insertedReview) {
+        await supabase.from("token_transactions").insert({
+          user_id: userId,
+          amount: -1,
+          type: "usage",
+          description: "Автоответ на отзыв",
+          review_id: insertedReview.id,
+        });
+      }
     }
   }
 
@@ -309,6 +343,10 @@ async function processUserReviews(
       const modeForRating = replyModes[ratingKey] || "manual";
 
       if (modeForRating === "auto" && pr.ai_draft) {
+        if (currentBalance < 1) {
+          console.log(`[sync-reviews] user=${userId} insufficient tokens for retry ${pr.wb_id}`);
+          continue;
+        }
         try {
           await sendWBAnswer(WB_API_KEY, pr.wb_id, pr.ai_draft);
           await supabase
@@ -316,6 +354,22 @@ async function processUserReviews(
             .update({ status: "auto", sent_answer: pr.ai_draft, updated_at: new Date().toISOString() })
             .eq("id", pr.id);
           autoSentCount++;
+
+          // Deduct token
+          currentBalance -= 1;
+          await supabase
+            .from("token_balances")
+            .update({ balance: currentBalance })
+            .eq("user_id", userId);
+
+          await supabase.from("token_transactions").insert({
+            user_id: userId,
+            amount: -1,
+            type: "usage",
+            description: "Автоответ на отзыв",
+            review_id: pr.id,
+          });
+
           await delay(350);
         } catch (e) {
           console.error(`[sync-reviews] Auto-retry failed for ${pr.wb_id}:`, e);

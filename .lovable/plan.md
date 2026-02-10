@@ -1,55 +1,24 @@
 
-# Улучшение UX кнопок управления балансом
+# Добавить дату отзыва в контекст AI аналитика
 
 ## Проблема
 
-Сейчас в колонке «Действия» расположены 4 безликие иконки (+, -, +, -), разделённые тонкой полоской. Из скриншота непонятно, какие кнопки относятся к токенам, а какие — к AI запросам.
+Функция `formatReviews` в `supabase/functions/ai-assistant/index.ts` получает поле `created_date` из базы, но не включает его в текстовый контекст, передаваемый AI. Поэтому аналитик не может анализировать отзывы по датам, дням недели и временным периодам.
 
 ## Решение
 
-Заменить ряд иконок на две компактные кнопочные группы с подписями. Каждая группа будет иметь метку («Токены» / «AI») и две кнопки (+/-) рядом:
+Одно изменение в файле `supabase/functions/ai-assistant/index.ts`:
 
-```
-Токены       AI запросы
-[+] [-]      [+] [-]
-```
+**Функция `formatReviews` (строка 112-123)** -- добавить дату в вывод каждого отзыва.
 
-### Файл: `src/components/admin/UsersTable.tsx`
-
-Строки 108-127 — заменить текущий `div` с кнопками на:
-
-```tsx
-<div className="flex items-center justify-end gap-3">
-  {/* Группа: Токены */}
-  <div className="flex flex-col items-center gap-0.5">
-    <span className="text-[10px] text-muted-foreground leading-none">Токены</span>
-    <div className="flex items-center gap-0.5">
-      <Button variant="ghost" size="icon" className="h-7 w-7" title="Пополнить токены"
-        onClick={() => openDialog(user.id, userName(user), "admin_topup", "token")}>
-        <Plus className="w-3.5 h-3.5 text-success" />
-      </Button>
-      <Button variant="ghost" size="icon" className="h-7 w-7" title="Списать токены"
-        onClick={() => openDialog(user.id, userName(user), "admin_deduct", "token")}>
-        <Minus className="w-3.5 h-3.5 text-destructive" />
-      </Button>
-    </div>
-  </div>
-
-  {/* Группа: AI запросы */}
-  <div className="flex flex-col items-center gap-0.5">
-    <span className="text-[10px] text-muted-foreground leading-none">AI</span>
-    <div className="flex items-center gap-0.5">
-      <Button variant="ghost" size="icon" className="h-7 w-7" title="Пополнить AI запросы"
-        onClick={() => openDialog(user.id, userName(user), "admin_topup", "ai")}>
-        <Plus className="w-3.5 h-3.5 text-primary" />
-      </Button>
-      <Button variant="ghost" size="icon" className="h-7 w-7" title="Списать AI запросы"
-        onClick={() => openDialog(user.id, userName(user), "admin_deduct", "ai")}>
-        <Minus className="w-3.5 h-3.5 text-destructive" />
-      </Button>
-    </div>
-  </div>
-</div>
+Было:
+```typescript
+const parts = [`${i + 1}. ⭐ ${r.rating}/5 — ${r.author_name}`];
 ```
 
-Кнопки визуально сгруппированы с подписями, и сразу понятно, какая пара за что отвечает.
+Станет:
+```typescript
+const parts = [`${i + 1}. ⭐ ${r.rating}/5 — ${r.author_name} (${r.created_date})`];
+```
+
+Дата будет отображаться в формате ISO рядом с именем автора. Это даст AI возможность анализировать паттерны по дням недели, месяцам и временным периодам.

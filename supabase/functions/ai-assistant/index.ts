@@ -112,7 +112,7 @@ async function getPositiveReviews(
 function formatReviews(reviews: ReviewRow[]): string {
   return reviews
     .map((r, i) => {
-      const parts = [`${i + 1}. ⭐ ${r.rating}/5 — ${r.author_name}`];
+      const parts = [`${i + 1}. ⭐ ${r.rating}/5 — ${r.author_name} (${r.created_date})`];
       if (r.pros) parts.push(`   Плюсы: "${r.pros}"`);
       if (r.cons) parts.push(`   Минусы: "${r.cons}"`);
       if (r.text) parts.push(`   Комментарий: "${r.text}"`);

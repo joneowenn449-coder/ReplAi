@@ -1,38 +1,55 @@
 
-# Исправления в админ-панели: иконка и пополнение AI-запросов
+# Улучшение UX кнопок управления балансом
 
-## Проблема 1: Иконка
-Для кнопки "Пополнить AI запросы" используется иконка `BrainCircuit` (фиолетовый мозг) вместо `Plus`. Нужно заменить на `Plus` с другим цветом, чтобы визуально отличать от токенов.
+## Проблема
 
-## Проблема 2: Ошибка при пополнении AI-запросов
-Таблица `ai_request_balances` пуста. При попытке пополнить баланс вызывается `.single()`, который падает с ошибкой, если записи нет. Нужно использовать `.maybeSingle()` и создавать запись при её отсутствии (upsert).
+Сейчас в колонке «Действия» расположены 4 безликие иконки (+, -, +, -), разделённые тонкой полоской. Из скриншота непонятно, какие кнопки относятся к токенам, а какие — к AI запросам.
 
-## Изменения
+## Решение
+
+Заменить ряд иконок на две компактные кнопочные группы с подписями. Каждая группа будет иметь метку («Токены» / «AI») и две кнопки (+/-) рядом:
+
+```
+Токены       AI запросы
+[+] [-]      [+] [-]
+```
 
 ### Файл: `src/components/admin/UsersTable.tsx`
-- Строка 119-121: заменить `BrainCircuit` на `Plus` для кнопки пополнения AI-запросов (оставить цвет `text-primary` для отличия от токенов).
 
-### Файл: `src/hooks/useAdmin.ts`
-- Функция `useUpdateAiBalance` (строка 217-222): заменить `.single()` на `.maybeSingle()` и добавить upsert-логику -- если запись не найдена, создать новую с начальным балансом равным `amount`.
-- Аналогично проверить `useUpdateBalance` (строка 162-167) на тот же случай и добавить upsert.
+Строки 108-127 — заменить текущий `div` с кнопками на:
 
-### Техническая деталь upsert:
-```typescript
-const { data: current } = await supabase
-  .from("ai_request_balances")
-  .select("balance")
-  .eq("user_id", userId)
-  .maybeSingle();
+```tsx
+<div className="flex items-center justify-end gap-3">
+  {/* Группа: Токены */}
+  <div className="flex flex-col items-center gap-0.5">
+    <span className="text-[10px] text-muted-foreground leading-none">Токены</span>
+    <div className="flex items-center gap-0.5">
+      <Button variant="ghost" size="icon" className="h-7 w-7" title="Пополнить токены"
+        onClick={() => openDialog(user.id, userName(user), "admin_topup", "token")}>
+        <Plus className="w-3.5 h-3.5 text-success" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-7 w-7" title="Списать токены"
+        onClick={() => openDialog(user.id, userName(user), "admin_deduct", "token")}>
+        <Minus className="w-3.5 h-3.5 text-destructive" />
+      </Button>
+    </div>
+  </div>
 
-if (!current) {
-  // Создать запись
-  const newBalance = type === "admin_topup" ? amount : 0;
-  await supabase.from("ai_request_balances").insert({ user_id: userId, balance: newBalance });
-  delta = type === "admin_topup" ? amount : -amount; // но deduct при 0 = ошибка
-} else {
-  const delta = type === "admin_topup" ? amount : -amount;
-  const newBalance = current.balance + delta;
-  if (newBalance < 0) throw new Error("Баланс не может быть отрицательным");
-  await supabase.from("ai_request_balances").update({ balance: newBalance }).eq("user_id", userId);
-}
+  {/* Группа: AI запросы */}
+  <div className="flex flex-col items-center gap-0.5">
+    <span className="text-[10px] text-muted-foreground leading-none">AI</span>
+    <div className="flex items-center gap-0.5">
+      <Button variant="ghost" size="icon" className="h-7 w-7" title="Пополнить AI запросы"
+        onClick={() => openDialog(user.id, userName(user), "admin_topup", "ai")}>
+        <Plus className="w-3.5 h-3.5 text-primary" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-7 w-7" title="Списать AI запросы"
+        onClick={() => openDialog(user.id, userName(user), "admin_deduct", "ai")}>
+        <Minus className="w-3.5 h-3.5 text-destructive" />
+      </Button>
+    </div>
+  </div>
+</div>
 ```
+
+Кнопки визуально сгруппированы с подписями, и сразу понятно, какая пара за что отвечает.

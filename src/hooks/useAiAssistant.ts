@@ -12,7 +12,7 @@ export type AiMessage = {
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
 
 export function useAiAssistant(conversationId: string | null) {
-  const [effectiveConvId, setEffectiveConvId] = useState<string | null>(conversationId);
+  const [messages, setMessages] = useState<AiMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const queryClient = useQueryClient();
@@ -47,8 +47,9 @@ export function useAiAssistant(conversationId: string | null) {
   }, [conversationId]);
 
   const sendMessage = useCallback(
-    async (input: string) => {
-      if (!conversationId) return;
+    async (input: string, overrideConvId?: string) => {
+      const convId = overrideConvId || conversationId;
+      if (!convId) return;
 
       const userMsg: AiMessage = { role: "user", content: input };
       const allMessages = [...messages, userMsg];
@@ -57,7 +58,7 @@ export function useAiAssistant(conversationId: string | null) {
 
       // Persist user message
       await supabase.from("ai_messages").insert({
-        conversation_id: conversationId,
+        conversation_id: convId,
         role: "user",
         content: input,
       });
@@ -65,7 +66,7 @@ export function useAiAssistant(conversationId: string | null) {
       // Auto-title: if this is the first user message, set title
       if (messages.length === 0) {
         const autoTitle = input.length > 40 ? input.slice(0, 40) + "…" : input;
-        renameMutation.mutate({ id: conversationId, title: autoTitle });
+        renameMutation.mutate({ id: convId, title: autoTitle });
       }
 
       let assistantSoFar = "";
@@ -173,15 +174,14 @@ export function useAiAssistant(conversationId: string | null) {
         // Persist assistant message
         if (assistantSoFar) {
           await supabase.from("ai_messages").insert({
-            conversation_id: conversationId,
+            conversation_id: convId,
             role: "assistant",
             content: assistantSoFar,
           });
-          // Update conversation timestamp
           await supabase
             .from("ai_conversations")
             .update({ updated_at: new Date().toISOString() })
-            .eq("id", conversationId);
+            .eq("id", convId);
           queryClient.invalidateQueries({ queryKey: ["ai-conversations"] });
         }
 

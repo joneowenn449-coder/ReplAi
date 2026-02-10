@@ -101,7 +101,7 @@ export const ReviewCard = ({
   };
 
   const isArchived = status === "archived";
-  const hasDraft = aiDraft && status !== "sent" && !isArchived;
+  const hasDraft = aiDraft && status === "pending";
   const hasAnswer = sentAnswer && (status === "sent" || status === "auto" || isArchived);
 
   return (

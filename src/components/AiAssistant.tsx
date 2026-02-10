@@ -4,10 +4,9 @@ import { useAiRequestBalance } from "@/hooks/useAiRequestBalance";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import ReactMarkdown from "react-markdown";
 import {
   Send,
-  Bot,
-  User,
   Loader2,
   Sparkles,
   Trash2,
@@ -71,25 +70,25 @@ export function AiAssistant() {
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] bg-card rounded-xl border border-border overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-180px)] bg-background rounded-2xl border border-border/60 overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-primary" />
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/40 bg-background/80 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Sparkles className="w-[18px] h-[18px] text-primary" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 className="text-sm font-semibold tracking-tight text-foreground">
               AI Аналитик
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               Знает все отзывы, товары и артикулы
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {!balanceLoading && aiBalance !== null && aiBalance !== undefined && (
-            <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary/60 text-[11px] text-muted-foreground font-medium">
               <Zap className="w-3 h-3" />
               <span>{aiBalance} запросов</span>
             </div>
@@ -99,10 +98,10 @@ export function AiAssistant() {
               variant="ghost"
               size="sm"
               onClick={clearMessages}
-              className="text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground rounded-lg h-8 px-2.5"
             >
-              <Trash2 className="w-4 h-4 mr-1" />
-              Очистить
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
+              <span className="text-xs">Очистить</span>
             </Button>
           )}
         </div>
@@ -110,7 +109,7 @@ export function AiAssistant() {
 
       {/* Balance exhausted warning */}
       {balanceExhausted && (
-        <div className="px-4 py-2 bg-destructive/10 border-b border-destructive/20 text-sm text-destructive flex items-center gap-2">
+        <div className="px-5 py-2.5 bg-destructive/8 border-b border-destructive/15 text-[13px] text-destructive flex items-center gap-2">
           <Zap className="w-4 h-4" />
           У вас закончились запросы AI аналитика. Приобретите пакет запросов для продолжения.
         </div>
@@ -118,28 +117,28 @@ export function AiAssistant() {
 
       {/* Messages */}
       <ScrollArea className="flex-1" ref={scrollRef}>
-        <div className="p-4 space-y-4">
+        <div className="px-5 py-5 space-y-5">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center py-12 space-y-6">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <Bot className="w-8 h-8 text-primary" />
+            <div className="flex flex-col items-center justify-center py-16 space-y-8">
+              <div className="w-16 h-16 rounded-3xl bg-primary/8 flex items-center justify-center">
+                <Sparkles className="w-7 h-7 text-primary/70" />
               </div>
               <div className="text-center space-y-2">
-                <h3 className="text-lg font-semibold text-foreground">
+                <h3 className="text-lg font-semibold tracking-tight text-foreground">
                   Привет! Я AI-аналитик
                 </h3>
-                <p className="text-sm text-muted-foreground max-w-md">
-                  Я знаю все о ваших товарах и отзывах на Wildberries. 
+                <p className="text-[13px] text-muted-foreground max-w-sm leading-relaxed">
+                  Я знаю все о ваших товарах и отзывах. 
                   Задайте вопрос или выберите из готовых:
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+              <div className="flex flex-wrap gap-2 justify-center max-w-md">
                 {QUICK_QUESTIONS.map((q) => (
                   <button
                     key={q}
                     onClick={() => handleQuickQuestion(q)}
                     disabled={!hasBalance}
-                    className="px-3 py-2 text-sm rounded-lg border border-border bg-secondary/50 text-foreground hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3.5 py-2 text-[13px] rounded-xl border border-border/50 bg-background/60 backdrop-blur-sm text-foreground hover:bg-secondary/80 hover:border-border transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {q}
                   </button>
@@ -150,42 +149,39 @@ export function AiAssistant() {
             messages.map((msg, i) => (
               <div
                 key={i}
-                className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                {msg.role === "assistant" && (
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Bot className="w-4 h-4 text-primary" />
-                  </div>
-                )}
                 <div
-                  className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                  className={`max-w-[85%] rounded-2xl px-5 py-3.5 ${
                     msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-foreground"
+                      ? "bg-primary text-primary-foreground text-[14px] leading-relaxed"
+                      : "bg-secondary/50 backdrop-blur-sm text-foreground"
                   }`}
                 >
-                  {msg.content}
-                  {msg.role === "assistant" &&
-                    i === messages.length - 1 &&
-                    isLoading && (
-                      <span className="inline-block w-1.5 h-4 bg-primary/60 ml-0.5 animate-pulse rounded-sm" />
-                    )}
+                  {msg.role === "assistant" ? (
+                    <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none
+                      prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-headings:mt-4 prose-headings:mb-2
+                      prose-p:leading-relaxed prose-p:text-[14px] prose-p:text-foreground prose-p:my-1.5
+                      prose-li:text-[14px] prose-li:text-foreground prose-li:my-0.5
+                      prose-strong:font-semibold prose-strong:text-foreground
+                      prose-ul:my-2 prose-ol:my-2
+                      prose-h3:text-[15px] prose-h2:text-base">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      {i === messages.length - 1 && isLoading && (
+                        <span className="inline-block w-1.5 h-4 bg-primary/50 ml-0.5 animate-pulse rounded-sm" />
+                      )}
+                    </div>
+                  ) : (
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
+                  )}
                 </div>
-                {msg.role === "user" && (
-                  <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                )}
               </div>
             ))
           )}
           {isLoading && messages[messages.length - 1]?.role === "user" && (
-            <div className="flex gap-3">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Bot className="w-4 h-4 text-primary" />
-              </div>
-              <div className="bg-secondary rounded-xl px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
+            <div className="flex justify-start">
+              <div className="bg-secondary/50 backdrop-blur-sm rounded-2xl px-5 py-3.5 text-[14px] text-muted-foreground flex items-center gap-2.5">
+                <Loader2 className="w-4 h-4 animate-spin text-primary/60" />
                 Анализирую отзывы...
               </div>
             </div>
@@ -194,7 +190,7 @@ export function AiAssistant() {
       </ScrollArea>
 
       {/* Input */}
-      <div className="border-t border-border p-3 bg-card">
+      <div className="border-t border-border/40 p-3 bg-background/80 backdrop-blur-sm">
         <div className="flex gap-2 items-end">
           <Textarea
             ref={textareaRef}
@@ -203,7 +199,7 @@ export function AiAssistant() {
             onKeyDown={handleKeyDown}
             onInput={handleTextareaInput}
             placeholder={balanceExhausted ? "Запросы закончились — приобретите пакет" : "Задайте вопрос о товарах и отзывах..."}
-            className="resize-none min-h-[40px] max-h-[120px] text-sm"
+            className="resize-none min-h-[42px] max-h-[120px] text-[14px] rounded-2xl border-border/50 bg-secondary/30 shadow-sm focus-visible:ring-primary/30 placeholder:text-muted-foreground/60"
             rows={1}
             disabled={isLoading || balanceExhausted}
           />
@@ -211,7 +207,7 @@ export function AiAssistant() {
             onClick={handleSend}
             disabled={!input.trim() || isLoading || !hasBalance}
             size="icon"
-            className="flex-shrink-0 h-10 w-10"
+            className="flex-shrink-0 h-[42px] w-[42px] rounded-xl shadow-sm transition-all duration-200"
           >
             <Send className="w-4 h-4" />
           </Button>

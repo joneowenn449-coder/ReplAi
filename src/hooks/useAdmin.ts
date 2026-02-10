@@ -220,22 +220,28 @@ export function useUpdateAiBalance() {
       type: "admin_topup" | "admin_deduct";
       description?: string;
     }) => {
-      const { data: current, error: fetchError } = await supabase
+      const { data: current } = await supabase
         .from("ai_request_balances")
         .select("balance")
         .eq("user_id", userId)
-        .single();
-      if (fetchError) throw fetchError;
+        .maybeSingle();
 
       const delta = type === "admin_topup" ? amount : -amount;
-      const newBalance = current.balance + delta;
+      const newBalance = (current?.balance ?? 0) + delta;
       if (newBalance < 0) throw new Error("Баланс не может быть отрицательным");
 
-      const { error: updateError } = await supabase
-        .from("ai_request_balances")
-        .update({ balance: newBalance })
-        .eq("user_id", userId);
-      if (updateError) throw updateError;
+      if (!current) {
+        const { error: insertError } = await supabase
+          .from("ai_request_balances")
+          .insert({ user_id: userId, balance: newBalance });
+        if (insertError) throw insertError;
+      } else {
+        const { error: updateError } = await supabase
+          .from("ai_request_balances")
+          .update({ balance: newBalance })
+          .eq("user_id", userId);
+        if (updateError) throw updateError;
+      }
 
       const { error: txError } = await supabase
         .from("ai_request_transactions")

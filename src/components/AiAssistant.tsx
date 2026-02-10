@@ -42,7 +42,7 @@ export function AiAssistant() {
 
   const ensureConversation = useCallback(async (): Promise<string> => {
     if (activeConversationId) return activeConversationId;
-    const conv = await createConversation.mutateAsync();
+    const conv = await createConversation.mutateAsync("Новый чат");
     setActiveConversationId(conv.id);
     return conv.id;
   }, [activeConversationId, createConversation]);

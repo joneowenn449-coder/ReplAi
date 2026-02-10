@@ -80,7 +80,7 @@ async function getReviewsByArticle(
 
 async function getNegativeReviews(
   supabase: any,
-  limit = 30
+  limit = 50
 ): Promise<ReviewRow[]> {
   const { data, error } = await supabase
     .from("reviews")
@@ -95,7 +95,7 @@ async function getNegativeReviews(
 
 async function getPositiveReviews(
   supabase: any,
-  limit = 30
+  limit = 50
 ): Promise<ReviewRow[]> {
   const { data, error } = await supabase
     .from("reviews")
@@ -120,6 +120,72 @@ function formatReviews(reviews: ReviewRow[]): string {
       return parts.join("\n");
     })
     .join("\n\n");
+}
+
+async function getTimeStats(supabase: any, userId: string): Promise<string> {
+  // Paginate to bypass 1000-row default limit
+  let allData: { created_date: string; rating: number }[] = [];
+  const pageSize = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("created_date, rating")
+      .eq("user_id", userId)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allData = allData.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  if (allData.length === 0) return "";
+
+  const dayNames = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+  const byDay: Record<string, { total: number; neg: number; sumRating: number }> = {};
+  const byHour: Record<number, { total: number; neg: number; sumRating: number }> = {};
+
+  for (const name of dayNames) {
+    byDay[name] = { total: 0, neg: 0, sumRating: 0 };
+  }
+  for (let h = 0; h < 24; h++) {
+    byHour[h] = { total: 0, neg: 0, sumRating: 0 };
+  }
+
+  for (const r of allData) {
+    const d = new Date(r.created_date);
+    const dayName = dayNames[d.getUTCDay()];
+    const hour = d.getUTCHours();
+
+    byDay[dayName].total++;
+    byDay[dayName].sumRating += r.rating;
+    if (r.rating <= 3) byDay[dayName].neg++;
+
+    byHour[hour].total++;
+    byHour[hour].sumRating += r.rating;
+    if (r.rating <= 3) byHour[hour].neg++;
+  }
+
+  const lines: string[] = [];
+  lines.push(`Статистика по дням недели (всего ${allData.length} отзывов):`);
+  for (const name of ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]) {
+    const d = byDay[name];
+    if (d.total === 0) continue;
+    const avg = Math.round((d.sumRating / d.total) * 100) / 100;
+    lines.push(`  ${name}: ${d.total} отзывов, ср. рейтинг ${avg}, негативных: ${d.neg}`);
+  }
+
+  lines.push("");
+  lines.push("Статистика по часам (UTC):");
+  for (let h = 0; h < 24; h++) {
+    const hr = byHour[h];
+    if (hr.total === 0) continue;
+    const avg = Math.round((hr.sumRating / hr.total) * 100) / 100;
+    lines.push(`  ${String(h).padStart(2, "0")}:00-${String(h).padStart(2, "0")}:59: ${hr.total} отзывов, ср. рейтинг ${avg}, негативных: ${hr.neg}`);
+  }
+
+  return lines.join("\n");
 }
 
 function detectIntent(message: string): {
@@ -223,9 +289,8 @@ serve(async (req) => {
       description: "Запрос к AI аналитику",
     });
 
-    // --- RAG context (use service role supabase which has user's reviews via service role) ---
-    // Fetch reviews scoped to user
-    const userServiceSupabase = supabase; // service role sees all; filter by user_id
+    // --- RAG context ---
+    const userServiceSupabase = supabase;
 
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user");
     const userText = lastUserMessage?.content || "";
@@ -274,9 +339,16 @@ serve(async (req) => {
       )
       .join("\n");
 
+    // Fetch aggregated time stats
+    const timeStatsText = await getTimeStats(userServiceSupabase, userId);
+
     const contextParts: string[] = [
       `Товары в базе (всего ${productStats.reduce((s, p) => s + p.count, 0)} отзывов):\n${statsBlock}`,
     ];
+
+    if (timeStatsText) {
+      contextParts.push(`\n${timeStatsText}`);
+    }
 
     for (const article of articles) {
       const { data, error } = await userServiceSupabase
@@ -303,7 +375,7 @@ serve(async (req) => {
         .eq("user_id", userId)
         .lte("rating", 3)
         .order("created_date", { ascending: false })
-        .limit(30);
+        .limit(50);
       if (data && data.length > 0) {
         contextParts.push(
           `\nОтзывы с низким рейтингом (1-3 звезды, последние ${data.length}):\n${formatReviews(data)}`
@@ -319,7 +391,7 @@ serve(async (req) => {
         .gte("rating", 4)
         .not("pros", "is", null)
         .order("created_date", { ascending: false })
-        .limit(30);
+        .limit(50);
       if (data && data.length > 0) {
         contextParts.push(
           `\nПоложительные отзывы (4-5 звёзд, последние ${data.length}):\n${formatReviews(data)}`
@@ -334,6 +406,8 @@ serve(async (req) => {
 - Выявлять основные жалобы и преимущества товаров
 - Давать статистику по рейтингам
 - Находить паттерны в отзывах
+- Анализировать динамику отзывов по дням недели и времени суток
+- Выявлять временные паттерны (когда приходит больше негатива, сезонность и т.д.)
 - Отвечать на любые вопросы о товарах и мнении покупателей
 
 Правила:
@@ -343,6 +417,7 @@ serve(async (req) => {
 - Если спрашивают о товаре которого нет в базе — скажи об этом
 - Отвечай на русском языке
 - Будь кратким но информативным
+- Используй агрегированную статистику по дням недели и часам для анализа временных паттернов
 
 Данные из базы отзывов:
 

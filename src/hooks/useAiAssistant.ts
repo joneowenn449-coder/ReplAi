@@ -12,7 +12,7 @@ export type AiMessage = {
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
 
 export function useAiAssistant(conversationId: string | null) {
-  const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [effectiveConvId, setEffectiveConvId] = useState<string | null>(conversationId);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const queryClient = useQueryClient();

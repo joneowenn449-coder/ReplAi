@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useRenameConversation } from "@/hooks/useAiConversations";
 
 export type AiMessage = {
   role: "user" | "assistant";
@@ -10,17 +11,62 @@ export type AiMessage = {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
 
-export function useAiAssistant() {
+export function useAiAssistant(conversationId: string | null) {
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const queryClient = useQueryClient();
+  const renameMutation = useRenameConversation();
+
+  // Load messages from DB when conversationId changes
+  useEffect(() => {
+    if (!conversationId) {
+      setMessages([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setIsLoadingHistory(true);
+      const { data, error } = await supabase
+        .from("ai_messages")
+        .select("role, content")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+      if (!cancelled) {
+        if (error) {
+          console.error("Failed to load messages:", error);
+          setMessages([]);
+        } else {
+          setMessages((data || []) as AiMessage[]);
+        }
+        setIsLoadingHistory(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [conversationId]);
 
   const sendMessage = useCallback(
     async (input: string) => {
+      if (!conversationId) return;
+
       const userMsg: AiMessage = { role: "user", content: input };
       const allMessages = [...messages, userMsg];
       setMessages(allMessages);
       setIsLoading(true);
+
+      // Persist user message
+      await supabase.from("ai_messages").insert({
+        conversation_id: conversationId,
+        role: "user",
+        content: input,
+      });
+
+      // Auto-title: if this is the first user message, set title
+      if (messages.length === 0) {
+        const autoTitle = input.length > 40 ? input.slice(0, 40) + "…" : input;
+        renameMutation.mutate({ id: conversationId, title: autoTitle });
+      }
 
       let assistantSoFar = "";
 
@@ -38,7 +84,6 @@ export function useAiAssistant() {
       };
 
       try {
-        // Get current session token for auth
         const { data: { session } } = await supabase.auth.getSession();
         const accessToken = session?.access_token;
 
@@ -97,9 +142,7 @@ export function useAiAssistant() {
 
             try {
               const parsed = JSON.parse(jsonStr);
-              const content = parsed.choices?.[0]?.delta?.content as
-                | string
-                | undefined;
+              const content = parsed.choices?.[0]?.delta?.content as string | undefined;
               if (content) upsertAssistant(content);
             } catch {
               textBuffer = line + "\n" + textBuffer;
@@ -119,9 +162,7 @@ export function useAiAssistant() {
             if (jsonStr === "[DONE]") continue;
             try {
               const parsed = JSON.parse(jsonStr);
-              const content = parsed.choices?.[0]?.delta?.content as
-                | string
-                | undefined;
+              const content = parsed.choices?.[0]?.delta?.content as string | undefined;
               if (content) upsertAssistant(content);
             } catch {
               /* ignore partial leftovers */
@@ -129,7 +170,21 @@ export function useAiAssistant() {
           }
         }
 
-        // Invalidate AI request balance cache after successful response
+        // Persist assistant message
+        if (assistantSoFar) {
+          await supabase.from("ai_messages").insert({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: assistantSoFar,
+          });
+          // Update conversation timestamp
+          await supabase
+            .from("ai_conversations")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", conversationId);
+          queryClient.invalidateQueries({ queryKey: ["ai-conversations"] });
+        }
+
         queryClient.invalidateQueries({ queryKey: ["ai-request-balance"] });
       } catch (e) {
         console.error("AI assistant error:", e);
@@ -138,12 +193,12 @@ export function useAiAssistant() {
         setIsLoading(false);
       }
     },
-    [messages, queryClient]
+    [messages, queryClient, conversationId, renameMutation]
   );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
   }, []);
 
-  return { messages, isLoading, sendMessage, clearMessages };
+  return { messages, isLoading, isLoadingHistory, sendMessage, clearMessages };
 }

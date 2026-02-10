@@ -67,8 +67,8 @@ export function AiAssistant() {
 
   const handleQuickQuestion = async (q: string) => {
     if (isLoading || !hasBalance) return;
-    await ensureConversation();
-    sendMessage(q);
+    const convId = await ensureConversation();
+    sendMessage(q, convId);
   };
 
   const handleTextareaInput = () => {

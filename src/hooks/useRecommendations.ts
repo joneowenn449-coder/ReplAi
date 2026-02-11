@@ -47,6 +47,36 @@ export function useRecommendations(sourceArticle: string | null) {
   });
 }
 
+export function useAllRecommendationsSummary() {
+  return useQuery({
+    queryKey: ["recommendations-summary"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("product_recommendations")
+        .select("source_article, target_article, target_name");
+
+      if (error) throw error;
+
+      const map = new Map<string, { count: number; targets: string[] }>();
+      for (const r of data || []) {
+        const existing = map.get(r.source_article);
+        if (existing) {
+          existing.count++;
+          existing.targets.push(r.target_article);
+        } else {
+          map.set(r.source_article, { count: 1, targets: [r.target_article] });
+        }
+      }
+
+      return Array.from(map.entries()).map(([article, info]) => ({
+        article,
+        count: info.count,
+        targets: info.targets,
+      }));
+    },
+  });
+}
+
 export function useAddRecommendation() {
   const queryClient = useQueryClient();
 
@@ -60,12 +90,16 @@ export function useAddRecommendation() {
       targetArticle: string;
       targetName: string;
     }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Не авторизован");
+
       const { error } = await supabase
         .from("product_recommendations")
         .insert({
           source_article: sourceArticle,
           target_article: targetArticle,
           target_name: targetName,
+          user_id: user.id,
         });
 
       if (error) {
@@ -78,6 +112,9 @@ export function useAddRecommendation() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["recommendations", variables.sourceArticle],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["recommendations-summary"],
       });
       toast.success("Рекомендация добавлена");
     },
@@ -109,6 +146,9 @@ export function useDeleteRecommendation() {
     onSuccess: (sourceArticle) => {
       queryClient.invalidateQueries({
         queryKey: ["recommendations", sourceArticle],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["recommendations-summary"],
       });
       toast.success("Рекомендация удалена");
     },

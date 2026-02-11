@@ -106,7 +106,7 @@ export function AiChatSidebar({ activeId, onSelect, onNewChat }: Props) {
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="flex-1 text-[13px] truncate leading-tight">
+          <span className="flex-1 min-w-0 text-[13px] truncate leading-tight">
             {conv.title}
           </span>
         )}
@@ -114,7 +114,7 @@ export function AiChatSidebar({ activeId, onSelect, onNewChat }: Props) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="opacity-40 hover:opacity-100 p-0.5 rounded-md hover:bg-secondary transition-opacity"
+                className="shrink-0 opacity-40 hover:opacity-100 p-0.5 rounded-md hover:bg-secondary transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />

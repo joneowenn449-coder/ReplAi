@@ -152,7 +152,13 @@ serve(async (req) => {
 
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
-    // Call Lovable AI Gateway
+    // Choose model based on rating: lightweight for positive, powerful for negative
+    const model = review.rating >= 4
+      ? "google/gemini-2.5-flash-lite"
+      : "openai/gpt-5.2";
+    console.log(`[generate-reply] Rating ${review.rating} → model: ${model}`);
+
+    // Call AI Gateway
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -160,7 +166,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model,
         messages: [
           { role: "system", content: promptTemplate },
           { role: "user", content: userMessage },

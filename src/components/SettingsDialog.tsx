@@ -305,20 +305,19 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
             </p>
           </div>
 
-          {/* AI Prompt Section */}
+          {/* Company Vibe Section */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground block">
-              Промпт для генерации ответов
+            <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+              ✨ Вайб компании
             </label>
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[100px] text-sm"
-              placeholder="Опишите, как ИИ должен отвечать на отзывы..."
+              placeholder="Опиши тон, стиль и правила ответов бренда. Например: «Отвечаем с юмором, всегда предлагаем решение, благодарим за внимание к нашему бренду»"
             />
             <p className="text-xs text-muted-foreground">
-              Этот промпт будет использоваться как системная инструкция при
-              генерации ответов на отзывы.
+              Это описание тона и правил — основа для всех ответов ИИ на отзывы. Всё, что ты напишешь здесь, будет учтено при формировании ответов.
             </p>
           </div>
         </div>

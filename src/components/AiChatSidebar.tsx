@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Plus,
-  MoreHorizontal,
+  MoreVertical,
   Pin,
   PinOff,
   Pencil,
@@ -91,25 +91,6 @@ export function AiChatSidebar({ activeId, onSelect, onNewChat }: Props) {
         }`}
         onClick={() => !isRenaming && onSelect(conv.id)}
       >
-        <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
-        {isRenaming ? (
-          <Input
-            ref={renameRef}
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitRename();
-              if (e.key === "Escape") setRenamingId(null);
-            }}
-            className="h-6 text-[13px] px-1.5 py-0 border-border/50 bg-background"
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="flex-1 min-w-0 text-[13px] truncate leading-tight">
-            {conv.title}
-          </span>
-        )}
         {!isRenaming && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -117,10 +98,10 @@ export function AiChatSidebar({ activeId, onSelect, onNewChat }: Props) {
                 className="shrink-0 opacity-40 hover:opacity-100 p-0.5 rounded-md hover:bg-secondary transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreHorizontal className="w-3.5 h-3.5" />
+                <MoreVertical className="w-3.5 h-3.5" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuContent align="start" className="w-40">
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
@@ -156,6 +137,25 @@ export function AiChatSidebar({ activeId, onSelect, onNewChat }: Props) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+        <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
+        {isRenaming ? (
+          <Input
+            ref={renameRef}
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") setRenamingId(null);
+            }}
+            className="h-6 text-[13px] px-1.5 py-0 border-border/50 bg-background"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="flex-1 min-w-0 text-[13px] truncate leading-tight">
+            {conv.title}
+          </span>
         )}
       </div>
     );

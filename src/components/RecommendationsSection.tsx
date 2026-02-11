@@ -12,8 +12,9 @@ import {
   useRecommendations,
   useAddRecommendation,
   useDeleteRecommendation,
+  useAllRecommendationsSummary,
 } from "@/hooks/useRecommendations";
-import { Plus, X, Package, Loader2 } from "lucide-react";
+import { Plus, X, Package, Loader2, ChevronRight } from "lucide-react";
 
 export const RecommendationsSection = () => {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -23,6 +24,7 @@ export const RecommendationsSection = () => {
     useProductArticles();
   const { data: recommendations = [], isLoading: recsLoading } =
     useRecommendations(selectedArticle);
+  const { data: summary = [] } = useAllRecommendationsSummary();
   const addRecommendation = useAddRecommendation();
   const deleteRecommendation = useDeleteRecommendation();
 
@@ -65,6 +67,32 @@ export const RecommendationsSection = () => {
         При ответе на отзыв ИИ добавит призыв посмотреть рекомендованные
         артикулы.
       </p>
+
+      {/* Summary of all recommendations */}
+      {summary.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Настроенные связи:</p>
+          <div className="space-y-1">
+            {summary.map((s) => (
+              <button
+                key={s.article}
+                onClick={() => setSelectedArticle(s.article)}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors ${
+                  selectedArticle === s.article
+                    ? "bg-primary/10 border border-primary/30 text-primary"
+                    : "bg-muted/50 border border-border text-foreground hover:bg-muted"
+                }`}
+              >
+                <span className="font-mono">{s.article}</span>
+                <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground">
+                  {s.count === 1 ? "1 рекомендация" : s.count < 5 ? `${s.count} рекомендации` : `${s.count} рекомендаций`}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Article selector */}
       <Select

@@ -114,7 +114,7 @@ export function AiChatSidebar({ activeId, onSelect, onNewChat }: Props) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="opacity-0 group-hover:opacity-100 p-0.5 rounded-md hover:bg-secondary transition-opacity"
+                className="opacity-40 hover:opacity-100 p-0.5 rounded-md hover:bg-secondary transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />

@@ -111,15 +111,18 @@ serve(async (req) => {
     const photoLinks = Array.isArray(review.photo_links) ? review.photo_links : [];
     const photoCount = photoLinks.length;
     const hasVideo = review.has_video === true;
+    const hasPhotos = photoCount > 0;
     let attachmentInfo = "";
-    if (photoCount > 0 || hasVideo) {
+    if (hasPhotos || hasVideo) {
       const parts: string[] = [];
-      if (photoCount > 0) {
+      if (hasPhotos) {
         const photoWord = photoCount === 1 ? "фотографию" : photoCount < 5 ? "фотографии" : "фотографий";
         parts.push(`${photoCount} ${photoWord}`);
       }
       if (hasVideo) parts.push("видео");
-      attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
+      attachmentInfo = hasPhotos
+        ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже — проанализируй их и учти в ответе, если это уместно.]`
+        : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
     }
 
     // Build full review content
@@ -152,11 +155,24 @@ serve(async (req) => {
 
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
-    // Choose model based on rating: lightweight for positive, powerful for negative
-    const model = review.rating >= 4
-      ? "google/gemini-2.5-flash-lite"
-      : "openai/gpt-5.2";
-    console.log(`[generate-reply] Rating ${review.rating} → model: ${model}`);
+    // Choose model: vision for photos, lightweight for positive, powerful for negative
+    const model = hasPhotos
+      ? "google/gemini-2.5-flash"
+      : review.rating >= 4
+        ? "google/gemini-2.5-flash-lite"
+        : "openai/gpt-5.2";
+    console.log(`[generate-reply] Rating ${review.rating}, photos: ${photoCount} → model: ${model}`);
+
+    // Build multimodal content if photos are present
+    const userContent: any = hasPhotos
+      ? [
+          { type: "text", text: userMessage },
+          ...photoLinks.slice(0, 5).map((photo: any) => ({
+            type: "image_url",
+            image_url: { url: photo.miniSize || photo.fullSize },
+          })).filter((p: any) => p.image_url.url),
+        ]
+      : userMessage;
 
     // Call AI Gateway
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -169,7 +185,7 @@ serve(async (req) => {
         model,
         messages: [
           { role: "system", content: promptTemplate },
-          { role: "user", content: userMessage },
+          { role: "user", content: userContent },
         ],
         max_tokens: isEmptyReview ? 300 : 1000,
         temperature: 0.7,

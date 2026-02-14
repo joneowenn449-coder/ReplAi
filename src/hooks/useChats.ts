@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEffect } from "react";
+import { useActiveCabinet } from "./useCabinets";
 
 export interface Chat {
   id: string;
@@ -15,6 +16,7 @@ export interface Chat {
   is_read: boolean;
   created_at: string;
   updated_at: string;
+  cabinet_id: string | null;
 }
 
 export interface ChatMessage {
@@ -30,8 +32,9 @@ export interface ChatMessage {
 
 export function useChats() {
   const queryClient = useQueryClient();
+  const { data: activeCabinet } = useActiveCabinet();
+  const cabinetId = activeCabinet?.id;
 
-  // Subscribe to realtime changes on chats table
   useEffect(() => {
     const channel = supabase
       .channel("chats-realtime")
@@ -50,15 +53,22 @@ export function useChats() {
   }, [queryClient]);
 
   return useQuery({
-    queryKey: ["chats"],
+    queryKey: ["chats", cabinetId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("chats")
         .select("*")
         .order("last_message_at", { ascending: false, nullsFirst: false });
+
+      if (cabinetId) {
+        query = query.eq("cabinet_id", cabinetId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data as unknown as Chat[]) || [];
     },
+    enabled: !!cabinetId,
     refetchInterval: 30_000,
   });
 }
@@ -66,7 +76,6 @@ export function useChats() {
 export function useChatMessages(chatId: string | null) {
   const queryClient = useQueryClient();
 
-  // Subscribe to realtime changes on chat_messages for this chat
   useEffect(() => {
     if (!chatId) return;
 
@@ -102,7 +111,6 @@ export function useChatMessages(chatId: string | null) {
         .order("sent_at", { ascending: true });
       if (error) throw error;
       const messages = (data as unknown as ChatMessage[]) || [];
-      // Client-side dedup: remove duplicate seller messages within 2-min window
       return messages.filter((msg, index, arr) => {
         if (index === 0) return true;
         return !arr.slice(0, index).some(
@@ -130,6 +138,7 @@ export function useSyncChats() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["chats"] });
       queryClient.invalidateQueries({ queryKey: ["chat_messages"] });
+      queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });
       const chats = data?.chats || 0;
       const messages = data?.messages || 0;
       toast.success(`Синхронизировано: ${chats} чатов, ${messages} сообщений`);

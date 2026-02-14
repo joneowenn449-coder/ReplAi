@@ -124,6 +124,7 @@ export type Database = {
       chat_messages: {
         Row: {
           attachments: Json | null
+          cabinet_id: string | null
           chat_id: string
           created_at: string
           event_id: string
@@ -135,6 +136,7 @@ export type Database = {
         }
         Insert: {
           attachments?: Json | null
+          cabinet_id?: string | null
           chat_id: string
           created_at?: string
           event_id: string
@@ -146,6 +148,7 @@ export type Database = {
         }
         Update: {
           attachments?: Json | null
+          cabinet_id?: string | null
           chat_id?: string
           created_at?: string
           event_id?: string
@@ -157,6 +160,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "chat_messages_cabinet_id_fkey"
+            columns: ["cabinet_id"]
+            isOneToOne: false
+            referencedRelation: "wb_cabinets"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "chat_messages_chat_id_fkey"
             columns: ["chat_id"]
             isOneToOne: false
@@ -167,6 +177,7 @@ export type Database = {
       }
       chats: {
         Row: {
+          cabinet_id: string | null
           chat_id: string
           client_name: string
           created_at: string
@@ -181,6 +192,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          cabinet_id?: string | null
           chat_id: string
           client_name?: string
           created_at?: string
@@ -195,6 +207,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          cabinet_id?: string | null
           chat_id?: string
           client_name?: string
           created_at?: string
@@ -208,7 +221,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chats_cabinet_id_fkey"
+            columns: ["cabinet_id"]
+            isOneToOne: false
+            referencedRelation: "wb_cabinets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payments: {
         Row: {
@@ -296,6 +317,7 @@ export type Database = {
           ai_draft: string | null
           author_name: string
           brand_name: string
+          cabinet_id: string | null
           cons: string | null
           created_date: string
           fetched_at: string
@@ -318,6 +340,7 @@ export type Database = {
           ai_draft?: string | null
           author_name?: string
           brand_name?: string
+          cabinet_id?: string | null
           cons?: string | null
           created_date?: string
           fetched_at?: string
@@ -340,6 +363,7 @@ export type Database = {
           ai_draft?: string | null
           author_name?: string
           brand_name?: string
+          cabinet_id?: string | null
           cons?: string | null
           created_date?: string
           fetched_at?: string
@@ -358,7 +382,15 @@ export type Database = {
           user_id?: string | null
           wb_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "reviews_cabinet_id_fkey"
+            columns: ["cabinet_id"]
+            isOneToOne: false
+            referencedRelation: "wb_cabinets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       settings: {
         Row: {
@@ -467,6 +499,48 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      wb_cabinets: {
+        Row: {
+          ai_prompt_template: string
+          brand_name: string
+          created_at: string
+          id: string
+          is_active: boolean
+          last_sync_at: string | null
+          name: string
+          reply_modes: Json
+          updated_at: string
+          user_id: string
+          wb_api_key: string | null
+        }
+        Insert: {
+          ai_prompt_template?: string
+          brand_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          name?: string
+          reply_modes?: Json
+          updated_at?: string
+          user_id: string
+          wb_api_key?: string | null
+        }
+        Update: {
+          ai_prompt_template?: string
+          brand_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          name?: string
+          reply_modes?: Json
+          updated_at?: string
+          user_id?: string
+          wb_api_key?: string | null
         }
         Relationships: []
       }

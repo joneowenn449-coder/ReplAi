@@ -69,12 +69,35 @@ serve(async (req) => {
     if (fetchError) throw new Error(`DB error: ${fetchError.message}`);
     if (!review) throw new Error("Review not found");
 
-    // Get settings for this user's prompt template and brand
-    const { data: settings } = await supabase
-      .from("settings")
-      .select("ai_prompt_template, brand_name")
-      .eq("user_id", userId)
-      .maybeSingle();
+    // Get cabinet settings for prompt template and brand
+    const cabinetId = review.cabinet_id;
+    let promptTemplate = "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
+    let cabinetBrand = "";
+
+    if (cabinetId) {
+      const { data: cabinet } = await supabase
+        .from("wb_cabinets")
+        .select("ai_prompt_template, brand_name")
+        .eq("id", cabinetId)
+        .maybeSingle();
+
+      if (cabinet) {
+        promptTemplate = cabinet.ai_prompt_template || promptTemplate;
+        cabinetBrand = cabinet.brand_name || "";
+      }
+    } else {
+      // Fallback to settings
+      const { data: settings } = await supabase
+        .from("settings")
+        .select("ai_prompt_template, brand_name")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (settings) {
+        promptTemplate = settings.ai_prompt_template || promptTemplate;
+        cabinetBrand = settings.brand_name || "";
+      }
+    }
 
     // Fetch recommendations scoped to this user
     const { data: recommendations } = await supabase
@@ -89,23 +112,16 @@ serve(async (req) => {
         .map((r) => `- Артикул ${r.target_article}${r.target_name ? `: "${r.target_name}"` : ""}`)
         .join("\n");
       recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
-      console.log(`[generate-reply] Adding ${recommendations.length} recommendations to prompt`);
-    } else if (recommendations && recommendations.length > 0 && review.rating < 4) {
-      console.log(`[generate-reply] Skipping recommendations for low rating (${review.rating} stars)`);
     }
 
-    const promptTemplate =
-      settings?.ai_prompt_template ||
-      "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
-
-    // Check if review is empty and build special instruction
+    // Check if review is empty
     const isEmptyReview = !review.text && !review.pros && !review.cons;
     let emptyInstruction = "";
     if (isEmptyReview) {
       if (review.rating >= 4) {
-        emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил только оценку ${review.rating} из 5.\nНапиши КОРОТКУЮ благодарность за отзыв и высокую оценку. Максимум 1-2 предложения.\nНе задавай вопросов. Не фантазируй о товаре.]`;
+        emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил только оценку ${review.rating} из 5.\nНапиши КОРОТКУЮ благодарность за отзыв и высокую оценку. Максимум 1-2 предложения.]`;
       } else {
-        emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил низкую оценку ${review.rating} из 5 без пояснения.\nВырази сожаление, что опыт не оправдал ожиданий.\nПредложи написать в чат с продавцом, чтобы разобраться в ситуации и помочь.\nМаксимум 1-2 предложения. Не задавай лишних вопросов.]`;
+        emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил низкую оценку ${review.rating} из 5 без пояснения.\nВырази сожаление. Предложи написать в чат с продавцом.\nМаксимум 1-2 предложения.]`;
       }
     }
 
@@ -113,21 +129,20 @@ serve(async (req) => {
     const photoLinks = Array.isArray(review.photo_links) ? review.photo_links : [];
     const photoCount = photoLinks.length;
     const hasVideo = review.has_video === true;
-    const hasPhotos = photoCount > 0;
     let attachmentInfo = "";
-    if (hasPhotos || hasVideo) {
+    if (photoCount > 0 || hasVideo) {
       const parts: string[] = [];
-      if (hasPhotos) {
+      if (photoCount > 0) {
         const photoWord = photoCount === 1 ? "фотографию" : photoCount < 5 ? "фотографии" : "фотографий";
         parts.push(`${photoCount} ${photoWord}`);
       }
       if (hasVideo) parts.push("видео");
-      attachmentInfo = hasPhotos
+      attachmentInfo = photoCount > 0
         ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже — проанализируй их и учти в ответе, если это уместно.]`
         : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
     }
 
-    // Build full review content
+    // Build review content
     let reviewContent = "";
     const contentParts: string[] = [];
     if (review.text) contentParts.push(`Комментарий: ${review.text}`);
@@ -142,31 +157,23 @@ serve(async (req) => {
 
     const isRefusal = detectRefusal(review.text, review.pros, review.cons);
     const refusalWarning = isRefusal
-      ? `\n\n[ВНИМАНИЕ: Покупатель НЕ выкупил товар (обнаружены признаки отказа/возврата). НЕ благодари за покупку или выбор товара. Поблагодари за внимание к бренду, вырази сожаление, что модель не подошла, и пригласи вернуться.]`
+      ? `\n\n[ВНИМАНИЕ: Покупатель НЕ выкупил товар. НЕ благодари за покупку. Поблагодари за внимание к бренду, вырази сожаление и пригласи вернуться.]`
       : "";
 
-    if (isRefusal) {
-      console.log(`[generate-reply] Refusal detected for review ${review_id}`);
-    }
-
-    // Determine brand name: review-level > settings-level
-    const brandName = review.brand_name || settings?.brand_name || "";
+    const brandName = review.brand_name || cabinetBrand || "";
     const brandInstruction = brandName
       ? `\n\nНазвание бренда продавца: ${brandName}. Используй это название при обращении к покупателю.`
       : "";
 
-    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
+    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.product_name}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
-    // Choose model: vision for photos, lightweight for positive, powerful for negative
-    const model = hasPhotos
+    const model = photoCount > 0
       ? "google/gemini-2.5-flash"
       : review.rating >= 4
         ? "google/gemini-2.5-flash-lite"
         : "openai/gpt-5.2";
-    console.log(`[generate-reply] Rating ${review.rating}, photos: ${photoCount} → model: ${model}`);
 
-    // Build multimodal content if photos are present
-    const userContent: any = hasPhotos
+    const userContent: any = photoCount > 0
       ? [
           { type: "text", text: userMessage },
           ...photoLinks.slice(0, 5).map((photo: any) => ({
@@ -176,7 +183,6 @@ serve(async (req) => {
         ]
       : userMessage;
 
-    // Call AI Gateway
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -204,7 +210,6 @@ serve(async (req) => {
 
     if (!newDraft) throw new Error("AI returned empty response");
 
-    // Update review with new draft (scoped to user)
     const { error: updateError } = await supabase
       .from("reviews")
       .update({ ai_draft: newDraft, status: "pending" })

@@ -40,9 +40,12 @@ serve(async (req) => {
     }
     const userId = user.id;
 
-    const { api_key } = await req.json();
+    const { api_key, cabinet_id } = await req.json();
     if (!api_key || typeof api_key !== "string" || api_key.trim().length < 10) {
       throw new Error("Некорректный API-ключ");
+    }
+    if (!cabinet_id) {
+      throw new Error("cabinet_id is required");
     }
 
     const trimmedKey = api_key.trim();
@@ -70,7 +73,16 @@ serve(async (req) => {
     // Consume response body
     await testResp.text();
 
-    // Key is valid — save to settings for this user
+    // Key is valid — save to wb_cabinets
+    const { error: updateError } = await supabase
+      .from("wb_cabinets")
+      .update({ wb_api_key: trimmedKey })
+      .eq("id", cabinet_id)
+      .eq("user_id", userId);
+
+    if (updateError) throw new Error(`DB error: ${updateError.message}`);
+
+    // Also update legacy settings for backwards compat
     const { data: settings } = await supabase
       .from("settings")
       .select("id")
@@ -78,16 +90,10 @@ serve(async (req) => {
       .maybeSingle();
 
     if (settings) {
-      const { error } = await supabase
+      await supabase
         .from("settings")
         .update({ wb_api_key: trimmedKey })
         .eq("id", settings.id);
-      if (error) throw new Error(`DB error: ${error.message}`);
-    } else {
-      const { error } = await supabase
-        .from("settings")
-        .insert({ wb_api_key: trimmedKey, user_id: userId });
-      if (error) throw new Error(`DB error: ${error.message}`);
     }
 
     // Test chat API access
@@ -110,16 +116,16 @@ serve(async (req) => {
         ? trimmedKey.slice(0, 4) + "****...****" + trimmedKey.slice(-4)
         : "****";
 
-    // Check if this is first setup (no reviews for this user) — auto-import archive
+    // Check if this is first setup (no reviews for this cabinet) — auto-import archive
     let archiveImported = false;
     try {
       const { count, error: countError } = await supabase
         .from("reviews")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", userId);
+        .eq("cabinet_id", cabinet_id);
 
       if (!countError && (count === null || count === 0)) {
-        console.log(`First setup detected for user ${userId} — triggering archive import`);
+        console.log(`First setup detected for cabinet ${cabinet_id} — triggering archive import`);
         const archiveResp = await fetch(
           `${SUPABASE_URL}/functions/v1/fetch-archive`,
           {
@@ -128,7 +134,7 @@ serve(async (req) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             },
-            body: JSON.stringify({ user_id: userId }),
+            body: JSON.stringify({ user_id: userId, cabinet_id }),
           }
         );
         const archiveData = await archiveResp.json();

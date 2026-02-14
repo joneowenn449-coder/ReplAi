@@ -56,16 +56,6 @@ serve(async (req) => {
     const { review_id, answer_text } = await req.json();
     if (!review_id) throw new Error("review_id is required");
 
-    // Get WB API key for this user
-    const { data: settings } = await supabase
-      .from("settings")
-      .select("wb_api_key")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const WB_API_KEY = settings?.wb_api_key;
-    if (!WB_API_KEY) throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
-
     // Get review scoped to this user
     const { data: review, error: fetchError } = await supabase
       .from("reviews")
@@ -76,6 +66,30 @@ serve(async (req) => {
 
     if (fetchError) throw new Error(`DB error: ${fetchError.message}`);
     if (!review) throw new Error("Review not found");
+
+    // Get WB API key from cabinet or settings
+    let WB_API_KEY: string | null = null;
+
+    if (review.cabinet_id) {
+      const { data: cabinet } = await supabase
+        .from("wb_cabinets")
+        .select("wb_api_key")
+        .eq("id", review.cabinet_id)
+        .maybeSingle();
+      WB_API_KEY = cabinet?.wb_api_key || null;
+    }
+
+    if (!WB_API_KEY) {
+      // Fallback to settings
+      const { data: settings } = await supabase
+        .from("settings")
+        .select("wb_api_key")
+        .eq("user_id", userId)
+        .maybeSingle();
+      WB_API_KEY = settings?.wb_api_key || null;
+    }
+
+    if (!WB_API_KEY) throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
 
     const textToSend = answer_text || review.ai_draft;
     if (!textToSend) throw new Error("No answer text provided");

@@ -21,15 +21,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
-  useSettings,
-  useUpdateSettings,
   useValidateApiKey,
   useDeleteApiKey,
   DEFAULT_REPLY_MODES,
   ReplyModes,
   ReplyMode,
-  Settings,
 } from "@/hooks/useReviews";
+import { useActiveCabinet, useUpdateCabinet, useDeleteCabinet } from "@/hooks/useCabinets";
+import type { WbCabinet } from "@/hooks/useCabinets";
 import { toast } from "sonner";
 import { Check, Pencil, Trash2, Loader2, KeyRound, Star } from "lucide-react";
 import { RecommendationsSection } from "@/components/RecommendationsSection";
@@ -45,33 +44,30 @@ function maskKey(key: string): string {
 }
 
 export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
-  const { data: settings } = useSettings();
-  const updateSettings = useUpdateSettings();
+  const { data: activeCabinet } = useActiveCabinet();
+  const updateCabinet = useUpdateCabinet();
   const validateApiKey = useValidateApiKey();
   const deleteApiKey = useDeleteApiKey();
+  const deleteCabinet = useDeleteCabinet();
 
   const [prompt, setPrompt] = useState("");
   const [brandName, setBrandName] = useState("");
+  const [cabinetName, setCabinetName] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [isEditingKey, setIsEditingKey] = useState(false);
   const [replyModes, setReplyModes] = useState<ReplyModes>(DEFAULT_REPLY_MODES);
 
-  const hasKey = !!settings?.wb_api_key;
+  const cabinet = activeCabinet;
+  const hasKey = !!cabinet?.wb_api_key;
 
   useEffect(() => {
-    if (settings?.ai_prompt_template) {
-      setPrompt(settings.ai_prompt_template);
+    if (cabinet) {
+      setPrompt(cabinet.ai_prompt_template || "");
+      setBrandName(cabinet.brand_name || "");
+      setCabinetName(cabinet.name || "");
+      setReplyModes((cabinet.reply_modes as ReplyModes) || DEFAULT_REPLY_MODES);
     }
-    if (settings?.brand_name !== undefined) {
-      setBrandName(settings.brand_name);
-    }
-  }, [settings?.ai_prompt_template, settings?.brand_name]);
-
-  useEffect(() => {
-    if (settings?.reply_modes) {
-      setReplyModes(settings.reply_modes);
-    }
-  }, [settings?.reply_modes]);
+  }, [cabinet?.id, cabinet?.ai_prompt_template, cabinet?.brand_name, cabinet?.name, cabinet?.reply_modes]);
 
   useEffect(() => {
     if (!open) {
@@ -81,8 +77,16 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   }, [open]);
 
   const handleSaveSettings = () => {
-    updateSettings.mutate(
-      { ai_prompt_template: prompt, brand_name: brandName } as Partial<Settings>,
+    if (!cabinet) return;
+    updateCabinet.mutate(
+      {
+        id: cabinet.id,
+        updates: {
+          ai_prompt_template: prompt,
+          brand_name: brandName,
+          name: cabinetName,
+        } as Partial<WbCabinet>,
+      },
       {
         onSuccess: () => {
           toast.success("Настройки сохранены");
@@ -92,13 +96,17 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   };
 
   const handleToggleRating = (rating: string, checked: boolean) => {
+    if (!cabinet) return;
     const newModes: ReplyModes = {
       ...replyModes,
       [rating]: (checked ? "auto" : "manual") as ReplyMode,
     };
     setReplyModes(newModes);
-    updateSettings.mutate(
-      { reply_modes: newModes },
+    updateCabinet.mutate(
+      {
+        id: cabinet.id,
+        updates: { reply_modes: newModes } as Partial<WbCabinet>,
+      },
       {
         onSuccess: () => {
           toast.success("Режим обновлён");
@@ -108,8 +116,8 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   };
 
   const handleValidateKey = () => {
-    if (!apiKeyInput.trim()) return;
-    validateApiKey.mutate(apiKeyInput.trim(), {
+    if (!apiKeyInput.trim() || !cabinet) return;
+    validateApiKey.mutate({ apiKey: apiKeyInput.trim(), cabinetId: cabinet.id }, {
       onSuccess: () => {
         setApiKeyInput("");
         setIsEditingKey(false);
@@ -118,7 +126,8 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   };
 
   const handleDeleteKey = () => {
-    deleteApiKey.mutate(undefined, {
+    if (!cabinet) return;
+    deleteApiKey.mutate(cabinet.id, {
       onSuccess: () => {
         setIsEditingKey(false);
         setApiKeyInput("");
@@ -135,10 +144,23 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg p-4 sm:p-5">
         <DialogHeader className="pb-2">
-          <DialogTitle>Настройки</DialogTitle>
+          <DialogTitle>Настройки кабинета</DialogTitle>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4">
+          {/* Cabinet Name */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground block">
+              Название кабинета
+            </label>
+            <Input
+              value={cabinetName}
+              onChange={(e) => setCabinetName(e.target.value)}
+              placeholder="Например: Магазин Одежда"
+              className="text-sm"
+            />
+          </div>
+
           {/* API Key Section */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -153,7 +175,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
                 <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-md bg-muted border border-border">
                   <Check className="w-4 h-4 text-success shrink-0" />
                   <span className="text-sm font-mono text-foreground truncate">
-                    {maskKey(settings.wb_api_key!)}
+                    {maskKey(cabinet!.wb_api_key!)}
                   </span>
                   <span className="text-xs text-success font-medium ml-auto shrink-0">
                     Подключено
@@ -314,7 +336,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[100px] text-sm"
-              placeholder="Опиши тон, стиль и правила ответов бренда. Например: «Отвечаем с юмором, всегда предлагаем решение, благодарим за внимание к нашему бренду»"
+              placeholder="Опиши тон, стиль и правила ответов бренда."
             />
             <p className="text-xs text-muted-foreground">
               Это описание тона и правил — основа для всех ответов ИИ на отзывы. Всё, что ты напишешь здесь, будет учтено при формировании ответов.
@@ -328,9 +350,9 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
           </Button>
           <Button
             onClick={handleSaveSettings}
-            disabled={updateSettings.isPending}
+            disabled={updateCabinet.isPending}
           >
-            {updateSettings.isPending ? "Сохранение..." : "Сохранить"}
+            {updateCabinet.isPending ? "Сохранение..." : "Сохранить"}
           </Button>
         </div>
       </DialogContent>

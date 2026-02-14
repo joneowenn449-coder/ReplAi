@@ -169,9 +169,13 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
         <NavTabs activeTab={activeTab} onTabChange={onTabChange} unreadChatsCount={unreadChatsCount} />
 
         <div className="mt-6">
-          <h1 className="text-2xl font-bold text-foreground">Отзывы Wildberries</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {activeTab === "dashboard" ? "Сводка" : "Отзывы Wildberries"}
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Управление отзывами и автоответами с помощью ИИ
+            {activeTab === "dashboard"
+              ? "Аналитика и статистика по отзывам"
+              : "Управление отзывами и автоответами с помощью ИИ"}
           </p>
         </div>
       </div>

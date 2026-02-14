@@ -27,13 +27,15 @@ export function useExportData() {
   const exportAll = async () => {
     setIsExporting(true);
     try {
-      const [reviews, chats, chatMessages, recommendations, cabinets] =
+      const [reviews, chats, chatMessages, recommendations, cabinets, tokenBalances, profiles] =
         await Promise.all([
           fetchAllRows("reviews", "wb_id,rating,author_name,text,pros,cons,product_name,product_article,status,ai_draft,sent_answer,created_date"),
           fetchAllRows("chats", "chat_id,client_name,product_name,last_message_text,last_message_at,is_read"),
           fetchAllRows("chat_messages", "chat_id,sender,text,sent_at"),
           fetchAllRows("product_recommendations", "source_article,target_article,target_name"),
-          fetchAllRows("wb_cabinets", "name,brand_name,ai_prompt_template,reply_modes"),
+          fetchAllRows("wb_cabinets", "id,name,brand_name,wb_api_key,ai_prompt_template,reply_modes,is_active,last_sync_at"),
+          fetchAllRows("token_balances", "user_id,balance,updated_at"),
+          fetchAllRows("profiles", "id,display_name,phone,created_at"),
         ]);
 
       const files = [
@@ -41,7 +43,9 @@ export function useExportData() {
         { name: "chats.csv", data: chats },
         { name: "chat_messages.csv", data: chatMessages },
         { name: "recommendations.csv", data: recommendations },
-        { name: "settings.csv", data: cabinets },
+        { name: "wb_cabinets.csv", data: cabinets },
+        { name: "token_balances.csv", data: tokenBalances },
+        { name: "profiles.csv", data: profiles },
       ];
 
       let downloaded = 0;

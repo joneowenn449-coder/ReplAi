@@ -1,45 +1,26 @@
 
-# Экспорт данных в CSV
+# Добавление недостающих таблиц в экспорт CSV
 
-## Что будет сделано
+## Что будет изменено
 
-Кнопка "Экспорт данных" в диалоге настроек, которая позволяет скачать все данные (отзывы, чаты, рекомендации, настройки кабинета) в виде CSV-файлов, упакованных в один ZIP-архив, или по отдельности через выпадающее меню.
+Файл `src/hooks/useExportData.ts` — расширяем экспорт тремя дополнительными таблицами:
 
-## Реализация
-
-### Новый файл: `src/lib/exportCsv.ts`
-
-Утилита для конвертации массива объектов в CSV-строку и скачивания файла через `Blob` + `URL.createObjectURL`. Функции:
-- `objectsToCsv(data: Record<string, any>[])` -- конвертация в CSV с экранированием
-- `downloadCsv(filename: string, csvContent: string)` -- триггер скачивания через скрытый `<a>`
-
-### Новый файл: `src/hooks/useExportData.ts`
-
-Хук, который:
-1. Загружает данные из базы (reviews, chats, chat_messages, product_recommendations, настройки кабинета) через Supabase-клиент
-2. Формирует CSV для каждой таблицы
-3. Скачивает каждый файл по отдельности (reviews.csv, chats.csv, chat_messages.csv, recommendations.csv, settings.csv)
-
-### Изменения в `src/components/SettingsDialog.tsx`
-
-Добавить секцию "Экспорт данных" в конец диалога (перед кнопками "Отмена"/"Сохранить"):
-- Кнопка "Скачать все данные (CSV)" с иконкой `Download`
-- При нажатии вызывается функция экспорта, последовательно скачиваются 5 CSV-файлов
-- Индикатор загрузки (Loader2) во время подготовки данных
-
-## Состав экспортируемых данных
-
-| Файл | Таблица | Ключевые поля |
+| Файл | Таблица | Поля |
 |---|---|---|
-| reviews.csv | reviews | wb_id, rating, author_name, text, pros, cons, product_name, product_article, status, ai_draft, sent_answer, created_date |
-| chats.csv | chats | chat_id, client_name, product_name, last_message_text, last_message_at, is_read |
-| chat_messages.csv | chat_messages | chat_id, sender, text, sent_at |
-| recommendations.csv | product_recommendations | source_article, target_article, target_name |
-| settings.csv | wb_cabinets | name, brand_name, ai_prompt_template, reply_modes |
+| wb_cabinets.csv | wb_cabinets | id, name, brand_name, wb_api_key, ai_prompt_template, reply_modes, is_active, last_sync_at |
+| token_balances.csv | token_balances | user_id, balance, updated_at |
+| profiles.csv | profiles | id, display_name, phone, created_at |
+
+## Детали
+
+- Текущий файл `settings.csv` экспортирует `wb_cabinets`, но без критичных полей (`id`, `wb_api_key`, `is_active`, `last_sync_at`). Он будет заменён на полный экспорт `wb_cabinets.csv` со всеми полями, включая API-ключи.
+- Добавятся два новых файла: `token_balances.csv` и `profiles.csv`.
+- Итого будет скачиваться 7 CSV-файлов вместо 5.
 
 ## Технические детали
 
-- Данные загружаются напрямую из базы (не из кэша React Query), чтобы гарантировать полноту
-- Лимит Supabase в 1000 строк обходится пагинацией (range-запросы по 1000)
-- CSV формируется с BOM-меткой (`\uFEFF`) для корректного отображения кириллицы в Excel
-- Никаких новых зависимостей не требуется
+Изменения только в одном файле: `src/hooks/useExportData.ts`.
+
+- В `Promise.all` добавятся два новых вызова `fetchAllRows` для `token_balances` и `profiles`
+- Запрос `wb_cabinets` будет расширен до полного набора колонок, включая `wb_api_key`
+- Файл `settings.csv` переименуется в `wb_cabinets.csv` для ясности

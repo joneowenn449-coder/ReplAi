@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useAdminRole } from "@/hooks/useAdmin";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,7 +57,7 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
                 <Button
                   size="sm"
                   className="text-xs h-8 px-3"
-                  onClick={() => toast.info("Раздел оплаты скоро будет доступен")}
+                  onClick={() => navigate("/pricing")}
                 >
                   Пополнить
                 </Button>

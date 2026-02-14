@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.ai-assistant]
 verify_jwt = false
+
+[functions.create-payment]
+verify_jwt = false
+
+[functions.robokassa-webhook]
+verify_jwt = false

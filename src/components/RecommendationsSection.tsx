@@ -14,17 +14,21 @@ import {
   useDeleteRecommendation,
   useAllRecommendationsSummary,
 } from "@/hooks/useRecommendations";
+import { useActiveCabinet } from "@/hooks/useCabinets";
 import { Plus, X, Package, Loader2, ChevronRight } from "lucide-react";
 
 export const RecommendationsSection = () => {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [newArticle, setNewArticle] = useState("");
 
+  const { data: activeCabinet } = useActiveCabinet();
+  const cabinetId = activeCabinet?.id;
+
   const { data: articles = [], isLoading: articlesLoading } =
-    useProductArticles();
+    useProductArticles(cabinetId);
   const { data: recommendations = [], isLoading: recsLoading } =
-    useRecommendations(selectedArticle);
-  const { data: summary = [] } = useAllRecommendationsSummary();
+    useRecommendations(selectedArticle, cabinetId);
+  const { data: summary = [] } = useAllRecommendationsSummary(cabinetId);
   const addRecommendation = useAddRecommendation();
   const deleteRecommendation = useDeleteRecommendation();
 
@@ -34,13 +38,14 @@ export const RecommendationsSection = () => {
   );
 
   const handleAdd = () => {
-    if (!selectedArticle || !newArticle) return;
+    if (!selectedArticle || !newArticle || !cabinetId) return;
     const targetName = articles.find((a) => a.article === newArticle)?.name || "";
     addRecommendation.mutate(
       {
         sourceArticle: selectedArticle,
         targetArticle: newArticle,
         targetName,
+        cabinetId,
       },
       {
         onSuccess: () => {
@@ -51,8 +56,8 @@ export const RecommendationsSection = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (!selectedArticle) return;
-    deleteRecommendation.mutate({ id, sourceArticle: selectedArticle });
+    if (!selectedArticle || !cabinetId) return;
+    deleteRecommendation.mutate({ id, sourceArticle: selectedArticle, cabinetId });
   };
 
   return (

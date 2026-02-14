@@ -185,7 +185,7 @@ async function processCabinetReviews(
         .from("product_recommendations")
         .select("target_article, target_name")
         .eq("source_article", productArticle)
-        .eq("user_id", userId);
+        .eq("cabinet_id", cabinetId);
 
       if (recommendations && recommendations.length > 0) {
         const recList = recommendations

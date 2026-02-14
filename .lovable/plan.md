@@ -1,56 +1,45 @@
 
-
-# Вкладка "Сводка" -- аналитический дашборд
+# Экспорт данных в CSV
 
 ## Что будет сделано
 
-Новая вкладка "Сводка" в навигации (между "Отзывы" и "Чаты") с интерактивными графиками и фильтрами по датам, артикулу и рейтингу. Все данные берутся из уже загруженных отзывов текущего кабинета -- без новых таблиц в базе.
+Кнопка "Экспорт данных" в диалоге настроек, которая позволяет скачать все данные (отзывы, чаты, рекомендации, настройки кабинета) в виде CSV-файлов, упакованных в один ZIP-архив, или по отдельности через выпадающее меню.
 
-## Состав дашборда
+## Реализация
 
-1. **Панель фильтров** -- выбор диапазона дат (календарь), выпадающий список артикулов, фильтр по рейтингу (1-5 звёзд, мультивыбор)
-2. **Карточки-счётчики** -- всего отзывов, средний рейтинг, ожидают ответа, отвечено
-3. **График "Отзывы по дням"** -- линейный/столбчатый (recharts), количество отзывов в разрезе дат
-4. **График "Распределение рейтингов"** -- горизонтальная гистограмма (1-5 звёзд)
-5. **Таблица топ-артикулов** -- артикул, название, кол-во отзывов, средний рейтинг, % негативных
+### Новый файл: `src/lib/exportCsv.ts`
+
+Утилита для конвертации массива объектов в CSV-строку и скачивания файла через `Blob` + `URL.createObjectURL`. Функции:
+- `objectsToCsv(data: Record<string, any>[])` -- конвертация в CSV с экранированием
+- `downloadCsv(filename: string, csvContent: string)` -- триггер скачивания через скрытый `<a>`
+
+### Новый файл: `src/hooks/useExportData.ts`
+
+Хук, который:
+1. Загружает данные из базы (reviews, chats, chat_messages, product_recommendations, настройки кабинета) через Supabase-клиент
+2. Формирует CSV для каждой таблицы
+3. Скачивает каждый файл по отдельности (reviews.csv, chats.csv, chat_messages.csv, recommendations.csv, settings.csv)
+
+### Изменения в `src/components/SettingsDialog.tsx`
+
+Добавить секцию "Экспорт данных" в конец диалога (перед кнопками "Отмена"/"Сохранить"):
+- Кнопка "Скачать все данные (CSV)" с иконкой `Download`
+- При нажатии вызывается функция экспорта, последовательно скачиваются 5 CSV-файлов
+- Индикатор загрузки (Loader2) во время подготовки данных
+
+## Состав экспортируемых данных
+
+| Файл | Таблица | Ключевые поля |
+|---|---|---|
+| reviews.csv | reviews | wb_id, rating, author_name, text, pros, cons, product_name, product_article, status, ai_draft, sent_answer, created_date |
+| chats.csv | chats | chat_id, client_name, product_name, last_message_text, last_message_at, is_read |
+| chat_messages.csv | chat_messages | chat_id, sender, text, sent_at |
+| recommendations.csv | product_recommendations | source_article, target_article, target_name |
+| settings.csv | wb_cabinets | name, brand_name, ai_prompt_template, reply_modes |
 
 ## Технические детали
 
-### Новые файлы
-
-- `src/components/DashboardSection.tsx` -- основной компонент вкладки с фильтрами и графиками
-- `src/hooks/useDashboardData.ts` -- хук, который принимает отзывы и фильтры, возвращает агрегированные данные (мемоизация через `useMemo`)
-
-### Изменения в существующих файлах
-
-- `src/components/NavTabs.tsx` -- добавить кнопку "Сводка" с иконкой `BarChart3`
-- `src/pages/Index.tsx` -- добавить ветку `activeTab === "dashboard"` для рендера `DashboardSection`
-- `src/components/Header.tsx` -- обновить заголовок/подзаголовок при переключении на вкладку "Сводка"
-
-### Используемые библиотеки
-
-- `recharts` (уже установлен) -- для графиков
-- `react-day-picker` + `date-fns` (уже установлены) -- для выбора диапазона дат
-- shadcn `Select`, `Popover`, `Calendar`, `Badge` -- для UI фильтров
-
-### Логика фильтрации
-
-Данные берутся из существующего хука `useReviews()` (уже скоупленного по кабинету). Фильтрация происходит на клиенте через `useMemo`:
-
-```text
-reviews -> filterByDateRange -> filterByArticles -> filterByRatings -> aggregatedStats
-```
-
-Никаких дополнительных запросов к базе не требуется.
-
-### Структура компонента DashboardSection
-
-```text
-DashboardSection
-  +-- FilterBar (даты, артикул, рейтинг)
-  +-- StatsRow (4 карточки: всего, ср. рейтинг, ожидают, отвечено)
-  +-- ChartsRow
-  |     +-- ReviewsByDayChart (BarChart, recharts)
-  |     +-- RatingDistributionChart (горизонтальный BarChart)
-  +-- TopArticlesTable (таблица с сортировкой)
-```
+- Данные загружаются напрямую из базы (не из кэша React Query), чтобы гарантировать полноту
+- Лимит Supabase в 1000 строк обходится пагинацией (range-запросы по 1000)
+- CSV формируется с BOM-меткой (`\uFEFF`) для корректного отображения кириллицы в Excel
+- Никаких новых зависимостей не требуется

@@ -84,12 +84,14 @@ serve(async (req) => {
       .eq("user_id", userId);
 
     let recommendationInstruction = "";
-    if (recommendations && recommendations.length > 0) {
+    if (recommendations && recommendations.length > 0 && review.rating >= 4) {
       const recList = recommendations
         .map((r) => `- Артикул ${r.target_article}${r.target_name ? `: "${r.target_name}"` : ""}`)
         .join("\n");
       recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
       console.log(`[generate-reply] Adding ${recommendations.length} recommendations to prompt`);
+    } else if (recommendations && recommendations.length > 0 && review.rating < 4) {
+      console.log(`[generate-reply] Skipping recommendations for low rating (${review.rating} stars)`);
     }
 
     const promptTemplate =

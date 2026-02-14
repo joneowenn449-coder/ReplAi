@@ -8,6 +8,7 @@ import { ReviewCard } from "@/components/ReviewCard";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ChatsSection } from "@/components/ChatsSection";
 import { AiAssistant } from "@/components/AiAssistant";
+import { DashboardSection } from "@/components/DashboardSection";
 import {
   useReviews,
   useSyncReviews,
@@ -81,6 +82,8 @@ const Index = () => {
           <AiAssistant />
         ) : activeTab === "chats" ? (
           <ChatsSection />
+        ) : activeTab === "dashboard" ? (
+          <DashboardSection reviews={reviews} isLoading={reviewsLoading} />
         ) : (
           <>
             <ApiStatus

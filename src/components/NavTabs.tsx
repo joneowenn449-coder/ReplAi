@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Bot, MessageCircle } from "lucide-react";
+import { BarChart3, Bot, MessageCircle } from "lucide-react";
 
 interface NavTabsProps {
   activeTab: string;
@@ -20,6 +20,18 @@ export const NavTabs = ({ activeTab, onTabChange, unreadChatsCount = 0 }: NavTab
         )}
       >
         Отзывы
+      </button>
+      <button
+        onClick={() => onTabChange("dashboard")}
+        className={cn(
+          "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+          activeTab === "dashboard"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+        )}
+      >
+        <BarChart3 className="w-4 h-4" />
+        Сводка
       </button>
       <button
         onClick={() => onTabChange("chats")}

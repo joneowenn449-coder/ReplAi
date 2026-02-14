@@ -99,12 +99,12 @@ serve(async (req) => {
       }
     }
 
-    // Fetch recommendations scoped to this user
+    // Fetch recommendations scoped to this cabinet
     const { data: recommendations } = await supabase
       .from("product_recommendations")
       .select("target_article, target_name")
       .eq("source_article", review.product_article)
-      .eq("user_id", userId);
+      .eq("cabinet_id", cabinetId);
 
     let recommendationInstruction = "";
     if (recommendations && recommendations.length > 0 && review.rating >= 4) {

@@ -266,6 +266,7 @@ export type Database = {
       }
       product_recommendations: {
         Row: {
+          cabinet_id: string
           created_at: string
           id: string
           source_article: string
@@ -274,6 +275,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          cabinet_id: string
           created_at?: string
           id?: string
           source_article: string
@@ -282,6 +284,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          cabinet_id?: string
           created_at?: string
           id?: string
           source_article?: string
@@ -289,7 +292,15 @@ export type Database = {
           target_name?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "product_recommendations_cabinet_id_fkey"
+            columns: ["cabinet_id"]
+            isOneToOne: false
+            referencedRelation: "wb_cabinets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

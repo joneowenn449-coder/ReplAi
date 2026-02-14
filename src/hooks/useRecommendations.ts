@@ -2,18 +2,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export function useProductArticles() {
+export function useProductArticles(cabinetId: string | undefined) {
   return useQuery({
-    queryKey: ["product-articles"],
+    queryKey: ["product-articles", cabinetId],
     queryFn: async () => {
-      // Fetch unique product articles from reviews
+      if (!cabinetId) return [];
       const { data, error } = await supabase
         .from("reviews")
-        .select("product_article, product_name");
+        .select("product_article, product_name")
+        .eq("cabinet_id", cabinetId);
 
       if (error) throw error;
 
-      // Deduplicate by article
       const map = new Map<string, string>();
       for (const r of data || []) {
         if (r.product_article && !map.has(r.product_article)) {
@@ -26,34 +26,38 @@ export function useProductArticles() {
         name,
       }));
     },
+    enabled: !!cabinetId,
   });
 }
 
-export function useRecommendations(sourceArticle: string | null) {
+export function useRecommendations(sourceArticle: string | null, cabinetId: string | undefined) {
   return useQuery({
-    queryKey: ["recommendations", sourceArticle],
+    queryKey: ["recommendations", sourceArticle, cabinetId],
     queryFn: async () => {
-      if (!sourceArticle) return [];
+      if (!sourceArticle || !cabinetId) return [];
       const { data, error } = await supabase
         .from("product_recommendations")
         .select("*")
         .eq("source_article", sourceArticle)
+        .eq("cabinet_id", cabinetId)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
       return data || [];
     },
-    enabled: !!sourceArticle,
+    enabled: !!sourceArticle && !!cabinetId,
   });
 }
 
-export function useAllRecommendationsSummary() {
+export function useAllRecommendationsSummary(cabinetId: string | undefined) {
   return useQuery({
-    queryKey: ["recommendations-summary"],
+    queryKey: ["recommendations-summary", cabinetId],
     queryFn: async () => {
+      if (!cabinetId) return [];
       const { data, error } = await supabase
         .from("product_recommendations")
-        .select("source_article, target_article, target_name");
+        .select("source_article, target_article, target_name")
+        .eq("cabinet_id", cabinetId);
 
       if (error) throw error;
 
@@ -74,6 +78,7 @@ export function useAllRecommendationsSummary() {
         targets: info.targets,
       }));
     },
+    enabled: !!cabinetId,
   });
 }
 
@@ -85,10 +90,12 @@ export function useAddRecommendation() {
       sourceArticle,
       targetArticle,
       targetName,
+      cabinetId,
     }: {
       sourceArticle: string;
       targetArticle: string;
       targetName: string;
+      cabinetId: string;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Не авторизован");
@@ -100,6 +107,7 @@ export function useAddRecommendation() {
           target_article: targetArticle,
           target_name: targetName,
           user_id: user.id,
+          cabinet_id: cabinetId,
         });
 
       if (error) {
@@ -111,10 +119,10 @@ export function useAddRecommendation() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ["recommendations", variables.sourceArticle],
+        queryKey: ["recommendations", variables.sourceArticle, variables.cabinetId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["recommendations-summary"],
+        queryKey: ["recommendations-summary", variables.cabinetId],
       });
       toast.success("Рекомендация добавлена");
     },
@@ -131,9 +139,11 @@ export function useDeleteRecommendation() {
     mutationFn: async ({
       id,
       sourceArticle,
+      cabinetId,
     }: {
       id: string;
       sourceArticle: string;
+      cabinetId: string;
     }) => {
       const { error } = await supabase
         .from("product_recommendations")
@@ -141,14 +151,14 @@ export function useDeleteRecommendation() {
         .eq("id", id);
 
       if (error) throw error;
-      return sourceArticle;
+      return { sourceArticle, cabinetId };
     },
-    onSuccess: (sourceArticle) => {
+    onSuccess: ({ sourceArticle, cabinetId }) => {
       queryClient.invalidateQueries({
-        queryKey: ["recommendations", sourceArticle],
+        queryKey: ["recommendations", sourceArticle, cabinetId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["recommendations-summary"],
+        queryKey: ["recommendations-summary", cabinetId],
       });
       toast.success("Рекомендация удалена");
     },

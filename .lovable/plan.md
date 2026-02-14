@@ -1,65 +1,47 @@
 
-
-# Исправление зависания при проверке API-ключа
+# Исправление: спиннер синхронизации показывается во всех кабинетах
 
 ## Проблема
 
-Когда вы нажимаете "Проверить подключение", функция `validate-api-key` вызывает `fetch-archive` (импорт архива отзывов) **синхронно** и ждёт, пока загрузятся ВСЕ архивные отзывы с WB API. Если отзывов много — это занимает минуты, и кнопка остаётся в состоянии "Проверка..." без обратной связи.
+Кнопка "Синхронизировать" показывает анимацию загрузки во всех кабинетах, хотя синхронизация запущена только для одного. Причина -- состояние `syncReviews.isPending` глобальное и не привязано к конкретному кабинету.
 
 ## Решение
 
-Сделать вызов `fetch-archive` **асинхронным** (fire-and-forget): функция `validate-api-key` отправит запрос на импорт архива, но **не будет ждать его завершения**. Пользователь сразу увидит результат проверки ключа, а архив загрузится в фоне.
+Отслеживать ID кабинета, для которого запущена синхронизация, и показывать спиннер только если активный кабинет совпадает.
 
 ## Что изменится
 
-### 1. Edge Function `validate-api-key/index.ts`
+### 1. `src/pages/Index.tsx`
 
-Заменить синхронный `await fetch(...)` на fire-and-forget вызов:
-- Отправлять запрос к `fetch-archive` без `await` на ответ
-- Сразу возвращать `{ valid: true, archive_importing: true }` пользователю
-- Добавить таймаут на случай зависания
+- Добавить `useState` для хранения `syncingCabinetId`
+- В `handleSync` записывать ID текущего активного кабинета
+- Сбрасывать `syncingCabinetId` при завершении (успех или ошибка)
+- Передавать в `ApiStatus` флаг `isSyncing` только если `syncingCabinetId === activeCabinet?.id`
 
-### 2. Frontend: уведомление об импорте
+### 2. `src/hooks/useReviews.ts`
 
-В хуке `useValidateApiKey` (в `useReviews.ts`):
-- Обработать новое поле `archive_importing` (вместо `archive_imported`)
-- Показать toast "Архив отзывов загружается в фоне" вместо "Архив загружен"
+- Добавить в `useSyncReviews` поддержку колбэков `onSuccess`/`onError` через параметры, чтобы `Index.tsx` мог сбрасывать `syncingCabinetId`
+- Или альтернативно: обработку вынести полностью в `Index.tsx` через `mutateAsync`
 
 ## Технические детали
 
-Изменение в `validate-api-key/index.ts` (блок ~строки 119-146):
+Изменение в `src/pages/Index.tsx`:
 
 ```typescript
-// Вместо:
-const archiveResp = await fetch(...);
-const archiveData = await archiveResp.json();
-archiveImported = archiveResp.ok && archiveData?.success;
+const [syncingCabinetId, setSyncingCabinetId] = useState<string | null>(null);
 
-// Будет:
-// Fire-and-forget — не ждём ответа
-fetch(`${SUPABASE_URL}/functions/v1/fetch-archive`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-  },
-  body: JSON.stringify({ user_id: userId, cabinet_id }),
-}).catch(err => console.error("Archive trigger failed:", err));
-archiveImported = true; // сигнал что импорт запущен
-```
-
-Изменение в `useReviews.ts` (`onSuccess`):
-
-```typescript
-if (data?.archive_imported) {
-  toast.info("Архив отзывов загружается в фоне. Это может занять несколько минут.", {
-    duration: 7000,
+const handleSync = () => {
+  if (!activeCabinet?.id) return;
+  setSyncingCabinetId(activeCabinet.id);
+  syncReviews.mutate(undefined, {
+    onSettled: () => setSyncingCabinetId(null),
   });
-}
+};
+
+// В JSX:
+isSyncing={syncReviews.isPending && syncingCabinetId === activeCabinet?.id}
 ```
 
 ### Затрагиваемые файлы
 
-- `supabase/functions/validate-api-key/index.ts` — убираем `await` на fetch-archive
-- `src/hooks/useReviews.ts` — обновляем toast-сообщение
-
+- `src/pages/Index.tsx` -- добавить отслеживание кабинета при синхронизации

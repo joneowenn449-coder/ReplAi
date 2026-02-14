@@ -22,6 +22,7 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState("reviews");
   const [activeFilter, setActiveFilter] = useState("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [syncingCabinetId, setSyncingCabinetId] = useState<string | null>(null);
 
   const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
   const { data: chats = [] } = useChats();
@@ -53,7 +54,11 @@ const Index = () => {
         : reviews.filter((r) => r.status === activeFilter);
 
   const handleSync = () => {
-    syncReviews.mutate();
+    if (!activeCabinet?.id) return;
+    setSyncingCabinetId(activeCabinet.id);
+    syncReviews.mutate(undefined, {
+      onSettled: () => setSyncingCabinetId(null),
+    });
   };
 
   const lastSyncFormatted = activeCabinet?.last_sync_at
@@ -83,7 +88,7 @@ const Index = () => {
               lastSync={lastSyncFormatted}
               replyModes={replyModes}
               onSync={handleSync}
-              isSyncing={syncReviews.isPending}
+              isSyncing={syncReviews.isPending && syncingCabinetId === activeCabinet?.id}
             />
 
             <StatsCards

@@ -15,9 +15,7 @@ function delay(ms: number) {
 
 async function fetchAnsweredReviews(apiKey: string, skip = 0, take = 50) {
   const url = `${WB_BASE_URL}/api/v1/feedbacks?isAnswered=true&take=${take}&skip=${skip}`;
-  const resp = await fetch(url, {
-    headers: { Authorization: apiKey },
-  });
+  const resp = await fetch(url, { headers: { Authorization: apiKey } });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`WB API error ${resp.status}: ${text}`);
@@ -40,15 +38,15 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Resolve user_id: from body (internal call) or from auth header
+    // Resolve user_id and cabinet_id
     let userId: string;
+    let cabinetId: string | null = null;
     const body = await req.json().catch(() => ({}));
 
     if (body.user_id) {
-      // Called internally from validate-api-key with service role
       userId = body.user_id;
+      cabinetId = body.cabinet_id || null;
     } else {
-      // Called directly by user
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) {
         return new Response(
@@ -67,16 +65,45 @@ serve(async (req) => {
       userId = user.id;
     }
 
-    // Get settings for this user's WB API key
-    const { data: settings } = await supabase
-      .from("settings")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+    // Get WB API key from cabinet or settings
+    let WB_API_KEY: string | null = null;
 
-    const WB_API_KEY = settings?.wb_api_key;
+    if (cabinetId) {
+      const { data: cabinet } = await supabase
+        .from("wb_cabinets")
+        .select("wb_api_key")
+        .eq("id", cabinetId)
+        .maybeSingle();
+      WB_API_KEY = cabinet?.wb_api_key || null;
+    }
+
     if (!WB_API_KEY) {
-      throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
+      // Try active cabinet
+      const { data: activeCab } = await supabase
+        .from("wb_cabinets")
+        .select("id, wb_api_key")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (activeCab?.wb_api_key) {
+        WB_API_KEY = activeCab.wb_api_key;
+        cabinetId = activeCab.id;
+      }
+    }
+
+    if (!WB_API_KEY) {
+      // Fallback to settings
+      const { data: settings } = await supabase
+        .from("settings")
+        .select("wb_api_key")
+        .eq("user_id", userId)
+        .maybeSingle();
+      WB_API_KEY = settings?.wb_api_key || null;
+    }
+
+    if (!WB_API_KEY) {
+      throw new Error("WB API ключ не настроен.");
     }
 
     let skip = 0;
@@ -86,19 +113,12 @@ serve(async (req) => {
     let hasMore = true;
 
     while (hasMore) {
-      console.log(`[fetch-archive] user=${userId} Fetching page: skip=${skip}, take=${take}`);
-
       const wbData = await fetchAnsweredReviews(WB_API_KEY, skip, take);
       const feedbacks = wbData?.data?.feedbacks || [];
 
-      if (feedbacks.length === 0) {
-        hasMore = false;
-        break;
-      }
-
+      if (feedbacks.length === 0) { hasMore = false; break; }
       totalFetched += feedbacks.length;
 
-      // Check for existing reviews for this user
       const wbIds = feedbacks.map((fb: any) => fb.id);
       const { data: existingRows } = await supabase
         .from("reviews")
@@ -113,16 +133,14 @@ serve(async (req) => {
         .map((fb: any) => ({
           wb_id: fb.id,
           user_id: userId,
+          cabinet_id: cabinetId || null,
           rating: fb.productValuation || 5,
           author_name: fb.userName || "Покупатель",
           text: fb.text || null,
           pros: fb.pros || null,
           cons: fb.cons || null,
-          product_name:
-            fb.productDetails?.productName || fb.subjectName || "Товар",
-          product_article: String(
-            fb.productDetails?.nmId || fb.nmId || ""
-          ),
+          product_name: fb.productDetails?.productName || fb.subjectName || "Товар",
+          product_article: String(fb.productDetails?.nmId || fb.nmId || ""),
           photo_links: fb.photoLinks || [],
           has_video: !!(fb.video && (fb.video.link || fb.video.previewImage)),
           created_date: fb.createdDate || new Date().toISOString(),
@@ -132,49 +150,23 @@ serve(async (req) => {
         }));
 
       if (newRows.length > 0) {
-        const { error: insertError } = await supabase
-          .from("reviews")
-          .insert(newRows);
-
-        if (insertError) {
-          console.error("Batch insert error:", insertError);
-          throw new Error(`DB error: ${insertError.message}`);
-        }
+        const { error: insertError } = await supabase.from("reviews").insert(newRows);
+        if (insertError) throw new Error(`DB error: ${insertError.message}`);
         totalInserted += newRows.length;
       }
 
-      if (feedbacks.length < take) {
-        hasMore = false;
-      } else {
-        skip += take;
-        await delay(350);
-      }
+      if (feedbacks.length < take) { hasMore = false; } else { skip += take; await delay(350); }
     }
 
-    console.log(
-      `[fetch-archive] user=${userId} Complete: ${totalFetched} fetched, ${totalInserted} inserted`
-    );
-
     return new Response(
-      JSON.stringify({
-        success: true,
-        fetched: totalFetched,
-        inserted: totalInserted,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ success: true, fetched: totalFetched, inserted: totalInserted }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("fetch-archive error:", e);
     return new Response(
-      JSON.stringify({
-        error: e instanceof Error ? e.message : "Unknown error",
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

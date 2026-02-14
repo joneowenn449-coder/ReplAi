@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useActiveCabinet } from "./useCabinets";
 
 export interface Review {
   id: string;
@@ -21,6 +22,7 @@ export interface Review {
   is_edited: boolean;
   fetched_at: string;
   updated_at: string;
+  cabinet_id: string | null;
 }
 
 export type ReplyMode = "auto" | "manual";
@@ -46,19 +48,28 @@ export interface Settings {
 }
 
 export function useReviews() {
+  const { data: activeCabinet } = useActiveCabinet();
+  const cabinetId = activeCabinet?.id;
+
   return useQuery({
-    queryKey: ["reviews"],
+    queryKey: ["reviews", cabinetId],
     queryFn: async () => {
       const allReviews: Review[] = [];
       const pageSize = 1000;
       let from = 0;
 
       while (true) {
-        const { data, error } = await supabase
+        let query = supabase
           .from("reviews")
           .select("*")
           .order("created_date", { ascending: false })
           .range(from, from + pageSize - 1);
+
+        if (cabinetId) {
+          query = query.eq("cabinet_id", cabinetId);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
         const rows = (data as unknown as Review[]) || [];
         allReviews.push(...rows);
@@ -68,6 +79,7 @@ export function useReviews() {
 
       return allReviews;
     },
+    enabled: !!cabinetId,
   });
 }
 
@@ -98,6 +110,7 @@ export function useSyncReviews() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
       queryClient.invalidateQueries({ queryKey: ["settings"] });
+      queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });
       const newCount = data?.new || 0;
       const autoSent = data?.autoSent || 0;
       toast.success(
@@ -200,10 +213,10 @@ export function useValidateApiKey() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (apiKey: string) => {
+    mutationFn: async ({ apiKey, cabinetId }: { apiKey: string; cabinetId: string }) => {
       const { data, error } = await supabase.functions.invoke(
         "validate-api-key",
-        { body: { api_key: apiKey } }
+        { body: { api_key: apiKey, cabinet_id: cabinetId } }
       );
       if (error) throw error;
       if (!data?.valid) {
@@ -212,7 +225,7 @@ export function useValidateApiKey() {
       return data as { valid: boolean; masked_key: string; archive_imported?: boolean };
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
       toast.success("API-ключ подтверждён и сохранён");
       if (data?.archive_imported) {
@@ -231,23 +244,15 @@ export function useDeleteApiKey() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async () => {
-      const { data: existing } = await supabase
-        .from("settings")
-        .select("id")
-        .limit(1)
-        .maybeSingle();
-
-      if (!existing) throw new Error("Settings not found");
-
+    mutationFn: async (cabinetId: string) => {
       const { error } = await supabase
-        .from("settings")
+        .from("wb_cabinets")
         .update({ wb_api_key: null } as Record<string, unknown>)
-        .eq("id", existing.id);
+        .eq("id", cabinetId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });
       toast.success("API-ключ удалён");
     },
     onError: (error) => {

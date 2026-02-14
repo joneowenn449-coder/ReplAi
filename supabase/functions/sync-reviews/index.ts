@@ -25,9 +25,7 @@ function detectRefusal(text?: string | null, pros?: string | null, cons?: string
 
 async function fetchWBReviews(apiKey: string, skip = 0, take = 50) {
   const url = `${WB_BASE_URL}/api/v1/feedbacks?isAnswered=false&take=${take}&skip=${skip}`;
-  const resp = await fetch(url, {
-    headers: { Authorization: apiKey },
-  });
+  const resp = await fetch(url, { headers: { Authorization: apiKey } });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`WB API error ${resp.status}: ${text}`);
@@ -38,10 +36,7 @@ async function fetchWBReviews(apiKey: string, skip = 0, take = 50) {
 async function sendWBAnswer(apiKey: string, feedbackId: string, text: string) {
   const resp = await fetch(`${WB_BASE_URL}/api/v1/feedbacks/answer`, {
     method: "POST",
-    headers: {
-      Authorization: apiKey,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ id: feedbackId, text }),
   });
   if (!resp.ok) {
@@ -52,59 +47,39 @@ async function sendWBAnswer(apiKey: string, feedbackId: string, text: string) {
 }
 
 async function generateAIReply(
-  apiKey: string,
-  systemPrompt: string,
-  reviewText: string,
-  rating: number,
-  productName: string,
-  photoCount: number = 0,
-  hasVideo: boolean = false,
-  authorName: string = "",
-  isEmpty: boolean = false,
-  recommendationInstruction: string = "",
-  isRefusal: boolean = false,
-  brandName: string = ""
+  apiKey: string, systemPrompt: string, reviewText: string, rating: number,
+  productName: string, photoCount = 0, hasVideo = false, authorName = "",
+  isEmpty = false, recommendationInstruction = "", isRefusal = false, brandName = ""
 ) {
-  // Build empty review instruction if needed
   let emptyInstruction = "";
   if (isEmpty) {
-    if (rating >= 4) {
-      emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил только оценку ${rating} из 5.\nНапиши КОРОТКУЮ благодарность за отзыв и высокую оценку. Максимум 1-2 предложения.\nНе задавай вопросов. Не фантазируй о товаре.]`;
-    } else {
-      emptyInstruction = `\n\n[Это пустой отзыв без текста. Покупатель поставил низкую оценку ${rating} из 5 без пояснения.\nВырази сожаление, что опыт не оправдал ожиданий.\nПредложи написать в чат с продавцом, чтобы разобраться в ситуации и помочь.\nМаксимум 1-2 предложения. Не задавай лишних вопросов.]`;
-    }
+    emptyInstruction = rating >= 4
+      ? `\n\n[Это пустой отзыв. Оценка ${rating}/5. КОРОТКАЯ благодарность, 1-2 предложения.]`
+      : `\n\n[Это пустой отзыв. Оценка ${rating}/5. Сожаление + предложи написать в чат. 1-2 предложения.]`;
   }
 
   let attachmentInfo = "";
   if (photoCount > 0 || hasVideo) {
     const parts: string[] = [];
-    if (photoCount > 0) {
-      const photoWord = photoCount === 1 ? "фотографию" : photoCount < 5 ? "фотографии" : "фотографий";
-      parts.push(`${photoCount} ${photoWord}`);
-    }
+    if (photoCount > 0) parts.push(`${photoCount} фото`);
     if (hasVideo) parts.push("видео");
-    attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
+    attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")}.]`;
   }
 
   const nameInstruction = authorName && authorName !== "Покупатель"
-    ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
-    : "";
+    ? `\n\nИмя покупателя: ${authorName}. Обратись по имени.` : "";
 
   const refusalWarning = isRefusal
-    ? `\n\n[ВНИМАНИЕ: Покупатель НЕ выкупил товар (обнаружены признаки отказа/возврата). НЕ благодари за покупку или выбор товара. Поблагодари за внимание к бренду, вырази сожаление, что модель не подошла, и пригласи вернуться.]`
-    : "";
+    ? `\n\n[ВНИМАНИЕ: Покупатель НЕ выкупил товар. НЕ благодари за покупку.]` : "";
 
   const brandInstruction = brandName
-    ? `\n\nНазвание бренда продавца: ${brandName}. Используй это название при обращении к покупателю.`
-    : "";
+    ? `\n\nБренд: ${brandName}. Используй в ответе.` : "";
 
-  const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта. Не игнорируй ни одно требование.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating} из 5 звёзд) на товар "${productName}":\n\n${reviewText || "(Без текста, только оценка)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
+  const userMessage = `ВАЖНО: следуй правилам промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating}/5) на "${productName}":\n\n${reviewText || "(Без текста)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
+
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",
       messages: [
@@ -137,27 +112,26 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-interface UserSettings {
+interface CabinetSettings {
   id: string;
   user_id: string;
   wb_api_key: string;
   ai_prompt_template: string;
   reply_modes: Record<string, string>;
-  auto_reply_enabled: boolean;
   brand_name: string;
 }
 
-async function processUserReviews(
+async function processCabinetReviews(
   supabase: any,
-  userSettings: UserSettings,
+  cabinet: CabinetSettings,
   OPENROUTER_API_KEY: string
 ) {
-  const userId = userSettings.user_id;
-  const WB_API_KEY = userSettings.wb_api_key;
+  const userId = cabinet.user_id;
+  const cabinetId = cabinet.id;
+  const WB_API_KEY = cabinet.wb_api_key;
   const defaultModes = { "1": "manual", "2": "manual", "3": "manual", "4": "manual", "5": "manual" };
-  const replyModes = userSettings.reply_modes || defaultModes;
+  const replyModes = cabinet.reply_modes || defaultModes;
 
-  // Fetch token balance for this user
   const { data: tokenBalance } = await supabase
     .from("token_balances")
     .select("balance")
@@ -165,18 +139,15 @@ async function processUserReviews(
     .maybeSingle();
 
   let currentBalance = tokenBalance?.balance ?? 0;
-  console.log(`[sync-reviews] user=${userId} token balance: ${currentBalance}`);
-  const promptTemplate = userSettings.ai_prompt_template ||
+  const promptTemplate = cabinet.ai_prompt_template ||
     "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
 
-  // Fetch ALL unanswered reviews from WB with pagination
   const allFeedbacks: any[] = [];
   let skip = 0;
   const take = 50;
   while (true) {
     const wbData = await fetchWBReviews(WB_API_KEY, skip, take);
     const feedbacks = wbData?.data?.feedbacks || [];
-    console.log(`[sync-reviews] user=${userId} WB page skip=${skip}: got ${feedbacks.length} reviews`);
     if (feedbacks.length === 0) break;
     allFeedbacks.push(...feedbacks);
     if (feedbacks.length < take) break;
@@ -184,7 +155,7 @@ async function processUserReviews(
     await delay(350);
   }
 
-  console.log(`[sync-reviews] user=${userId} Fetched ${allFeedbacks.length} total unanswered reviews`);
+  console.log(`[sync-reviews] cabinet=${cabinetId} user=${userId} Fetched ${allFeedbacks.length} reviews`);
 
   let newCount = 0;
   let autoSentCount = 0;
@@ -193,12 +164,12 @@ async function processUserReviews(
   for (const fb of allFeedbacks) {
     const wbId = fb.id;
 
-    // Check if already exists for this user
     const { data: existing } = await supabase
       .from("reviews")
       .select("id")
       .eq("wb_id", wbId)
       .eq("user_id", userId)
+      .eq("cabinet_id", cabinetId)
       .maybeSingle();
 
     if (existing) continue;
@@ -207,7 +178,6 @@ async function processUserReviews(
     const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
     const isEmptyReview = !fb.text && !fb.pros && !fb.cons;
 
-    // Fetch recommendations for this product article (scoped to user)
     const productArticle = String(fb.productDetails?.nmId || fb.nmId || "");
     let recommendationInstruction = "";
     if (productArticle) {
@@ -221,36 +191,23 @@ async function processUserReviews(
         const recList = recommendations
           .map((r: any) => `- Артикул ${r.target_article}${r.target_name ? `: "${r.target_name}"` : ""}`)
           .join("\n");
-        recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
+        recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: предложи товары:\n${recList}`;
       }
     }
 
-    // Extract brand name from WB API
     const reviewBrandName = fb.productDetails?.brandName || "";
-    const effectiveBrand = reviewBrandName || userSettings.brand_name || "";
-
-    // Detect refusal
+    const effectiveBrand = reviewBrandName || cabinet.brand_name || "";
     const isRefusal = detectRefusal(fb.text, fb.pros, fb.cons);
-    if (isRefusal) {
-      console.log(`[sync-reviews] Refusal detected for review ${wbId}`);
-    }
 
-    // Generate AI draft
     let aiDraft = "";
     try {
       aiDraft = await generateAIReply(
-        OPENROUTER_API_KEY,
-        promptTemplate,
+        OPENROUTER_API_KEY, promptTemplate,
         buildReviewText(fb.text, fb.pros, fb.cons),
         fb.productValuation || 5,
         fb.productDetails?.productName || fb.subjectName || "Товар",
-        photoLinks.length,
-        hasVideo,
-        fb.userName || "",
-        isEmptyReview,
-        recommendationInstruction,
-        isRefusal,
-        effectiveBrand
+        photoLinks.length, hasVideo, fb.userName || "",
+        isEmptyReview, recommendationInstruction, isRefusal, effectiveBrand
       );
     } catch (e) {
       console.error(`AI generation failed for ${wbId}:`, e);
@@ -262,24 +219,16 @@ async function processUserReviews(
     const ratingKey = String(rating);
     const modeForRating = replyModes[ratingKey] || "manual";
 
-    // Auto-reply if mode is "auto" for this rating and draft generated
     if (modeForRating === "auto" && aiDraft) {
       if (currentBalance < 1) {
-        console.log(`[sync-reviews] user=${userId} insufficient tokens (${currentBalance}), skipping auto-reply for ${wbId}`);
         status = "pending";
       } else {
         try {
           await sendWBAnswer(WB_API_KEY, wbId, aiDraft);
           status = "auto";
           autoSentCount++;
-
-          // Deduct token
           currentBalance -= 1;
-          await supabase
-            .from("token_balances")
-            .update({ balance: currentBalance })
-            .eq("user_id", userId);
-
+          await supabase.from("token_balances").update({ balance: currentBalance }).eq("user_id", userId);
           await delay(350);
         } catch (e) {
           console.error(`Auto-reply failed for ${wbId}:`, e);
@@ -289,10 +238,10 @@ async function processUserReviews(
       }
     }
 
-    // Save to DB with user_id
     const { data: insertedReview, error: insertError } = await supabase.from("reviews").insert({
       wb_id: wbId,
       user_id: userId,
+      cabinet_id: cabinetId,
       rating: fb.productValuation || 5,
       author_name: fb.userName || "Покупатель",
       text: fb.text || null,
@@ -314,78 +263,64 @@ async function processUserReviews(
       errors.push(`DB error for ${wbId}: ${insertError.message}`);
     } else {
       newCount++;
-
-      // Record token transaction for auto-replies
       if (status === "auto" && insertedReview) {
         await supabase.from("token_transactions").insert({
-          user_id: userId,
-          amount: -1,
-          type: "usage",
-          description: "Автоответ на отзыв",
-          review_id: insertedReview.id,
+          user_id: userId, amount: -1, type: "usage",
+          description: "Автоответ на отзыв", review_id: insertedReview.id,
         });
       }
     }
   }
 
-  // Retry pending reviews that should be auto-sent (scoped to user)
+  // Retry pending reviews
   const { data: pendingReviews } = await supabase
     .from("reviews")
     .select("id, wb_id, rating, ai_draft")
     .eq("status", "pending")
     .eq("user_id", userId)
+    .eq("cabinet_id", cabinetId)
     .not("ai_draft", "is", null);
 
   if (pendingReviews && pendingReviews.length > 0) {
-    console.log(`[sync-reviews] user=${userId} Found ${pendingReviews.length} pending reviews with AI drafts`);
     for (const pr of pendingReviews) {
       const ratingKey = String(pr.rating);
       const modeForRating = replyModes[ratingKey] || "manual";
-
       if (modeForRating === "auto" && pr.ai_draft) {
-        if (currentBalance < 1) {
-          console.log(`[sync-reviews] user=${userId} insufficient tokens for retry ${pr.wb_id}`);
-          continue;
-        }
+        if (currentBalance < 1) continue;
         try {
           await sendWBAnswer(WB_API_KEY, pr.wb_id, pr.ai_draft);
-          await supabase
-            .from("reviews")
+          await supabase.from("reviews")
             .update({ status: "auto", sent_answer: pr.ai_draft, updated_at: new Date().toISOString() })
             .eq("id", pr.id);
           autoSentCount++;
-
-          // Deduct token
           currentBalance -= 1;
-          await supabase
-            .from("token_balances")
-            .update({ balance: currentBalance })
-            .eq("user_id", userId);
-
+          await supabase.from("token_balances").update({ balance: currentBalance }).eq("user_id", userId);
           await supabase.from("token_transactions").insert({
-            user_id: userId,
-            amount: -1,
-            type: "usage",
-            description: "Автоответ на отзыв",
-            review_id: pr.id,
+            user_id: userId, amount: -1, type: "usage",
+            description: "Автоответ на отзыв", review_id: pr.id,
           });
-
           await delay(350);
         } catch (e) {
-          console.error(`[sync-reviews] Auto-retry failed for ${pr.wb_id}:`, e);
           errors.push(`Auto-retry error for ${pr.wb_id}: ${e.message}`);
         }
       }
     }
   }
 
-  // Update last_sync_at
+  // Update last_sync_at on cabinet
+  await supabase
+    .from("wb_cabinets")
+    .update({ last_sync_at: new Date().toISOString() })
+    .eq("id", cabinetId);
+
+  // Also update settings for backwards compat
   await supabase
     .from("settings")
     .update({ last_sync_at: new Date().toISOString() })
-    .eq("id", userSettings.id);
+    .eq("user_id", userId);
 
   return {
+    cabinetId,
     userId,
     fetched: allFeedbacks.length,
     new: newCount,
@@ -410,62 +345,58 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Determine mode: single user (auth header) or cron (all users)
     const authHeader = req.headers.get("Authorization");
     let userId: string | null = null;
 
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.replace("Bearer ", "");
       const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) {
-        userId = user.id;
-      }
+      if (user) userId = user.id;
     }
 
     if (userId) {
-      // Single user mode
-      const { data: settings } = await supabase
-        .from("settings")
+      // Single user mode — process active cabinet
+      const { data: activeCabinet } = await supabase
+        .from("wb_cabinets")
         .select("*")
         .eq("user_id", userId)
+        .eq("is_active", true)
         .maybeSingle();
 
-      if (!settings?.wb_api_key) {
+      if (!activeCabinet?.wb_api_key) {
         throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
       }
 
-      const result = await processUserReviews(supabase, settings as UserSettings, OPENROUTER_API_KEY);
+      const result = await processCabinetReviews(supabase, activeCabinet as CabinetSettings, OPENROUTER_API_KEY);
 
       return new Response(
         JSON.stringify({ success: true, ...result }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else {
-      // Cron mode — process ALL users with API keys
-      console.log("[sync-reviews] Cron mode — processing all users");
-      const { data: allSettings } = await supabase
-        .from("settings")
+      // Cron mode — process ALL cabinets with API keys
+      console.log("[sync-reviews] Cron mode — processing all cabinets");
+      const { data: allCabinets } = await supabase
+        .from("wb_cabinets")
         .select("*")
         .not("wb_api_key", "is", null);
 
-      if (!allSettings || allSettings.length === 0) {
-        console.log("[sync-reviews] No users with API keys configured");
+      if (!allCabinets || allCabinets.length === 0) {
         return new Response(
-          JSON.stringify({ success: true, message: "No users to process" }),
+          JSON.stringify({ success: true, message: "No cabinets to process" }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       const results = [];
-      for (const settings of allSettings) {
-        if (!settings.user_id) continue;
+      for (const cabinet of allCabinets) {
         try {
-          console.log(`[sync-reviews] Processing user ${settings.user_id}`);
-          const result = await processUserReviews(supabase, settings as UserSettings, OPENROUTER_API_KEY);
+          console.log(`[sync-reviews] Processing cabinet ${cabinet.id} user ${cabinet.user_id}`);
+          const result = await processCabinetReviews(supabase, cabinet as CabinetSettings, OPENROUTER_API_KEY);
           results.push(result);
         } catch (e) {
-          console.error(`[sync-reviews] Error processing user ${settings.user_id}:`, e);
-          results.push({ userId: settings.user_id, error: e.message });
+          console.error(`[sync-reviews] Error for cabinet ${cabinet.id}:`, e);
+          results.push({ cabinetId: cabinet.id, userId: cabinet.user_id, error: e.message });
         }
       }
 
@@ -478,10 +409,7 @@ serve(async (req) => {
     console.error("sync-reviews error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

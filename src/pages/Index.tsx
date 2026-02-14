@@ -10,10 +10,10 @@ import { ChatsSection } from "@/components/ChatsSection";
 import { AiAssistant } from "@/components/AiAssistant";
 import {
   useReviews,
-  useSettings,
   useSyncReviews,
   DEFAULT_REPLY_MODES,
 } from "@/hooks/useReviews";
+import { useActiveCabinet } from "@/hooks/useCabinets";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
@@ -25,12 +25,12 @@ const Index = () => {
 
   const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
   const { data: chats = [] } = useChats();
-  const { data: settings } = useSettings();
+  const { data: activeCabinet } = useActiveCabinet();
   const syncReviews = useSyncReviews();
 
   const unreadChatsCount = chats.filter((c) => !c.is_read).length;
 
-  const replyModes = settings?.reply_modes ?? DEFAULT_REPLY_MODES;
+  const replyModes = (activeCabinet?.reply_modes as Record<string, "auto" | "manual">) ?? DEFAULT_REPLY_MODES;
 
   const activeReviews = reviews.filter((r) => r.status !== "archived");
 
@@ -56,9 +56,8 @@ const Index = () => {
     syncReviews.mutate();
   };
 
-
-  const lastSyncFormatted = settings?.last_sync_at
-    ? format(new Date(settings.last_sync_at), "d MMM yyyy 'в' HH:mm", {
+  const lastSyncFormatted = activeCabinet?.last_sync_at
+    ? format(new Date(activeCabinet.last_sync_at), "d MMM yyyy 'в' HH:mm", {
         locale: ru,
       })
     : "Ещё не синхронизировано";
@@ -80,7 +79,7 @@ const Index = () => {
         ) : (
           <>
             <ApiStatus
-              isConnected={!!settings?.wb_api_key}
+              isConnected={!!activeCabinet?.wb_api_key}
               lastSync={lastSyncFormatted}
               replyModes={replyModes}
               onSync={handleSync}

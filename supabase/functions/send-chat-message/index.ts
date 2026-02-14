@@ -50,22 +50,10 @@ serve(async (req) => {
       throw new Error("Сообщение не должно превышать 1000 символов");
     }
 
-    // Get WB API key for this user
-    const { data: settings } = await supabase
-      .from("settings")
-      .select("wb_api_key")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const WB_API_KEY = settings?.wb_api_key;
-    if (!WB_API_KEY) {
-      throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
-    }
-
     // Get chat scoped to this user
     const { data: chat, error: chatError } = await supabase
       .from("chats")
-      .select("reply_sign")
+      .select("reply_sign, cabinet_id")
       .eq("chat_id", chat_id)
       .eq("user_id", userId)
       .maybeSingle();
@@ -73,6 +61,31 @@ serve(async (req) => {
     if (chatError) throw new Error(`DB error: ${chatError.message}`);
     if (!chat) throw new Error("Чат не найден");
     if (!chat.reply_sign) throw new Error("Нет подписи для ответа (reply_sign). Синхронизируйте чаты.");
+
+    // Get WB API key from cabinet or settings
+    let WB_API_KEY: string | null = null;
+
+    if (chat.cabinet_id) {
+      const { data: cabinet } = await supabase
+        .from("wb_cabinets")
+        .select("wb_api_key")
+        .eq("id", chat.cabinet_id)
+        .maybeSingle();
+      WB_API_KEY = cabinet?.wb_api_key || null;
+    }
+
+    if (!WB_API_KEY) {
+      const { data: settings } = await supabase
+        .from("settings")
+        .select("wb_api_key")
+        .eq("user_id", userId)
+        .maybeSingle();
+      WB_API_KEY = settings?.wb_api_key || null;
+    }
+
+    if (!WB_API_KEY) {
+      throw new Error("WB API ключ не настроен. Добавьте его в настройках.");
+    }
 
     // Send via WB API using multipart/form-data
     const formData = new FormData();
@@ -92,7 +105,7 @@ serve(async (req) => {
       throw new Error(`WB Chat API error ${resp.status}: ${body}`);
     }
 
-    // Save sent message with user_id
+    // Save sent message with user_id and cabinet_id
     const eventId = `seller_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const { error: insertError } = await supabase
@@ -100,6 +113,7 @@ serve(async (req) => {
       .insert({
         chat_id,
         user_id: userId,
+        cabinet_id: chat.cabinet_id || null,
         event_id: eventId,
         sender: "seller",
         text: message.trim(),
@@ -111,7 +125,7 @@ serve(async (req) => {
       console.error("Failed to save sent message:", insertError);
     }
 
-    // Update chat's last message (scoped to user)
+    // Update chat's last message
     await supabase
       .from("chats")
       .update({

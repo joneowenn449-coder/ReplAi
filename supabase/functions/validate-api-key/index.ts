@@ -125,21 +125,16 @@ serve(async (req) => {
         .eq("cabinet_id", cabinet_id);
 
       if (!countError && (count === null || count === 0)) {
-        console.log(`First setup detected for cabinet ${cabinet_id} — triggering archive import`);
-        const archiveResp = await fetch(
-          `${SUPABASE_URL}/functions/v1/fetch-archive`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            },
-            body: JSON.stringify({ user_id: userId, cabinet_id }),
-          }
-        );
-        const archiveData = await archiveResp.json();
-        console.log("Archive import result:", archiveData);
-        archiveImported = archiveResp.ok && archiveData?.success;
+        console.log(`First setup detected for cabinet ${cabinet_id} — triggering archive import (fire-and-forget)`);
+        fetch(`${SUPABASE_URL}/functions/v1/fetch-archive`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({ user_id: userId, cabinet_id }),
+        }).catch(err => console.error("Archive trigger failed:", err));
+        archiveImported = true;
       }
     } catch (archiveErr) {
       console.error("Archive auto-import failed (non-critical):", archiveErr);

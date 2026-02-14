@@ -229,8 +229,8 @@ export function useValidateApiKey() {
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
       toast.success("API-ключ подтверждён и сохранён");
       if (data?.archive_imported) {
-        toast.success("Архив отзывов загружен автоматически", {
-          duration: 5000,
+        toast.info("Архив отзывов загружается в фоне. Это может занять несколько минут.", {
+          duration: 7000,
         });
       }
     },

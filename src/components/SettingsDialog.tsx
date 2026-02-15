@@ -31,7 +31,7 @@ import {
 import { useActiveCabinet, useUpdateCabinet, useDeleteCabinet } from "@/hooks/useCabinets";
 import type { WbCabinet } from "@/hooks/useCabinets";
 import { toast } from "sonner";
-import { Check, Pencil, Trash2, Loader2, KeyRound, Star, ChevronRight, MessageCircle, Link2, Unlink, Copy } from "lucide-react";
+import { Check, Pencil, Trash2, Loader2, KeyRound, Star, ChevronRight, MessageCircle, Link2, Unlink, Copy, Sparkles } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import {
   Collapsible,
@@ -63,8 +63,10 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
   const [cabinetName, setCabinetName] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [isEditingKey, setIsEditingKey] = useState(false);
-  const [ratingSectionOpen, setRatingSectionOpen] = useState(true);
+  const [apiKeySectionOpen, setApiKeySectionOpen] = useState(false);
+  const [ratingSectionOpen, setRatingSectionOpen] = useState(false);
   const [replyModes, setReplyModes] = useState<ReplyModes>(DEFAULT_REPLY_MODES);
+  const [vibeSectionOpen, setVibeSectionOpen] = useState(false);
   const [telegramSectionOpen, setTelegramSectionOpen] = useState(false);
   const [telegramLink, setTelegramLink] = useState<string | null>(null);
   const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
@@ -88,6 +90,9 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
       setIsEditingKey(false);
       setApiKeyInput("");
       setTelegramLink(null);
+      setApiKeySectionOpen(false);
+      setRatingSectionOpen(false);
+      setVibeSectionOpen(false);
       setTelegramSectionOpen(false);
     }
   }, [open]);
@@ -187,103 +192,120 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
           </div>
 
           {/* API Key Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-muted-foreground" />
-              <label className="text-sm font-medium text-foreground">
-                API-ключ Wildberries
-              </label>
-            </div>
-
-            {hasKey && !isEditingKey ? (
-              <div className="flex items-center gap-3">
-                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-md bg-muted border border-border">
-                  <Check className="w-4 h-4 text-success shrink-0" />
-                  <span className="text-sm font-mono text-foreground truncate">
-                    {maskKey(cabinet!.wb_api_key!)}
-                  </span>
-                  <span className="text-xs text-success font-medium ml-auto shrink-0">
-                    Подключено
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setIsEditingKey(true)}
-                  title="Изменить ключ"
-                >
-                  <Pencil className="w-4 h-4" />
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="text-destructive hover:text-destructive"
-                      title="Удалить ключ"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Удалить API-ключ?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Синхронизация отзывов и отправка ответов перестанут
-                        работать до добавления нового ключа.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Отмена</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleDeleteKey}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Удалить
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Input
-                  type="password"
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  placeholder="Вставьте API-ключ Wildberries..."
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleValidateKey}
-                    disabled={
-                      !apiKeyInput.trim() || validateApiKey.isPending
-                    }
-                    className="flex-1"
-                  >
-                    {validateApiKey.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Проверка...
-                      </>
-                    ) : (
-                      "Проверить подключение"
-                    )}
-                  </Button>
-                  {isEditingKey && (
-                    <Button variant="outline" onClick={handleCancelEdit}>
-                      Отмена
-                    </Button>
+          <Collapsible open={apiKeySectionOpen} onOpenChange={setApiKeySectionOpen}>
+            <div className="space-y-3">
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center gap-2 cursor-pointer hover-elevate rounded-md py-1 px-1 -mx-1" data-testid="trigger-section-api-key">
+                  <ChevronRight
+                    className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                      apiKeySectionOpen ? "rotate-90" : ""
+                    }`}
+                  />
+                  <KeyRound className="w-4 h-4 text-muted-foreground" />
+                  <label className="text-sm font-medium text-foreground cursor-pointer">
+                    API-ключ Wildberries
+                  </label>
+                  {hasKey && (
+                    <span className="text-xs text-success font-medium ml-auto">
+                      Подключено
+                    </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Ключ будет проверен тестовым запросом к WB API и сохранён
-                  только при успешном подключении.
-                </p>
-              </div>
-            )}
-          </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-3 pt-1">
+                  {hasKey && !isEditingKey ? (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-md bg-muted border border-border">
+                        <Check className="w-4 h-4 text-success shrink-0" />
+                        <span className="text-sm font-mono text-foreground truncate">
+                          {maskKey(cabinet!.wb_api_key!)}
+                        </span>
+                        <span className="text-xs text-success font-medium ml-auto shrink-0">
+                          Подключено
+                        </span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setIsEditingKey(true)}
+                        title="Изменить ключ"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            title="Удалить ключ"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Удалить API-ключ?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Синхронизация отзывов и отправка ответов перестанут
+                              работать до добавления нового ключа.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Отмена</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleDeleteKey}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Удалить
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Input
+                        type="password"
+                        value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                        placeholder="Вставьте API-ключ Wildberries..."
+                        className="font-mono text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleValidateKey}
+                          disabled={
+                            !apiKeyInput.trim() || validateApiKey.isPending
+                          }
+                          className="flex-1"
+                        >
+                          {validateApiKey.isPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Проверка...
+                            </>
+                          ) : (
+                            "Проверить подключение"
+                          )}
+                        </Button>
+                        {isEditingKey && (
+                          <Button variant="outline" onClick={handleCancelEdit}>
+                            Отмена
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Ключ будет проверен тестовым запросом к WB API и сохранён
+                        только при успешном подключении.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
 
           {/* Reply Modes by Rating Section */}
           <Collapsible open={ratingSectionOpen} onOpenChange={setRatingSectionOpen}>
@@ -494,37 +516,56 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
             </div>
           </Collapsible>
 
-          {/* Brand Name Section */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground block">
-              Название бренда (по умолчанию)
-            </label>
-            <Input
-              value={brandName}
-              onChange={(e) => setBrandName(e.target.value)}
-              placeholder="Например: LUNÉRA"
-              className="text-sm"
-            />
-            <p className="text-xs text-muted-foreground">
-              Бренд автоматически определяется из WB для каждого отзыва. Это значение используется как запасное, если бренд не определён.
-            </p>
-          </div>
-
           {/* Company Vibe Section */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
-              ✨ Вайб компании
-            </label>
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[100px] text-sm"
-              placeholder="Опиши тон, стиль и правила ответов бренда."
-            />
-            <p className="text-xs text-muted-foreground">
-              Это описание тона и правил — основа для всех ответов ИИ на отзывы. Всё, что ты напишешь здесь, будет учтено при формировании ответов.
-            </p>
-          </div>
+          <Collapsible open={vibeSectionOpen} onOpenChange={setVibeSectionOpen}>
+            <div className="space-y-3">
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center gap-2 cursor-pointer hover-elevate rounded-md py-1 px-1 -mx-1" data-testid="trigger-section-vibe">
+                  <ChevronRight
+                    className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                      vibeSectionOpen ? "rotate-90" : ""
+                    }`}
+                  />
+                  <Sparkles className="w-4 h-4 text-muted-foreground" />
+                  <label className="text-sm font-medium text-foreground cursor-pointer">
+                    Вайб компании
+                  </label>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-4 pt-1">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground block">
+                      Название бренда (по умолчанию)
+                    </label>
+                    <Input
+                      value={brandName}
+                      onChange={(e) => setBrandName(e.target.value)}
+                      placeholder="Например: LUNÉRA"
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Бренд автоматически определяется из WB для каждого отзыва. Это значение используется как запасное, если бренд не определён.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground block">
+                      Тон и правила ответов
+                    </label>
+                    <Textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      className="min-h-[100px] text-sm"
+                      placeholder="Опиши тон, стиль и правила ответов бренда."
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Это описание тона и правил — основа для всех ответов ИИ на отзывы. Всё, что ты напишешь здесь, будет учтено при формировании ответов.
+                    </p>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
         </div>
 
         <div className="flex justify-end gap-2 pt-3 border-t border-border">

@@ -34,7 +34,7 @@ export const RecommendationsSection = () => {
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [sectionOpen, setSectionOpen] = useState(true);
+  const [sectionOpen, setSectionOpen] = useState(false);
 
   const { data: activeCabinet } = useActiveCabinet();
   const cabinetId = activeCabinet?.id;

@@ -1288,6 +1288,10 @@ export async function robokassaWebhook(req: Request, res: Response) {
     console.log(`[robokassa-webhook] Payment InvId=${invId} completed. Added ${payment.tokens} tokens to user ${payment.userId}`);
 
     res.status(200).send(`OK${invId}`);
+
+    processPendingReviews(payment.userId).catch((err) => {
+      console.error(`[robokassa-webhook] Error processing pending reviews after payment:`, err);
+    });
   } catch (e: any) {
     console.error("robokassa-webhook error:", e);
     res.status(500).send("internal error");
@@ -1425,4 +1429,71 @@ async function runAutoSyncInternal() {
   }
 
   console.log(`[auto-sync] Completed`);
+}
+
+export async function processPendingReviews(userId: string) {
+  console.log(`[process-pending] Starting for user=${userId}`);
+
+  const cabinets = await storage.getCabinets(userId);
+  if (!cabinets || cabinets.length === 0) {
+    console.log(`[process-pending] No cabinets for user=${userId}`);
+    return { processed: 0, errors: [] };
+  }
+
+  let currentBalance = await storage.getTokenBalance(userId);
+  if (currentBalance < 1) {
+    console.log(`[process-pending] No tokens for user=${userId}`);
+    return { processed: 0, errors: [] };
+  }
+
+  const defaultModes: Record<string, string> = { "1": "manual", "2": "manual", "3": "manual", "4": "manual", "5": "manual" };
+  let totalProcessed = 0;
+  const allErrors: string[] = [];
+
+  for (const cabinet of cabinets) {
+    if (!cabinet.wbApiKey) continue;
+
+    let cabinetModes = cabinet.replyModes as Record<string, string> | null;
+    if (!cabinetModes || Object.keys(cabinetModes).length === 0) {
+      const userSettings = await storage.getSettings(userId);
+      cabinetModes = (userSettings?.replyModes as Record<string, string>) || null;
+    }
+    const replyModes = (cabinetModes && Object.keys(cabinetModes).length > 0) ? cabinetModes : defaultModes;
+
+    const pendingReviews = await storage.getPendingReviewsForCabinet(userId, cabinet.id);
+    if (!pendingReviews || pendingReviews.length === 0) continue;
+
+    console.log(`[process-pending] cabinet=${cabinet.id} found ${pendingReviews.length} pending reviews, balance=${currentBalance}`);
+
+    for (const pr of pendingReviews) {
+      if (currentBalance < 1) break;
+
+      const ratingKey = String(pr.rating);
+      const modeForRating = replyModes[ratingKey] || "manual";
+      if (modeForRating !== "auto" || !pr.aiDraft) continue;
+
+      try {
+        await sendWBAnswer(cabinet.wbApiKey, pr.wbId, pr.aiDraft);
+        await storage.updateReview(pr.id, {
+          status: "auto",
+          sentAnswer: pr.aiDraft,
+          updatedAt: new Date(),
+        });
+        currentBalance -= 1;
+        await storage.updateTokenBalance(userId, currentBalance);
+        await storage.insertTokenTransaction({
+          userId, amount: -1, type: "usage",
+          description: "Автоответ на отзыв (после пополнения)", reviewId: pr.id,
+        });
+        totalProcessed++;
+        await delay(350);
+      } catch (e: any) {
+        console.error(`[process-pending] Error for review ${pr.wbId}:`, e.message);
+        allErrors.push(`Error for ${pr.wbId}: ${e.message}`);
+      }
+    }
+  }
+
+  console.log(`[process-pending] Done for user=${userId}: processed=${totalProcessed}, errors=${allErrors.length}`);
+  return { processed: totalProcessed, errors: allErrors };
 }

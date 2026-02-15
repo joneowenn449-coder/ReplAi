@@ -71,7 +71,8 @@ async function sendWBAnswer(apiKey: string, feedbackId: string, text: string) {
 async function generateAIReply(
   apiKey: string, systemPrompt: string, reviewText: string, rating: number,
   productName: string, photoCount = 0, hasVideo = false, authorName = "",
-  isEmpty = false, recommendationInstruction = "", isRefusal = false, brandName = ""
+  isEmpty = false, recommendationInstruction = "", isRefusal = false, brandName = "",
+  photoLinks: any[] = []
 ) {
   let emptyInstruction = "";
   if (isEmpty) {
@@ -83,9 +84,14 @@ async function generateAIReply(
   let attachmentInfo = "";
   if (photoCount > 0 || hasVideo) {
     const parts: string[] = [];
-    if (photoCount > 0) parts.push(`${photoCount} фото`);
+    if (photoCount > 0) {
+      const photoWord = photoCount === 1 ? "фотографию" : photoCount < 5 ? "фотографии" : "фотографий";
+      parts.push(`${photoCount} ${photoWord}`);
+    }
     if (hasVideo) parts.push("видео");
-    attachmentInfo = `\n\n[Покупатель приложил ${parts.join(" и ")}.]`;
+    attachmentInfo = photoCount > 0 && photoLinks.length > 0
+      ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже — проанализируй их и учти в ответе, если это уместно.]`
+      : `\n\n[Покупатель приложил ${parts.join(" и ")}.]`;
   }
 
   const nameInstruction = authorName && authorName !== "Покупатель"
@@ -99,14 +105,30 @@ async function generateAIReply(
 
   const userMessage = `ВАЖНО: следуй правилам промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating}/5) на "${productName}":\n\n${reviewText || "(Без текста)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
+  const model = photoCount > 0 && photoLinks.length > 0
+    ? "google/gemini-2.5-flash"
+    : rating >= 4
+      ? "google/gemini-2.5-flash-lite"
+      : "google/gemini-2.5-flash";
+
+  const userContent: any = photoCount > 0 && photoLinks.length > 0
+    ? [
+        { type: "text", text: userMessage },
+        ...photoLinks.slice(0, 5).map((photo: any) => ({
+          type: "image_url",
+          image_url: { url: photo.miniSize || photo.fullSize },
+        })).filter((p: any) => p.image_url.url),
+      ]
+    : userMessage;
+
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
+        { role: "user", content: userContent },
       ],
       max_tokens: isEmpty ? 300 : 1000,
       temperature: 0.7,
@@ -189,7 +211,8 @@ async function processCabinetReviews(
         fb.productValuation || 5,
         fb.productDetails?.productName || fb.subjectName || "Товар",
         photoLinks.length, hasVideo, fb.userName || "",
-        isEmptyReview, recommendationInstruction, isRefusal, effectiveBrand
+        isEmptyReview, recommendationInstruction, isRefusal, effectiveBrand,
+        photoLinks
       );
     } catch (e: any) {
       console.error(`AI generation failed for ${wbId}:`, e);
@@ -237,6 +260,7 @@ async function processCabinetReviews(
       status,
       aiDraft: aiDraft || null,
       sentAnswer: status === "auto" ? aiDraft : null,
+      createdDate: fb.createdDate ? new Date(fb.createdDate) : new Date(),
     });
 
     newCount++;
@@ -1312,6 +1336,7 @@ async function fetchArchiveInternal(userId: string, cabinetId: string, wbApiKey:
       status: "archived",
       aiDraft: null,
       sentAnswer: answer,
+      createdDate: fb.createdDate ? new Date(fb.createdDate) : new Date(),
     });
 
     importedCount++;

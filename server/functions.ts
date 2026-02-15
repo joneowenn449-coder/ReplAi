@@ -211,14 +211,15 @@ async function processCabinetReviews(
     const isEmptyReview = !fb.text && !fb.pros && !fb.cons;
 
     const productArticle = String(fb.productDetails?.nmId || fb.nmId || "");
+    const rating = fb.productValuation || 5;
     let recommendationInstruction = "";
-    if (productArticle) {
+    if (productArticle && rating >= 4) {
       const recommendations = await storage.getRecommendationsByArticle(productArticle, cabinetId);
       if (recommendations && recommendations.length > 0) {
         const recList = recommendations
           .map((r) => `- Артикул ${r.targetArticle}${r.targetName ? `: "${r.targetName}"` : ""}`)
           .join("\n");
-        recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: предложи товары:\n${recList}`;
+        recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
       }
     }
 
@@ -243,7 +244,6 @@ async function processCabinetReviews(
     }
 
     let status = "pending";
-    const rating = fb.productValuation || 5;
     const ratingKey = String(rating);
     const modeForRating = replyModes[ratingKey] || "manual";
 

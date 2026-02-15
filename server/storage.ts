@@ -410,8 +410,17 @@ export class DatabaseStorage {
       .orderBy(asc(productRecommendations.createdAt));
   }
 
-  async getRecommendationsSummary(cabinetId: string): Promise<ProductRecommendation[]> {
-    return db.select().from(productRecommendations).where(eq(productRecommendations.cabinetId, cabinetId));
+  async getRecommendationsSummary(cabinetId: string): Promise<{ article: string; count: number }[]> {
+    const rows = await db
+      .select({
+        article: productRecommendations.sourceArticle,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(productRecommendations)
+      .where(eq(productRecommendations.cabinetId, cabinetId))
+      .groupBy(productRecommendations.sourceArticle)
+      .orderBy(productRecommendations.sourceArticle);
+    return rows;
   }
 
   async insertRecommendation(data: InsertProductRecommendation): Promise<void> {

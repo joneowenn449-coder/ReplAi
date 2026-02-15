@@ -391,6 +391,103 @@ export class DatabaseStorage {
     await db.delete(productRecommendations).where(eq(productRecommendations.id, id));
   }
 
+  async getReviewByWbId(wbId: string, userId: string, cabinetId: string): Promise<Review | null> {
+    const rows = await db
+      .select()
+      .from(reviews)
+      .where(and(eq(reviews.wbId, wbId), eq(reviews.userId, userId), eq(reviews.cabinetId, cabinetId)))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async getReviewsByUserId(userId: string, columns?: string[]): Promise<any[]> {
+    return db
+      .select({
+        productArticle: reviews.productArticle,
+        productName: reviews.productName,
+        rating: reviews.rating,
+      })
+      .from(reviews)
+      .where(eq(reviews.userId, userId))
+      .orderBy(desc(reviews.createdDate));
+  }
+
+  async getReviewsByUserIdAndArticle(userId: string, article: string, limit_ = 50): Promise<any[]> {
+    return db
+      .select({
+        rating: reviews.rating,
+        authorName: reviews.authorName,
+        text: reviews.text,
+        pros: reviews.pros,
+        cons: reviews.cons,
+        productName: reviews.productName,
+        productArticle: reviews.productArticle,
+        createdDate: reviews.createdDate,
+      })
+      .from(reviews)
+      .where(and(eq(reviews.userId, userId), eq(reviews.productArticle, article)))
+      .orderBy(desc(reviews.createdDate))
+      .limit(limit_);
+  }
+
+  async getNegativeReviewsByUserId(userId: string, limit_ = 50): Promise<any[]> {
+    return db
+      .select({
+        rating: reviews.rating,
+        authorName: reviews.authorName,
+        text: reviews.text,
+        pros: reviews.pros,
+        cons: reviews.cons,
+        productName: reviews.productName,
+        productArticle: reviews.productArticle,
+        createdDate: reviews.createdDate,
+      })
+      .from(reviews)
+      .where(and(eq(reviews.userId, userId), lte(reviews.rating, 3)))
+      .orderBy(desc(reviews.createdDate))
+      .limit(limit_);
+  }
+
+  async getPositiveReviewsByUserId(userId: string, limit_ = 50): Promise<any[]> {
+    return db
+      .select({
+        rating: reviews.rating,
+        authorName: reviews.authorName,
+        text: reviews.text,
+        pros: reviews.pros,
+        cons: reviews.cons,
+        productName: reviews.productName,
+        productArticle: reviews.productArticle,
+        createdDate: reviews.createdDate,
+      })
+      .from(reviews)
+      .where(and(eq(reviews.userId, userId), gte(reviews.rating, 4), not(isNull(reviews.pros))))
+      .orderBy(desc(reviews.createdDate))
+      .limit(limit_);
+  }
+
+  async getReviewTimeStats(userId: string): Promise<{ createdDate: Date | null; rating: number }[]> {
+    return db
+      .select({
+        createdDate: reviews.createdDate,
+        rating: reviews.rating,
+      })
+      .from(reviews)
+      .where(eq(reviews.userId, userId));
+  }
+
+  async getReviewCountByCabinet(cabinetId: string): Promise<number> {
+    const rows = await db.select({ value: count() }).from(reviews).where(eq(reviews.cabinetId, cabinetId));
+    return rows[0]?.value ?? 0;
+  }
+
+  async getRecommendationsByArticle(sourceArticle: string, cabinetId: string): Promise<{ targetArticle: string; targetName: string | null }[]> {
+    return db
+      .select({ targetArticle: productRecommendations.targetArticle, targetName: productRecommendations.targetName })
+      .from(productRecommendations)
+      .where(and(eq(productRecommendations.sourceArticle, sourceArticle), eq(productRecommendations.cabinetId, cabinetId)));
+  }
+
   async createPayment(data: InsertPayment): Promise<Payment> {
     const rows = await db.insert(payments).values(data).returning();
     return rows[0];

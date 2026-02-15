@@ -1,5 +1,10 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
+import {
+  syncReviews, syncChats, sendReply, generateReply,
+  validateApiKey, sendChatMessage, aiAssistant,
+  createPayment, robokassaWebhook, fetchArchive,
+} from "./functions";
 
 export const router = Router();
 
@@ -475,41 +480,25 @@ router.post("/api/profiles", requireAuth, async (req: Request, res: Response) =>
   }
 });
 
-router.post("/api/functions/sync-reviews", requireAuth, (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/sync-reviews", requireAuth, syncReviews);
 
-router.post("/api/functions/sync-chats", requireAuth, (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/sync-chats", requireAuth, syncChats);
 
-router.post("/api/functions/send-reply", requireAuth, (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/send-reply", requireAuth, sendReply);
 
-router.post("/api/functions/generate-reply", requireAuth, (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/generate-reply", requireAuth, generateReply);
 
-router.post("/api/functions/validate-api-key", requireAuth, (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/validate-api-key", requireAuth, validateApiKey);
 
-router.post("/api/functions/send-chat-message", requireAuth, (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/send-chat-message", requireAuth, sendChatMessage);
 
-router.post("/api/functions/ai-assistant", requireAuth, (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/ai-assistant", requireAuth, aiAssistant);
 
-router.post("/api/functions/create-payment", requireAuth, (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/create-payment", requireAuth, createPayment);
 
-router.post("/api/functions/robokassa-webhook", (_req: Request, res: Response) => {
-  res.status(501).json({ error: "Not yet implemented" });
-});
+router.post("/api/functions/robokassa-webhook", robokassaWebhook);
+
+router.post("/api/functions/fetch-archive", requireAuth, fetchArchive);
 
 router.get("/api/export/:table", requireAuth, async (req: Request, res: Response) => {
   try {

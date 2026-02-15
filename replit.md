@@ -75,21 +75,24 @@ All data operations go through Express API:
 ## Running
 - Dev server: `npx tsx server/index.ts` (serves both API and Vite frontend on port 5000)
 
-## Edge Functions Status
-The following business logic endpoints are placeholders (return 501):
-- `sync-reviews` - Syncs reviews from WB API
-- `sync-chats` - Syncs chats from WB API
-- `send-reply` - Sends review replies to WB
-- `send-chat-message` - Sends chat messages via WB
-- `generate-reply` - Generates AI reply for a review
-- `validate-api-key` - Validates WB API key
-- `create-payment` - Creates Robokassa payment
-- `robokassa-webhook` - Handles payment webhook
-- `ai-assistant` - AI analytics chat streaming
+## Business Logic Endpoints (server/functions.ts)
+All business logic is fully ported from Supabase Edge Functions to Express:
+- `POST /api/functions/sync-reviews` - Syncs reviews from WB API + auto-replies via OpenRouter AI
+- `POST /api/functions/sync-chats` - Syncs chats and messages from WB API
+- `POST /api/functions/send-reply` - Sends review reply to WB + deducts token
+- `POST /api/functions/generate-reply` - Generates AI draft via OpenRouter (supports photos, recommendations, refusal detection)
+- `POST /api/functions/validate-api-key` - Validates WB API key + saves + triggers archive import
+- `POST /api/functions/send-chat-message` - Sends chat message via WB API
+- `POST /api/functions/ai-assistant` - Streaming AI analytics with RAG context from reviews
+- `POST /api/functions/create-payment` - Creates Robokassa payment URL
+- `POST /api/functions/robokassa-webhook` - Handles Robokassa payment callback (no auth)
+- `POST /api/functions/fetch-archive` - Imports archived (answered) reviews from WB
 
 ## Recent Changes
+- 2026-02-15: Ported all 10 Edge Functions to Express (server/functions.ts)
+- 2026-02-15: Added 8 new storage methods for business logic support
 - 2026-02-15: Migrated all frontend hooks from direct Supabase queries to server API
-- 2026-02-15: Created comprehensive DatabaseStorage class (50+ methods) with Drizzle ORM
+- 2026-02-15: Created comprehensive DatabaseStorage class (60+ methods) with Drizzle ORM
 - 2026-02-15: Created complete Express API routes for all CRUD operations
 - 2026-02-15: Replaced Supabase realtime subscriptions with polling (chats 30s, messages 10s)
 - 2026-02-15: Created src/lib/api.ts helper for authenticated API requests

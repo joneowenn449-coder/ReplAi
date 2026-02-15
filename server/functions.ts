@@ -582,6 +582,7 @@ export async function sendReply(req: Request, res: Response) {
       status: "sent",
       sentAnswer: textToSend,
       isEdited,
+      updatedAt: new Date(),
     });
 
     await storage.updateTokenBalance(userId, currentBalance - 1);

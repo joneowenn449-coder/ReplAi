@@ -39,6 +39,21 @@ export class DatabaseStorage {
     await db.update(reviews).set(data).where(eq(reviews.id, id));
   }
 
+  async archiveOldAnsweredReviews(daysOld: number = 7): Promise<number> {
+    const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+    const result = await db
+      .update(reviews)
+      .set({ status: "archived", updatedAt: new Date() })
+      .where(
+        and(
+          sql`(${reviews.status} = 'sent' OR ${reviews.status} = 'auto')`,
+          lte(reviews.updatedAt, cutoff)
+        )
+      )
+      .returning({ id: reviews.id });
+    return result.length;
+  }
+
   async getProductArticles(cabinetId: string): Promise<{ article: string; name: string }[]> {
     const rows = await db
       .selectDistinctOn([reviews.productArticle], {

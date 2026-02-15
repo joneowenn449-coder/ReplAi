@@ -458,6 +458,7 @@ export class DatabaseStorage {
         productArticle: reviews.productArticle,
         productName: reviews.productName,
         rating: reviews.rating,
+        photoLinks: reviews.photoLinks,
       })
       .from(reviews)
       .where(eq(reviews.userId, userId))
@@ -475,6 +476,7 @@ export class DatabaseStorage {
         productName: reviews.productName,
         productArticle: reviews.productArticle,
         createdDate: reviews.createdDate,
+        photoLinks: reviews.photoLinks,
       })
       .from(reviews)
       .where(and(eq(reviews.userId, userId), eq(reviews.productArticle, article)))
@@ -493,6 +495,7 @@ export class DatabaseStorage {
         productName: reviews.productName,
         productArticle: reviews.productArticle,
         createdDate: reviews.createdDate,
+        photoLinks: reviews.photoLinks,
       })
       .from(reviews)
       .where(and(eq(reviews.userId, userId), lte(reviews.rating, 3)))
@@ -511,6 +514,7 @@ export class DatabaseStorage {
         productName: reviews.productName,
         productArticle: reviews.productArticle,
         createdDate: reviews.createdDate,
+        photoLinks: reviews.photoLinks,
       })
       .from(reviews)
       .where(and(eq(reviews.userId, userId), gte(reviews.rating, 4), not(isNull(reviews.pros))))

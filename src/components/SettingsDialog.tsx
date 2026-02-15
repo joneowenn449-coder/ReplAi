@@ -30,7 +30,12 @@ import {
 import { useActiveCabinet, useUpdateCabinet, useDeleteCabinet } from "@/hooks/useCabinets";
 import type { WbCabinet } from "@/hooks/useCabinets";
 import { toast } from "sonner";
-import { Check, Pencil, Trash2, Loader2, KeyRound, Star, Download } from "lucide-react";
+import { Check, Pencil, Trash2, Loader2, KeyRound, Star, Download, ChevronRight } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { RecommendationsSection } from "@/components/RecommendationsSection";
 import { useExportData } from "@/hooks/useExportData";
 
@@ -56,6 +61,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   const [cabinetName, setCabinetName] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [isEditingKey, setIsEditingKey] = useState(false);
+  const [ratingSectionOpen, setRatingSectionOpen] = useState(true);
   const [replyModes, setReplyModes] = useState<ReplyModes>(DEFAULT_REPLY_MODES);
 
   const cabinet = activeCabinet;
@@ -262,52 +268,67 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
           </div>
 
           {/* Reply Modes by Rating Section */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-foreground block">
-              Режим ответов по рейтингу
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Авто — ответ отправляется сразу, Ручной — попадает на согласование.
-            </p>
-            <div className="space-y-2">
-              {[5, 4, 3, 2, 1].map((rating) => {
-                const key = String(rating);
-                const isAuto = replyModes[key] === "auto";
-                return (
-                  <div
-                    key={rating}
-                    className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/50 border border-border"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      {Array.from({ length: rating }).map((_, i) => (
-                        <Star
-                          key={i}
-                          className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400"
-                        />
-                      ))}
-                      {Array.from({ length: 5 - rating }).map((_, i) => (
-                        <Star
-                          key={`empty-${i}`}
-                          className="w-3.5 h-3.5 text-muted-foreground/30"
-                        />
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-16 text-right">
-                        {isAuto ? "Авто" : "Ручной"}
-                      </span>
-                      <Switch
-                        checked={isAuto}
-                        onCheckedChange={(checked) =>
-                          handleToggleRating(key, checked)
-                        }
-                      />
-                    </div>
+          <Collapsible open={ratingSectionOpen} onOpenChange={setRatingSectionOpen}>
+            <div className="space-y-3">
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center gap-2 cursor-pointer hover-elevate rounded-md py-1 px-1 -mx-1" data-testid="trigger-section-rating-modes">
+                  <ChevronRight
+                    className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                      ratingSectionOpen ? "rotate-90" : ""
+                    }`}
+                  />
+                  <label className="text-sm font-medium text-foreground cursor-pointer">
+                    Режим ответов по рейтингу
+                  </label>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-3 pt-1">
+                  <p className="text-xs text-muted-foreground">
+                    Авто — ответ отправляется сразу, Ручной — попадает на согласование.
+                  </p>
+                  <div className="space-y-2">
+                    {[5, 4, 3, 2, 1].map((rating) => {
+                      const key = String(rating);
+                      const isAuto = replyModes[key] === "auto";
+                      return (
+                        <div
+                          key={rating}
+                          className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/50 border border-border"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            {Array.from({ length: rating }).map((_, i) => (
+                              <Star
+                                key={i}
+                                className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400"
+                              />
+                            ))}
+                            {Array.from({ length: 5 - rating }).map((_, i) => (
+                              <Star
+                                key={`empty-${i}`}
+                                className="w-3.5 h-3.5 text-muted-foreground/30"
+                              />
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground w-16 text-right">
+                              {isAuto ? "Авто" : "Ручной"}
+                            </span>
+                            <Switch
+                              checked={isAuto}
+                              onCheckedChange={(checked) =>
+                                handleToggleRating(key, checked)
+                              }
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              </CollapsibleContent>
             </div>
-          </div>
+          </Collapsible>
 
           {/* Recommendations Section */}
           <RecommendationsSection />

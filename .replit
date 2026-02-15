@@ -18,6 +18,10 @@ publicDir = "dist"
 VITE_SUPABASE_PROJECT_ID = "yzlrebnfslyvqscjmmwh"
 VITE_SUPABASE_URL = "https://yzlrebnfslyvqscjmmwh.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bHJlYm5mc2x5dnFzY2ptbXdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNjgwMTAsImV4cCI6MjA4NTk0NDAxMH0.Ys-lY7wZ9EN82hkmzZXwcrREXHlmUzL4wxHXPRLM-6o"
+POSTGRESQL_HOST = "85.193.81.180"
+POSTGRESQL_PORT = "5432"
+POSTGRESQL_USER = "gen_user"
+POSTGRESQL_DBNAME = "ReplAi"
 
 [workflows]
 runButton = "Project"

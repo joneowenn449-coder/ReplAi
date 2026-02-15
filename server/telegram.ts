@@ -263,6 +263,15 @@ export function startTelegramBot() {
   bot = new TelegramBot(token, { polling: true });
   console.log("[telegram] Bot started with long polling");
 
+  bot.setMyCommands([
+    { command: "start", description: "\u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u043A / \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435" },
+    { command: "shops", description: "\u041C\u043E\u0438 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u044B WB" },
+    { command: "stats", description: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 \u0437\u0430 \u0441\u0435\u0433\u043E\u0434\u043D\u044F" },
+    { command: "balance", description: "\u0411\u0430\u043B\u0430\u043D\u0441 \u0442\u043E\u043A\u0435\u043D\u043E\u0432" },
+    { command: "mode", description: "\u0420\u0435\u0436\u0438\u043C \u043E\u0442\u0432\u0435\u0442\u043E\u0432" },
+    { command: "settings", description: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u0439" },
+  ]).catch(err => console.error("[telegram] Error setting commands:", err));
+
   bot.onText(/\/start(.*)/, async (msg, match) => {
     const chatId = String(msg.chat.id);
     const payload = (match?.[1] || "").trim();
@@ -314,6 +323,127 @@ export function startTelegramBot() {
       await sendSettingsMenu(chatId, cabinet.id);
     } catch (err) {
       console.error("[telegram] Error handling /settings:", err);
+    }
+  });
+
+  bot.onText(/\/shops/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    try {
+      const cabinets = await storage.getCabinetsByTelegramChatId(chatId);
+      if (cabinets.length === 0) {
+        await bot!.sendMessage(chatId, "\u041D\u0435\u0442 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u043E\u0432. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0431\u043E\u0442\u0430 \u0447\u0435\u0440\u0435\u0437 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u043D\u0430 \u0441\u0430\u0439\u0442\u0435.");
+        return;
+      }
+
+      let msg_text = "\uD83C\uDFEA *\u041C\u043E\u0438 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u044B WB:*\n\n";
+      for (const cab of cabinets) {
+        const hasKey = !!cab.wbApiKey;
+        const statusIcon = hasKey ? "\uD83D\uDFE2" : "\uD83D\uDD34";
+        const statusText = hasKey ? "\u0410\u043A\u0442\u0438\u0432\u0435\u043D" : "\u041D\u0435\u0442 API-\u043A\u043B\u044E\u0447\u0430";
+        const syncDate = cab.lastSyncAt ? new Date(cab.lastSyncAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "\u043D\u0435 \u0431\u044B\u043B\u043E";
+        const modesInfo = formatReplyModes(cab.replyModes as Record<string, string> | null);
+
+        msg_text += `${statusIcon} *${escapeMarkdown(cab.name || "\u041A\u0430\u0431\u0438\u043D\u0435\u0442")}*\n`;
+        msg_text += `\u0421\u0442\u0430\u0442\u0443\u0441: ${statusText}\n`;
+        msg_text += `\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u044F\u044F \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u044F: ${syncDate}\n`;
+        msg_text += `\u0420\u0435\u0436\u0438\u043C: ${modesInfo}\n\n`;
+      }
+
+      await bot!.sendMessage(chatId, msg_text, { parse_mode: "Markdown" });
+    } catch (err) {
+      console.error("[telegram] Error handling /shops:", err);
+      await bot!.sendMessage(chatId, "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0438 \u0441\u043F\u0438\u0441\u043A\u0430 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u043E\u0432.");
+    }
+  });
+
+  bot.onText(/\/stats/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    try {
+      const cabinets = await storage.getCabinetsByTelegramChatId(chatId);
+      if (cabinets.length === 0) {
+        await bot!.sendMessage(chatId, "\u041D\u0435\u0442 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D\u043D\u044B\u0445 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u043E\u0432.");
+        return;
+      }
+
+      const cabinetIds = cabinets.map(c => c.id);
+      const stats = await storage.getTodayReviewStats(cabinetIds);
+
+      const today = new Date().toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
+      const pending = stats.total - stats.answered;
+      const avgStr = stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "\u2014";
+
+      let ratingBars = "";
+      for (let r = 5; r >= 1; r--) {
+        const cnt = stats.byRating[r] || 0;
+        const bar = cnt > 0 ? "\u2588".repeat(Math.min(cnt, 20)) : "";
+        ratingBars += `${"*".repeat(r)} ${bar} ${cnt}\n`;
+      }
+
+      const msg_text = `\uD83D\uDCCA *\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 \u0437\u0430 ${today}*\n\n` +
+        `\uD83D\uDCE5 \u041D\u043E\u0432\u044B\u0445 \u043E\u0442\u0437\u044B\u0432\u043E\u0432: *${stats.total}*\n` +
+        `\u2705 \u041E\u0442\u0432\u0435\u0447\u0435\u043D\u043E: *${stats.answered}*\n` +
+        `\u23F3 \u041E\u0436\u0438\u0434\u0430\u044E\u0442 \u043E\u0442\u0432\u0435\u0442\u0430: *${pending}*\n` +
+        `\u2B50 \u0421\u0440\u0435\u0434\u043D\u0438\u0439 \u0440\u0435\u0439\u0442\u0438\u043D\u0433: *${avgStr}*\n\n` +
+        `\uD83D\uDCCA \u0420\u0430\u0441\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u0435:\n${ratingBars}`;
+
+      await bot!.sendMessage(chatId, msg_text, { parse_mode: "Markdown" });
+    } catch (err) {
+      console.error("[telegram] Error handling /stats:", err);
+      await bot!.sendMessage(chatId, "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0438 \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0438.");
+    }
+  });
+
+  bot.onText(/\/balance/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    try {
+      const cabinet = await storage.getCabinetByTelegramChatId(chatId);
+      if (!cabinet) {
+        await bot!.sendMessage(chatId, "\u041A\u0430\u0431\u0438\u043D\u0435\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D.");
+        return;
+      }
+
+      const balance = await storage.getTokenBalance(cabinet.userId);
+
+      const msg_text = `\uD83D\uDCB0 *\u0411\u0430\u043B\u0430\u043D\u0441 \u0442\u043E\u043A\u0435\u043D\u043E\u0432*\n\n` +
+        `\u041E\u0441\u0442\u0430\u0442\u043E\u043A: *${balance}* \u0442\u043E\u043A\u0435\u043D\u043E\u0432\n\n` +
+        `1 \u0442\u043E\u043A\u0435\u043D = 1 \u043E\u0442\u0432\u0435\u0442 \u043D\u0430 \u043E\u0442\u0437\u044B\u0432`;
+
+      const keyboard: TelegramBot.InlineKeyboardButton[][] = [
+        [{ text: "\uD83D\uDCB3 \u041F\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u044C", url: `${APP_DOMAIN}/pricing` }],
+      ];
+
+      await bot!.sendMessage(chatId, msg_text, {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: keyboard },
+      });
+    } catch (err) {
+      console.error("[telegram] Error handling /balance:", err);
+      await bot!.sendMessage(chatId, "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0438 \u0431\u0430\u043B\u0430\u043D\u0441\u0430.");
+    }
+  });
+
+  bot.onText(/\/mode/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    try {
+      const cabinet = await storage.getCabinetByTelegramChatId(chatId);
+      if (!cabinet) {
+        await bot!.sendMessage(chatId, "\u041A\u0430\u0431\u0438\u043D\u0435\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D.");
+        return;
+      }
+
+      const modesInfo = formatReplyModes(cabinet.replyModes as Record<string, string> | null);
+
+      const keyboard: TelegramBot.InlineKeyboardButton[][] = [
+        [{ text: "\u2699\uFE0F \u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C", callback_data: `rmcfg_start_${cabinet.id}` }],
+      ];
+
+      await bot!.sendMessage(chatId, `\uD83D\uDCDD *\u0420\u0435\u0436\u0438\u043C \u043E\u0442\u0432\u0435\u0442\u043E\u0432:*\n\n${modesInfo}`, {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: keyboard },
+      });
+    } catch (err) {
+      console.error("[telegram] Error handling /mode:", err);
+      await bot!.sendMessage(chatId, "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0438 \u0440\u0435\u0436\u0438\u043C\u043E\u0432.");
     }
   });
 

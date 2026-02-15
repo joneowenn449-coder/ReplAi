@@ -631,6 +631,36 @@ export class DatabaseStorage {
   async cleanupExpiredTelegramTokens(): Promise<void> {
     await db.delete(telegramAuthTokens).where(sql`${telegramAuthTokens.expiresAt} < NOW()`);
   }
+
+  async getTodayReviewStats(cabinetIds: string[]): Promise<{ total: number; answered: number; avgRating: number; byRating: Record<number, number> }> {
+    if (cabinetIds.length === 0) return { total: 0, answered: 0, avgRating: 0, byRating: {} };
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const allReviews = await db
+      .select({
+        rating: reviews.rating,
+        status: reviews.status,
+      })
+      .from(reviews)
+      .where(
+        and(
+          sql`${reviews.cabinetId} IN (${sql.join(cabinetIds.map(id => sql`${id}::uuid`), sql`, `)})`,
+          gte(reviews.fetchedAt, todayStart)
+        )
+      );
+
+    const total = allReviews.length;
+    const answered = allReviews.filter(r => r.status === "sent").length;
+    const avgRating = total > 0 ? allReviews.reduce((sum, r) => sum + r.rating, 0) / total : 0;
+    const byRating: Record<number, number> = {};
+    for (const r of allReviews) {
+      byRating[r.rating] = (byRating[r.rating] || 0) + 1;
+    }
+
+    return { total, answered, avgRating, byRating };
+  }
 }
 
 export const storage = new DatabaseStorage();

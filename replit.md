@@ -96,6 +96,11 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - sendAutoReplyNotification: enhanced format with rating emoji, article, shouldNotify filtering
 - sendNewReviewNotification: rich format with rating emoji, article, pros/cons, AI insight, photo support (sendPhoto), URL button for chat
 - Settings menu: /start sends inline keyboard with notification type (all/negative/questions) + reply mode (manual/auto/drafts)
+- Bot commands (setMyCommands): /start, /shops, /stats, /balance, /mode, /settings
+- /shops: lists all connected WB cabinets with status, last sync date, reply modes
+- /stats: today's review statistics (total/answered/pending, avg rating, distribution bars)
+- /balance: token balance with "Пополнить" button linking to pricing page
+- /mode: current reply modes with inline button to launch step-by-step configuration
 - /settings command: reconfigure notification preferences
 - Callback handlers: gen_REVIEWID generates AI draft, pub_REVIEWID sends to WB + deducts token, edit_REVIEWID enters edit mode (pendingEdits Map), regen_REVIEWID regenerates, cancel_edit_REVIEWID cancels edit
 - Photo handling: reviews with photos sent via sendPhoto, edits use editMessageCaption; text reviews use sendMessage/editMessageText
@@ -107,6 +112,7 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
 
 ## Recent Changes
+- 2026-02-15: Bot commands menu: /shops, /stats, /balance, /mode with setMyCommands; getTodayReviewStats storage method
 - 2026-02-15: Telegram bot reply modes: removed tgReplyMode, now uses cabinet's replyModes JSON directly; step-by-step config in bot (4-5 stars / 1-3 stars, only Ручной/Авто)
 - 2026-02-15: Enhanced Telegram bot: settings menu, notification preferences, rich notification format with photos, Generate/Publish/Edit/Regenerate flow, shouldNotify filtering
 - 2026-02-15: Added tgNotifyType field to wbCabinets schema + DB migration

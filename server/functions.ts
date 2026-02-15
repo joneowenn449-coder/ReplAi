@@ -1341,10 +1341,19 @@ async function fetchArchiveInternal(userId: string, cabinetId: string, wbApiKey:
   console.log(`[fetch-archive] Fetched ${allFeedbacks.length} archive reviews`);
 
   let importedCount = 0;
+  let updatedCount = 0;
   for (const fb of allFeedbacks) {
     const wbId = fb.id;
+    const wbCreatedDate = fb.createdDate ? new Date(fb.createdDate) : null;
     const existing = await storage.getReviewByWbId(wbId, userId, cabinetId);
-    if (existing) continue;
+
+    if (existing) {
+      if (wbCreatedDate) {
+        await storage.updateReview(existing.id, { createdDate: wbCreatedDate });
+        updatedCount++;
+      }
+      continue;
+    }
 
     const photoLinks = fb.photoLinks || [];
     const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
@@ -1368,14 +1377,14 @@ async function fetchArchiveInternal(userId: string, cabinetId: string, wbApiKey:
       status: "archived",
       aiDraft: null,
       sentAnswer: answer,
-      createdDate: fb.createdDate ? new Date(fb.createdDate) : new Date(),
+      createdDate: wbCreatedDate || new Date(),
     });
 
     importedCount++;
   }
 
-  console.log(`[fetch-archive] Imported ${importedCount} archive reviews for cabinet=${cabinetId}`);
-  return { imported: importedCount, total: allFeedbacks.length };
+  console.log(`[fetch-archive] Imported ${importedCount}, updated dates for ${updatedCount} archive reviews for cabinet=${cabinetId}`);
+  return { imported: importedCount, updated: updatedCount, total: allFeedbacks.length };
 }
 
 export async function fetchArchive(req: Request, res: Response) {

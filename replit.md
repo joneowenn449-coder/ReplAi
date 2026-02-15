@@ -7,7 +7,7 @@ A Wildberries marketplace review management application with AI-powered reply ge
 - **Frontend**: React 18 + TypeScript + Vite + TailwindCSS + shadcn/ui
 - **Backend**: Express.js + Drizzle ORM (TypeScript)
 - **Database**: External PostgreSQL (85.193.81.180, database: default_db, schema: replai)
-- **Auth**: Supabase (phone OTP, session management only - no data operations)
+- **Auth**: Supabase (email + password, session management only - no data operations)
 - **AI**: OpenRouter API (Gemini, GPT models) for review reply generation
 - **Payments**: Robokassa integration for token purchases
 
@@ -48,7 +48,7 @@ supabase/
 ```
 
 ## Authentication Flow
-1. Frontend uses Supabase auth (phone OTP) for login/signup
+1. Frontend uses Supabase auth (email + password) for login/signup
 2. Frontend gets JWT access token from Supabase session
 3. All API requests include `Authorization: Bearer <token>` header
 4. Server decodes JWT payload to extract user ID (`sub` field)
@@ -112,6 +112,9 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
 
 ## Recent Changes
+- 2026-02-15: Fixed race condition in ensureUserProvisioned (duplicate cabinet prevention via provisioningInProgress map)
+- 2026-02-15: Cleaned up duplicate empty cabinets from DB; fixed auth docs (email+password, not phone OTP)
+- 2026-02-15: Landing page on Auth.tsx: hero, 4 USP cards, how-it-works, auth form
 - 2026-02-15: Bot commands menu: /shops, /stats, /balance, /mode with setMyCommands; getTodayReviewStats storage method
 - 2026-02-15: Telegram bot reply modes: removed tgReplyMode, now uses cabinet's replyModes JSON directly; step-by-step config in bot (4-5 stars / 1-3 stars, only Ручной/Авто)
 - 2026-02-15: Enhanced Telegram bot: settings menu, notification preferences, rich notification format with photos, Generate/Publish/Edit/Regenerate flow, shouldNotify filtering

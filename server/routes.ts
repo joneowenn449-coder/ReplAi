@@ -55,36 +55,47 @@ function getUserIdFromToken(authHeader: string | undefined): string | null {
 }
 
 const provisionedUsers = new Set<string>();
+const provisioningInProgress = new Map<string, Promise<void>>();
 
 async function ensureUserProvisioned(userId: string): Promise<void> {
   if (provisionedUsers.has(userId)) return;
 
-  try {
-    const profile = await storage.getProfile(userId);
-    if (!profile) {
-      await storage.upsertProfile({ id: userId });
-      console.log(`[auto-provision] Created profile for user ${userId}`);
+  const existing = provisioningInProgress.get(userId);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    try {
+      const profile = await storage.getProfile(userId);
+      if (!profile) {
+        await storage.upsertProfile({ id: userId });
+        console.log(`[auto-provision] Created profile for user ${userId}`);
+      }
+
+      const userSettings = await storage.getSettings(userId);
+      if (!userSettings) {
+        await storage.insertSettings({ userId });
+        console.log(`[auto-provision] Created settings for user ${userId}`);
+      }
+
+      const cabinets = await storage.getCabinets(userId);
+      if (!cabinets || cabinets.length === 0) {
+        await storage.createCabinet({ userId, name: "Основной кабинет", isActive: true });
+        console.log(`[auto-provision] Created default cabinet for user ${userId}`);
+      }
+
+      await storage.upsertTokenBalance(userId, await storage.getTokenBalance(userId));
+      await storage.upsertAiRequestBalance(userId, await storage.getAiRequestBalance(userId));
+
+      provisionedUsers.add(userId);
+    } catch (err) {
+      console.error(`[auto-provision] Failed for user ${userId}:`, err);
+    } finally {
+      provisioningInProgress.delete(userId);
     }
+  })();
 
-    const userSettings = await storage.getSettings(userId);
-    if (!userSettings) {
-      await storage.insertSettings({ userId });
-      console.log(`[auto-provision] Created settings for user ${userId}`);
-    }
-
-    const cabinets = await storage.getCabinets(userId);
-    if (!cabinets || cabinets.length === 0) {
-      await storage.createCabinet({ userId, name: "Основной кабинет", isActive: true });
-      console.log(`[auto-provision] Created default cabinet for user ${userId}`);
-    }
-
-    await storage.upsertTokenBalance(userId, await storage.getTokenBalance(userId));
-    await storage.upsertAiRequestBalance(userId, await storage.getAiRequestBalance(userId));
-
-    provisionedUsers.add(userId);
-  } catch (err) {
-    console.error(`[auto-provision] Failed for user ${userId}:`, err);
-  }
+  provisioningInProgress.set(userId, promise);
+  return promise;
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -93,6 +104,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+  console.log(`[auth] userId=${userId} path=${req.path}`);
   (req as any).userId = userId;
   ensureUserProvisioned(userId).then(() => next()).catch((err) => {
     console.error("[auto-provision] Error:", err);

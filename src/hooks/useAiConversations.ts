@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/api";
 
 export type AiConversation = {
   id: string;
@@ -16,13 +16,7 @@ export function useConversationList() {
   return useQuery({
     queryKey: ["ai-conversations", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ai_conversations")
-        .select("*")
-        .order("is_pinned", { ascending: false })
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data as AiConversation[];
+      return apiRequest("/api/conversations") as Promise<AiConversation[]>;
     },
     enabled: !!user,
   });
@@ -30,16 +24,12 @@ export function useConversationList() {
 
 export function useCreateConversation() {
   const qc = useQueryClient();
-  const { user } = useAuth();
   return useMutation({
     mutationFn: async (title?: string) => {
-      const { data, error } = await supabase
-        .from("ai_conversations")
-        .insert({ user_id: user!.id, title: title || "Новый чат" })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as AiConversation;
+      return apiRequest("/api/conversations", {
+        method: "POST",
+        body: JSON.stringify({ title: title || "Новый чат" }),
+      }) as Promise<AiConversation>;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-conversations"] }),
   });
@@ -49,11 +39,10 @@ export function useRenameConversation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, title }: { id: string; title: string }) => {
-      const { error } = await supabase
-        .from("ai_conversations")
-        .update({ title })
-        .eq("id", id);
-      if (error) throw error;
+      return apiRequest(`/api/conversations/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-conversations"] }),
   });
@@ -63,11 +52,10 @@ export function useTogglePin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, is_pinned }: { id: string; is_pinned: boolean }) => {
-      const { error } = await supabase
-        .from("ai_conversations")
-        .update({ is_pinned })
-        .eq("id", id);
-      if (error) throw error;
+      return apiRequest(`/api/conversations/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_pinned }),
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-conversations"] }),
   });
@@ -77,11 +65,7 @@ export function useDeleteConversation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("ai_conversations")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      return apiRequest(`/api/conversations/${id}`, { method: "DELETE" });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-conversations"] }),
   });

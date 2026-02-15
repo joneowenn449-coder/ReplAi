@@ -3,13 +3,14 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRenameConversation } from "@/hooks/useAiConversations";
+import { apiRequest } from "@/lib/api";
 
 export type AiMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
+const CHAT_URL = `/api/functions/ai-assistant`;
 
 export function useAiAssistant(conversationId: string | null) {
   const [messages, setMessages] = useState<AiMessage[]>([]);
@@ -18,7 +19,6 @@ export function useAiAssistant(conversationId: string | null) {
   const queryClient = useQueryClient();
   const renameMutation = useRenameConversation();
 
-  // Load messages from DB when conversationId changes
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
@@ -27,18 +27,18 @@ export function useAiAssistant(conversationId: string | null) {
     let cancelled = false;
     const load = async () => {
       setIsLoadingHistory(true);
-      const { data, error } = await supabase
-        .from("ai_messages")
-        .select("role, content")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
-      if (!cancelled) {
-        if (error) {
-          console.error("Failed to load messages:", error);
-          setMessages([]);
-        } else {
+      try {
+        const data = await apiRequest(`/api/ai-messages?conversation_id=${conversationId}`);
+        if (!cancelled) {
           setMessages((data || []) as AiMessage[]);
         }
+      } catch (error) {
+        console.error("Failed to load messages:", error);
+        if (!cancelled) {
+          setMessages([]);
+        }
+      }
+      if (!cancelled) {
         setIsLoadingHistory(false);
       }
     };
@@ -56,14 +56,15 @@ export function useAiAssistant(conversationId: string | null) {
       setMessages(allMessages);
       setIsLoading(true);
 
-      // Persist user message
-      await supabase.from("ai_messages").insert({
-        conversation_id: convId,
-        role: "user",
-        content: input,
-      });
+      apiRequest("/api/ai-messages", {
+        method: "POST",
+        body: JSON.stringify({
+          conversation_id: convId,
+          role: "user",
+          content: input,
+        }),
+      }).catch(() => {});
 
-      // Auto-title: if this is the first user message, set title
       if (messages.length === 0) {
         const autoTitle = input.length > 40 ? input.slice(0, 40) + "…" : input;
         renameMutation.mutate({ id: convId, title: autoTitle });
@@ -92,7 +93,7 @@ export function useAiAssistant(conversationId: string | null) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           body: JSON.stringify({ messages: allMessages }),
         });
@@ -152,7 +153,6 @@ export function useAiAssistant(conversationId: string | null) {
           }
         }
 
-        // Final flush
         if (textBuffer.trim()) {
           for (let raw of textBuffer.split("\n")) {
             if (!raw) continue;
@@ -171,17 +171,21 @@ export function useAiAssistant(conversationId: string | null) {
           }
         }
 
-        // Persist assistant message
         if (assistantSoFar) {
-          await supabase.from("ai_messages").insert({
-            conversation_id: convId,
-            role: "assistant",
-            content: assistantSoFar,
-          });
-          await supabase
-            .from("ai_conversations")
-            .update({ updated_at: new Date().toISOString() })
-            .eq("id", convId);
+          apiRequest("/api/ai-messages", {
+            method: "POST",
+            body: JSON.stringify({
+              conversation_id: convId,
+              role: "assistant",
+              content: assistantSoFar,
+            }),
+          }).catch(() => {});
+
+          apiRequest(`/api/conversations/${convId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ updated_at: new Date().toISOString() }),
+          }).catch(() => {});
+
           queryClient.invalidateQueries({ queryKey: ["ai-conversations"] });
         }
 

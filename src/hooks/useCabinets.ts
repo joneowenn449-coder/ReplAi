@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { apiRequest } from "@/lib/api";
 
 export interface WbCabinet {
   id: string;
@@ -20,12 +20,7 @@ export function useCabinets() {
   return useQuery({
     queryKey: ["wb_cabinets"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("wb_cabinets")
-        .select("*")
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return (data as unknown as WbCabinet[]) || [];
+      return apiRequest("/api/cabinets") as Promise<WbCabinet[]>;
     },
   });
 }
@@ -41,11 +36,10 @@ export function useSwitchCabinet() {
 
   return useMutation({
     mutationFn: async (cabinetId: string) => {
-      const { error } = await supabase
-        .from("wb_cabinets")
-        .update({ is_active: true } as Record<string, unknown>)
-        .eq("id", cabinetId);
-      if (error) throw error;
+      return apiRequest(`/api/cabinets/${cabinetId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: true }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });
@@ -61,16 +55,10 @@ export function useCreateCabinet() {
 
   return useMutation({
     mutationFn: async (name: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const { data, error } = await supabase
-        .from("wb_cabinets")
-        .insert([{ user_id: user.id, name, is_active: true }])
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return apiRequest("/api/cabinets", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });
@@ -89,11 +77,10 @@ export function useUpdateCabinet() {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<WbCabinet> }) => {
-      const { error } = await supabase
-        .from("wb_cabinets")
-        .update(updates as Record<string, unknown>)
-        .eq("id", id);
-      if (error) throw error;
+      return apiRequest(`/api/cabinets/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });
@@ -109,11 +96,7 @@ export function useDeleteCabinet() {
 
   return useMutation({
     mutationFn: async (cabinetId: string) => {
-      const { error } = await supabase
-        .from("wb_cabinets")
-        .delete()
-        .eq("id", cabinetId);
-      if (error) throw error;
+      return apiRequest(`/api/cabinets/${cabinetId}`, { method: "DELETE" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });

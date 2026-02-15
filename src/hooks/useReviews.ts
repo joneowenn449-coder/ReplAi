@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useActiveCabinet } from "./useCabinets";
+import { apiRequest } from "@/lib/api";
 
 export interface Review {
   id: string;
@@ -54,30 +54,7 @@ export function useReviews() {
   return useQuery({
     queryKey: ["reviews", cabinetId],
     queryFn: async () => {
-      const allReviews: Review[] = [];
-      const pageSize = 1000;
-      let from = 0;
-
-      while (true) {
-        let query = supabase
-          .from("reviews")
-          .select("*")
-          .order("created_date", { ascending: false })
-          .range(from, from + pageSize - 1);
-
-        if (cabinetId) {
-          query = query.eq("cabinet_id", cabinetId);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-        const rows = (data as unknown as Review[]) || [];
-        allReviews.push(...rows);
-        if (rows.length < pageSize) break;
-        from += pageSize;
-      }
-
-      return allReviews;
+      return apiRequest(`/api/reviews?cabinet_id=${cabinetId}`) as Promise<Review[]>;
     },
     enabled: !!cabinetId,
   });
@@ -87,13 +64,7 @@ export function useSettings() {
   return useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("settings")
-        .select("*")
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data as unknown as Settings | null;
+      return apiRequest("/api/settings") as Promise<Settings | null>;
     },
   });
 }
@@ -103,9 +74,7 @@ export function useSyncReviews() {
 
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("sync-reviews");
-      if (error) throw error;
-      return data;
+      return apiRequest("/api/functions/sync-reviews", { method: "POST" });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
@@ -135,11 +104,10 @@ export function useSendReply() {
       reviewId: string;
       answerText?: string;
     }) => {
-      const { data, error } = await supabase.functions.invoke("send-reply", {
-        body: { review_id: reviewId, answer_text: answerText },
+      return apiRequest("/api/functions/send-reply", {
+        method: "POST",
+        body: JSON.stringify({ review_id: reviewId, answer_text: answerText }),
       });
-      if (error) throw error;
-      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
@@ -162,14 +130,10 @@ export function useGenerateReply() {
 
   return useMutation({
     mutationFn: async (reviewId: string) => {
-      const { data, error } = await supabase.functions.invoke(
-        "generate-reply",
-        {
-          body: { review_id: reviewId },
-        }
-      );
-      if (error) throw error;
-      return data;
+      return apiRequest("/api/functions/generate-reply", {
+        method: "POST",
+        body: JSON.stringify({ review_id: reviewId }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
@@ -186,19 +150,10 @@ export function useUpdateSettings() {
 
   return useMutation({
     mutationFn: async (updates: Partial<Settings>) => {
-      const { data: existing } = await supabase
-        .from("settings")
-        .select("id")
-        .limit(1)
-        .maybeSingle();
-
-      if (!existing) throw new Error("Settings not found");
-
-      const { error } = await supabase
-        .from("settings")
-        .update(updates as Record<string, unknown>)
-        .eq("id", existing.id);
-      if (error) throw error;
+      return apiRequest("/api/settings", {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
@@ -214,11 +169,10 @@ export function useValidateApiKey() {
 
   return useMutation({
     mutationFn: async ({ apiKey, cabinetId }: { apiKey: string; cabinetId: string }) => {
-      const { data, error } = await supabase.functions.invoke(
-        "validate-api-key",
-        { body: { api_key: apiKey, cabinet_id: cabinetId } }
-      );
-      if (error) throw error;
+      const data = await apiRequest("/api/functions/validate-api-key", {
+        method: "POST",
+        body: JSON.stringify({ api_key: apiKey, cabinet_id: cabinetId }),
+      });
       if (!data?.valid) {
         throw new Error(data?.error || "Ключ не прошёл проверку");
       }
@@ -245,11 +199,10 @@ export function useDeleteApiKey() {
 
   return useMutation({
     mutationFn: async (cabinetId: string) => {
-      const { error } = await supabase
-        .from("wb_cabinets")
-        .update({ wb_api_key: null } as Record<string, unknown>)
-        .eq("id", cabinetId);
-      if (error) throw error;
+      return apiRequest(`/api/cabinets/${cabinetId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ wb_api_key: null }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });

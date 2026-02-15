@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useEffect } from "react";
 import { useActiveCabinet } from "./useCabinets";
+import { apiRequest } from "@/lib/api";
 
 export interface Chat {
   id: string;
@@ -31,42 +30,13 @@ export interface ChatMessage {
 }
 
 export function useChats() {
-  const queryClient = useQueryClient();
   const { data: activeCabinet } = useActiveCabinet();
   const cabinetId = activeCabinet?.id;
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("chats-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "chats" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["chats"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
 
   return useQuery({
     queryKey: ["chats", cabinetId],
     queryFn: async () => {
-      let query = supabase
-        .from("chats")
-        .select("*")
-        .order("last_message_at", { ascending: false, nullsFirst: false });
-
-      if (cabinetId) {
-        query = query.eq("cabinet_id", cabinetId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data as unknown as Chat[]) || [];
+      return apiRequest(`/api/chats?cabinet_id=${cabinetId}`) as Promise<Chat[]>;
     },
     enabled: !!cabinetId,
     refetchInterval: 30_000,
@@ -74,43 +44,11 @@ export function useChats() {
 }
 
 export function useChatMessages(chatId: string | null) {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (!chatId) return;
-
-    const channel = supabase
-      .channel(`chat-messages-${chatId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_messages",
-          filter: `chat_id=eq.${chatId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["chat_messages", chatId] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [chatId, queryClient]);
-
   return useQuery({
     queryKey: ["chat_messages", chatId],
     queryFn: async () => {
       if (!chatId) return [];
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("chat_id", chatId)
-        .order("sent_at", { ascending: true });
-      if (error) throw error;
-      const messages = (data as unknown as ChatMessage[]) || [];
+      const messages = await apiRequest(`/api/chat-messages?chat_id=${chatId}`) as ChatMessage[];
       return messages.filter((msg, index, arr) => {
         if (index === 0) return true;
         return !arr.slice(0, index).some(
@@ -123,6 +61,7 @@ export function useChatMessages(chatId: string | null) {
       });
     },
     enabled: !!chatId,
+    refetchInterval: 10_000,
   });
 }
 
@@ -131,9 +70,7 @@ export function useSyncChats() {
 
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("sync-chats");
-      if (error) throw error;
-      return data;
+      return apiRequest("/api/functions/sync-chats", { method: "POST" });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["chats"] });
@@ -153,11 +90,7 @@ export function useMarkChatRead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (chatId: string) => {
-      const { error } = await supabase
-        .from("chats")
-        .update({ is_read: true })
-        .eq("chat_id", chatId);
-      if (error) throw error;
+      return apiRequest(`/api/chats/${chatId}/read`, { method: "PATCH" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chats"] });
@@ -176,14 +109,10 @@ export function useSendChatMessage() {
       chatId: string;
       message: string;
     }) => {
-      const { data, error } = await supabase.functions.invoke(
-        "send-chat-message",
-        {
-          body: { chat_id: chatId, message },
-        }
-      );
-      if (error) throw error;
-      return data;
+      return apiRequest("/api/functions/send-chat-message", {
+        method: "POST",
+        body: JSON.stringify({ chat_id: chatId, message }),
+      });
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["chat_messages", variables.chatId] });

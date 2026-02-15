@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { objectsToCsv, downloadCsv } from "@/lib/exportCsv";
-import { fetchAllRows } from "@/lib/fetchAllRows";
+import { apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 
 export function useExportData() {
@@ -11,13 +11,13 @@ export function useExportData() {
     try {
       const [reviews, chats, chatMessages, recommendations, cabinets, tokenBalances, profiles] =
         await Promise.all([
-          fetchAllRows("reviews", "wb_id,rating,author_name,text,pros,cons,product_name,product_article,status,ai_draft,sent_answer,created_date"),
-          fetchAllRows("chats", "chat_id,client_name,product_name,last_message_text,last_message_at,is_read"),
-          fetchAllRows("chat_messages", "chat_id,sender,text,sent_at"),
-          fetchAllRows("product_recommendations", "source_article,target_article,target_name"),
-          fetchAllRows("wb_cabinets", "id,name,brand_name,wb_api_key,ai_prompt_template,reply_modes,is_active,last_sync_at"),
-          fetchAllRows("token_balances", "user_id,balance,updated_at"),
-          fetchAllRows("profiles", "id,display_name,phone,created_at"),
+          apiRequest("/api/export/reviews"),
+          apiRequest("/api/export/chats"),
+          apiRequest("/api/export/chat_messages"),
+          apiRequest("/api/export/product_recommendations"),
+          apiRequest("/api/export/wb_cabinets"),
+          apiRequest("/api/export/token_balances"),
+          apiRequest("/api/export/profiles"),
         ]);
 
       const files = [

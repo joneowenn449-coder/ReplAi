@@ -56,15 +56,15 @@ async function sendSettingsMenu(chatId: string, cabinetId: string, messageId?: n
     const keyboard: TelegramBot.InlineKeyboardButton[][] = [
       [{ text: "\uD83D\uDD14 \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F:", callback_data: "noop" }],
       [
-        { text: `${checkN("all")}\u0412\u0441\u0435 \u043E\u0442\u0437\u044B\u0432\u044B`, callback_data: `notify_all_${cabinetId}` },
-        { text: `${checkN("negative")}\u041D\u0435\u0433\u0430\u0442\u0438\u0432 (1-3)`, callback_data: `notify_neg_${cabinetId}` },
-        { text: `${checkN("questions")}\u0422\u043E\u043B\u044C\u043A\u043E \u0432\u043E\u043F\u0440\u043E\u0441\u044B`, callback_data: `notify_questions_${cabinetId}` },
+        { text: `${checkN("all")}\u0412\u0441\u0435`, callback_data: `notify_all_${cabinetId}` },
+        { text: `${checkN("negative")}\u041D\u0435\u0433\u0430\u0442\u0438\u0432`, callback_data: `notify_neg_${cabinetId}` },
+        { text: `${checkN("questions")}\u0412\u043E\u043F\u0440\u043E\u0441\u044B`, callback_data: `notify_questions_${cabinetId}` },
       ],
       [{ text: "\uD83D\uDCDD \u0420\u0435\u0436\u0438\u043C \u043E\u0442\u0432\u0435\u0442\u043E\u0432:", callback_data: "noop" }],
       [
-        { text: `${checkM("manual")}\u0420\u0443\u0447\u043D\u043E\u0439 \u043A\u043E\u043D\u0442\u0440\u043E\u043B\u044C`, callback_data: `mode_manual_${cabinetId}` },
-        { text: `${checkM("auto")}\u0410\u0432\u0442\u043E\u043F\u0438\u043B\u043E\u0442 (AI)`, callback_data: `mode_auto_${cabinetId}` },
-        { text: `${checkM("drafts")}\u0427\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0438`, callback_data: `mode_drafts_${cabinetId}` },
+        { text: `${checkM("manual")}\u0420\u0443\u0447\u043D\u043E\u0439`, callback_data: `mode_manual_${cabinetId}` },
+        { text: `${checkM("auto")}\u0410\u0432\u0442\u043E (AI)`, callback_data: `mode_auto_${cabinetId}` },
+        { text: `${checkM("drafts")}\u0427\u0435\u0440\u043D\u043E\u0432\u0438\u043A`, callback_data: `mode_drafts_${cabinetId}` },
       ],
       [{ text: "\u2705 \u0413\u043E\u0442\u043E\u0432\u043E", callback_data: `settings_done_${cabinetId}` }],
     ];

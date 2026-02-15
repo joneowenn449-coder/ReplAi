@@ -1,0 +1,48 @@
+modules = ["nodejs-20", "web"]
+[agent]
+expertMode = true
+integrations = ["javascript_database:1.0.0"]
+
+[nix]
+channel = "stable-25_05"
+
+[deployment]
+deploymentTarget = "static"
+run = ["node", "./dist/index.cjs"]
+build = ["npx", "vite", "build"]
+publicDir = "dist"
+
+[userenv]
+
+[userenv.shared]
+VITE_SUPABASE_PROJECT_ID = "yzlrebnfslyvqscjmmwh"
+VITE_SUPABASE_URL = "https://yzlrebnfslyvqscjmmwh.supabase.co"
+VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bHJlYm5mc2x5dnFzY2ptbXdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNjgwMTAsImV4cCI6MjA4NTk0NDAxMH0.Ys-lY7wZ9EN82hkmzZXwcrREXHlmUzL4wxHXPRLM-6o"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vite --host 0.0.0.0 --port 5000"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80

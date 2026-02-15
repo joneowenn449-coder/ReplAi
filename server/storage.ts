@@ -4,6 +4,7 @@ import {
   reviews, chats, chatMessages, wbCabinets, settings, profiles,
   tokenBalances, aiRequestBalances, tokenTransactions, aiRequestTransactions,
   userRoles, aiConversations, aiMessages, productRecommendations, payments,
+  globalSettings,
   type Review, type InsertReview,
   type Chat, type InsertChat,
   type ChatMessage, type InsertChatMessage,
@@ -17,6 +18,7 @@ import {
   type AiMessage, type InsertAiMessage,
   type ProductRecommendation, type InsertProductRecommendation,
   type Payment, type InsertPayment,
+  type GlobalSetting,
 } from "@shared/schema";
 
 export class DatabaseStorage {
@@ -562,6 +564,25 @@ export class DatabaseStorage {
     const tbl = tableMap[table];
     if (!tbl) return [];
     return db.select().from(tbl);
+  }
+
+  async getGlobalSetting(key: string): Promise<string | null> {
+    const rows = await db.select().from(globalSettings).where(eq(globalSettings.key, key)).limit(1);
+    return rows[0]?.value ?? null;
+  }
+
+  async getAllGlobalSettings(): Promise<GlobalSetting[]> {
+    return db.select().from(globalSettings);
+  }
+
+  async upsertGlobalSetting(key: string, value: string): Promise<void> {
+    await db
+      .insert(globalSettings)
+      .values({ key, value, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: globalSettings.key,
+        set: { value, updatedAt: new Date() },
+      });
   }
 }
 

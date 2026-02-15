@@ -14,6 +14,17 @@ const REFUSAL_KEYWORDS = [
   "выбрал другой", "выбрала другую", "выбрала другой",
 ];
 
+function buildFullPrompt(basePrompt: string, examples: string | null, rules: string | null): string {
+  let prompt = basePrompt;
+  if (rules && rules.trim()) {
+    prompt += `\n\nПРАВИЛА:\n${rules.trim()}`;
+  }
+  if (examples && examples.trim()) {
+    prompt += `\n\nПРИМЕРЫ ХОРОШИХ ОТВЕТОВ:\n${examples.trim()}`;
+  }
+  return prompt;
+}
+
 function detectRefusal(text?: string | null, pros?: string | null, cons?: string | null): boolean {
   const combined = [text, pros, cons].filter(Boolean).join(" ").toLowerCase();
   return REFUSAL_KEYWORDS.some((kw) => combined.includes(kw));
@@ -161,8 +172,12 @@ async function processCabinetReviews(
   const replyModes = (cabinetModes && Object.keys(cabinetModes).length > 0) ? cabinetModes : defaultModes;
 
   let currentBalance = await storage.getTokenBalance(userId);
-  const promptTemplate = cabinet.aiPromptTemplate ||
+  const globalPrompt = await storage.getGlobalSetting("default_prompt");
+  const globalExamples = await storage.getGlobalSetting("response_examples");
+  const globalRules = await storage.getGlobalSetting("rules");
+  const basePrompt = cabinet.aiPromptTemplate || globalPrompt ||
     "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
+  const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules);
 
   console.log(`[sync-reviews] cabinet=${cabinetId} replyModes=${JSON.stringify(replyModes)} balance=${currentBalance}`);
 
@@ -655,22 +670,27 @@ export async function generateReply(req: Request, res: Response) {
       return;
     }
 
-    let promptTemplate = "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
+    const globalPrompt = await storage.getGlobalSetting("default_prompt");
+    const globalExamples = await storage.getGlobalSetting("response_examples");
+    const globalRules = await storage.getGlobalSetting("rules");
+    let basePrompt = globalPrompt || "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
     let cabinetBrand = "";
 
     if (review.cabinetId) {
       const cabinet = await storage.getCabinetById(review.cabinetId);
       if (cabinet) {
-        promptTemplate = cabinet.aiPromptTemplate || promptTemplate;
+        basePrompt = cabinet.aiPromptTemplate || basePrompt;
         cabinetBrand = cabinet.brandName || "";
       }
     } else {
       const userSettings = await storage.getSettings(userId);
       if (userSettings) {
-        promptTemplate = userSettings.aiPromptTemplate || promptTemplate;
+        basePrompt = userSettings.aiPromptTemplate || basePrompt;
         cabinetBrand = userSettings.brandName || "";
       }
     }
+
+    const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules);
 
     let recommendationInstruction = "";
     if (review.productArticle && review.cabinetId) {

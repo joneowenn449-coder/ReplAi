@@ -148,6 +148,13 @@ export const tokenTransactions = replaiSchema.table("token_transactions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const globalSettings = replaiSchema.table("global_settings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").default(""),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const userRoles = replaiSchema.table("user_roles", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
@@ -181,6 +188,7 @@ export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, f
 export const insertSettingSchema = createInsertSchema(settings).omit({ id: true });
 export const insertTokenBalanceSchema = createInsertSchema(tokenBalances).omit({ id: true, updatedAt: true });
 export const insertTokenTransactionSchema = createInsertSchema(tokenTransactions).omit({ id: true, createdAt: true });
+export const insertGlobalSettingSchema = createInsertSchema(globalSettings).omit({ id: true, updatedAt: true });
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true });
 export const insertWbCabinetSchema = createInsertSchema(wbCabinets).omit({ id: true, createdAt: true, updatedAt: true });
 
@@ -210,6 +218,8 @@ export type TokenBalance = typeof tokenBalances.$inferSelect;
 export type InsertTokenBalance = z.infer<typeof insertTokenBalanceSchema>;
 export type TokenTransaction = typeof tokenTransactions.$inferSelect;
 export type InsertTokenTransaction = z.infer<typeof insertTokenTransactionSchema>;
+export type GlobalSetting = typeof globalSettings.$inferSelect;
+export type InsertGlobalSetting = z.infer<typeof insertGlobalSettingSchema>;
 export type UserRole = typeof userRoles.$inferSelect;
 export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
 export type WbCabinet = typeof wbCabinets.$inferSelect;

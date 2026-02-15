@@ -422,6 +422,47 @@ router.get("/api/admin/role", requireAuth, async (req: Request, res: Response) =
   }
 });
 
+router.get("/api/admin/global-settings", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const role = await storage.getUserRole(userId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Admin access required" });
+      return;
+    }
+    const data = await storage.getAllGlobalSettings();
+    const result: Record<string, string> = {};
+    for (const row of data) {
+      result[row.key] = row.value || "";
+    }
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/api/admin/global-settings", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const role = await storage.getUserRole(userId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Admin access required" });
+      return;
+    }
+    const { settings: settingsData } = req.body;
+    if (!settingsData || typeof settingsData !== "object") {
+      res.status(400).json({ error: "Invalid settings data" });
+      return;
+    }
+    for (const [key, value] of Object.entries(settingsData)) {
+      await storage.upsertGlobalSetting(key, String(value));
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get("/api/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;

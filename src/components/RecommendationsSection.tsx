@@ -34,6 +34,7 @@ export const RecommendationsSection = () => {
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [sectionOpen, setSectionOpen] = useState(true);
 
   const { data: activeCabinet } = useActiveCabinet();
   const cabinetId = activeCabinet?.id;
@@ -127,17 +128,33 @@ export const RecommendationsSection = () => {
   };
 
   return (
-    <div className="space-y-4" data-testid="section-recommendations">
-      <div className="flex items-center gap-2">
-        <Package className="w-4 h-4 text-muted-foreground" />
-        <label className="text-sm font-medium text-foreground">
-          Рекомендации товаров
-        </label>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        При ответе на положительный отзыв (4-5 звезд) ИИ ненавязчиво предложит
-        покупателю посмотреть рекомендованные товары.
-      </p>
+    <Collapsible open={sectionOpen} onOpenChange={setSectionOpen}>
+      <div className="space-y-4" data-testid="section-recommendations">
+        <CollapsibleTrigger asChild>
+          <div className="flex items-center gap-2 cursor-pointer hover-elevate rounded-md py-1 px-1 -mx-1" data-testid="trigger-section-recommendations">
+            <ChevronRight
+              className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                sectionOpen ? "rotate-90" : ""
+              }`}
+            />
+            <Package className="w-4 h-4 text-muted-foreground" />
+            <label className="text-sm font-medium text-foreground cursor-pointer">
+              Рекомендации товаров
+            </label>
+            {!sectionOpen && groups.length > 0 && (
+              <Badge variant="secondary" className="ml-1 no-default-active-elevate" data-testid="badge-recommendations-count">
+                {groups.length}
+              </Badge>
+            )}
+          </div>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <div className="space-y-4 pt-1">
+            <p className="text-xs text-muted-foreground">
+              При ответе на положительный отзыв (4-5 звезд) ИИ ненавязчиво предложит
+              покупателю посмотреть рекомендованные товары.
+            </p>
 
       {groupsLoading ? (
         <div className="flex items-center justify-center py-6">
@@ -345,6 +362,9 @@ export const RecommendationsSection = () => {
           </Button>
         </div>
       </Card>
-    </div>
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 };

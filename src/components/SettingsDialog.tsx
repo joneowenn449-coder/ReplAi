@@ -30,14 +30,13 @@ import {
 import { useActiveCabinet, useUpdateCabinet, useDeleteCabinet } from "@/hooks/useCabinets";
 import type { WbCabinet } from "@/hooks/useCabinets";
 import { toast } from "sonner";
-import { Check, Pencil, Trash2, Loader2, KeyRound, Star, Download, ChevronRight } from "lucide-react";
+import { Check, Pencil, Trash2, Loader2, KeyRound, Star, ChevronRight } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { RecommendationsSection } from "@/components/RecommendationsSection";
-import { useExportData } from "@/hooks/useExportData";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -55,7 +54,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   const validateApiKey = useValidateApiKey();
   const deleteApiKey = useDeleteApiKey();
   const deleteCabinet = useDeleteCabinet();
-  const { exportAll, isExporting } = useExportData();
+
   const [prompt, setPrompt] = useState("");
   const [brandName, setBrandName] = useState("");
   const [cabinetName, setCabinetName] = useState("");
@@ -363,34 +362,6 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
             <p className="text-xs text-muted-foreground">
               Это описание тона и правил — основа для всех ответов ИИ на отзывы. Всё, что ты напишешь здесь, будет учтено при формировании ответов.
             </p>
-          </div>
-
-          {/* Export Data Section */}
-          <div className="space-y-2 pt-2 border-t border-border">
-            <label className="text-sm font-medium text-foreground block">
-              📦 Экспорт данных
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Скачать все данные (отзывы, чаты, сообщения, рекомендации, настройки) в CSV-файлах.
-            </p>
-            <Button
-              variant="outline"
-              onClick={exportAll}
-              disabled={isExporting}
-              className="w-full"
-            >
-              {isExporting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Подготовка файлов...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4 mr-2" />
-                  Скачать все данные (CSV)
-                </>
-              )}
-            </Button>
           </div>
         </div>
 

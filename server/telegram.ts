@@ -3,52 +3,13 @@ import { storage } from "./storage";
 
 let bot: TelegramBot | null = null;
 
+const APP_DOMAIN = "https://58f5cc99-55a6-439f-8709-d2675af5ea53-00-29unzgn58b4yj.picard.replit.dev";
+const WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru";
+
+const pendingEdits = new Map<string, string>();
+
 export function getTelegramBot(): TelegramBot | null {
   return bot;
-}
-
-export async function sendAutoReplyNotification(cabinetId: string, review: { userName: string; rating: number; text: string; productName: string }, answer: string) {
-  if (!bot) return;
-  try {
-    const cabinet = await storage.getCabinetById(cabinetId);
-    if (!cabinet?.telegramChatId) return;
-    const stars = "\u2B50".repeat(review.rating);
-    const msg = `\u2705 *\u0410\u0432\u0442\u043E-\u043E\u0442\u0432\u0435\u0442 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D*\n\n` +
-      `\uD83D\uDCE6 ${escapeMarkdown(review.productName || "")}\n` +
-      `${stars} \u043E\u0442 ${escapeMarkdown(review.userName || "\u041F\u043E\u043A\u0443\u043F\u0430\u0442\u0435\u043B\u044C")}\n` +
-      `\uD83D\uDCAC _${escapeMarkdown(truncate(review.text || "", 200))}_\n\n` +
-      `\uD83D\uDCDD *\u041E\u0442\u0432\u0435\u0442:*\n${escapeMarkdown(truncate(answer, 500))}`;
-    await bot.sendMessage(cabinet.telegramChatId, msg, { parse_mode: "Markdown" });
-  } catch (err) {
-    console.error("[telegram] Error sending auto-reply notification:", err);
-  }
-}
-
-export async function sendManualReviewForApproval(cabinetId: string, reviewId: string, review: { userName: string; rating: number; text: string; productName: string }, aiDraft: string) {
-  if (!bot) return;
-  try {
-    const cabinet = await storage.getCabinetById(cabinetId);
-    if (!cabinet?.telegramChatId) return;
-    const stars = "\u2B50".repeat(review.rating);
-    const msg = `\uD83D\uDD14 *\u041D\u043E\u0432\u044B\u0439 \u043E\u0442\u0437\u044B\u0432 (\u0440\u0443\u0447\u043D\u043E\u0439 \u0440\u0435\u0436\u0438\u043C)*\n\n` +
-      `\uD83D\uDCE6 ${escapeMarkdown(review.productName || "")}\n` +
-      `${stars} \u043E\u0442 ${escapeMarkdown(review.userName || "\u041F\u043E\u043A\u0443\u043F\u0430\u0442\u0435\u043B\u044C")}\n` +
-      `\uD83D\uDCAC _${escapeMarkdown(truncate(review.text || "", 300))}_\n\n` +
-      `\uD83D\uDCDD *\u0427\u0435\u0440\u043D\u043E\u0432\u0438\u043A \u0418\u0418:*\n${escapeMarkdown(truncate(aiDraft, 500))}`;
-    await bot.sendMessage(cabinet.telegramChatId, msg, {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: "\u2705 \u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C", callback_data: `send_${reviewId}` },
-            { text: "\uD83D\uDD04 \u041F\u0435\u0440\u0435\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u043E\u0432\u0430\u0442\u044C", callback_data: `regen_${reviewId}` },
-          ],
-        ],
-      },
-    });
-  } catch (err) {
-    console.error("[telegram] Error sending manual review:", err);
-  }
 }
 
 function escapeMarkdown(text: string): string {
@@ -60,7 +21,194 @@ function truncate(text: string, maxLen: number): string {
   return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
 }
 
-const WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru";
+function ratingStars(rating: number): string {
+  const filled = Math.min(Math.max(rating, 0), 5);
+  return "\u2B50".repeat(filled) + "\u2606".repeat(5 - filled);
+}
+
+function ratingEmoji(rating: number): string {
+  if (rating <= 2) return "\uD83D\uDD34";
+  if (rating === 3) return "\uD83D\uDFE1";
+  return "\uD83D\uDFE2";
+}
+
+export function shouldNotify(cabinet: any, rating: number, reviewText: string | null): boolean {
+  const notifyType = cabinet.tgNotifyType || "all";
+  switch (notifyType) {
+    case "all": return true;
+    case "negative": return rating <= 3;
+    case "questions": return (reviewText || "").includes("?");
+    default: return true;
+  }
+}
+
+async function sendSettingsMenu(chatId: string, cabinetId: string, messageId?: number) {
+  try {
+    const cabinet = await storage.getCabinetById(cabinetId);
+    if (!cabinet || !bot) return;
+
+    const notifyType = cabinet.tgNotifyType || "all";
+    const replyMode = cabinet.tgReplyMode || "manual";
+
+    const checkN = (type: string) => notifyType === type ? "\u2705 " : "";
+    const checkM = (type: string) => replyMode === type ? "\u2705 " : "";
+
+    const keyboard: TelegramBot.InlineKeyboardButton[][] = [
+      [{ text: "\uD83D\uDD14 \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F:", callback_data: "noop" }],
+      [
+        { text: `${checkN("all")}\u0412\u0441\u0435 \u043E\u0442\u0437\u044B\u0432\u044B`, callback_data: `notify_all_${cabinetId}` },
+        { text: `${checkN("negative")}\u041D\u0435\u0433\u0430\u0442\u0438\u0432 (1-3)`, callback_data: `notify_neg_${cabinetId}` },
+        { text: `${checkN("questions")}\u0422\u043E\u043B\u044C\u043A\u043E \u0432\u043E\u043F\u0440\u043E\u0441\u044B`, callback_data: `notify_questions_${cabinetId}` },
+      ],
+      [{ text: "\uD83D\uDCDD \u0420\u0435\u0436\u0438\u043C \u043E\u0442\u0432\u0435\u0442\u043E\u0432:", callback_data: "noop" }],
+      [
+        { text: `${checkM("manual")}\u0420\u0443\u0447\u043D\u043E\u0439 \u043A\u043E\u043D\u0442\u0440\u043E\u043B\u044C`, callback_data: `mode_manual_${cabinetId}` },
+        { text: `${checkM("auto")}\u0410\u0432\u0442\u043E\u043F\u0438\u043B\u043E\u0442 (AI)`, callback_data: `mode_auto_${cabinetId}` },
+        { text: `${checkM("drafts")}\u0427\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0438`, callback_data: `mode_drafts_${cabinetId}` },
+      ],
+      [{ text: "\u2705 \u0413\u043E\u0442\u043E\u0432\u043E", callback_data: `settings_done_${cabinetId}` }],
+    ];
+
+    const text = "\u2699\uFE0F \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F \u0434\u043B\u044F \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u0430:";
+
+    if (messageId) {
+      await bot.editMessageText(text, {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: { inline_keyboard: keyboard },
+      });
+    } else {
+      await bot.sendMessage(chatId, text, {
+        reply_markup: { inline_keyboard: keyboard },
+      });
+    }
+  } catch (err) {
+    console.error("[telegram] Error sending settings menu:", err);
+  }
+}
+
+export async function sendNewReviewNotification(
+  cabinetId: string,
+  reviewId: string,
+  reviewData: {
+    userName: string;
+    rating: number;
+    text: string;
+    pros: string | null;
+    cons: string | null;
+    productName: string;
+    productArticle: string;
+    photoLinks: any[] | null;
+    aiInsight: string | null;
+  }
+) {
+  if (!bot) return;
+  try {
+    const cabinet = await storage.getCabinetById(cabinetId);
+    if (!cabinet?.telegramChatId) return;
+
+    if (!shouldNotify(cabinet, reviewData.rating, reviewData.text)) return;
+
+    const emoji = ratingEmoji(reviewData.rating);
+    const stars = ratingStars(reviewData.rating);
+
+    let msg = `${emoji} *\u041D\u041E\u0412\u042B\u0419 \u041E\u0422\u0417\u042B\u0412* (${reviewData.rating}/5) | \u0410\u0440\u0442\u0438\u043A\u0443\u043B: ${escapeMarkdown(reviewData.productArticle)}\n\n`;
+    msg += `\uD83D\uDCE6 ${escapeMarkdown(reviewData.productName)}\n`;
+    msg += `\u041E\u0442: ${escapeMarkdown(reviewData.userName)}\n`;
+
+    if (reviewData.text) {
+      msg += `\n\uD83D\uDCAC \u0422\u0435\u043A\u0441\u0442: \u00AB${escapeMarkdown(truncate(reviewData.text, 300))}\u00BB\n`;
+    }
+
+    if (reviewData.pros) {
+      msg += `\n\uD83D\uDC4D \u0414\u043E\u0441\u0442\u043E\u0438\u043D\u0441\u0442\u0432\u0430: ${escapeMarkdown(truncate(reviewData.pros, 200))}`;
+    }
+    if (reviewData.cons) {
+      msg += `\n\uD83D\uDC4E \u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043A\u0438: ${escapeMarkdown(truncate(reviewData.cons, 200))}`;
+    }
+
+    if (reviewData.aiInsight) {
+      msg += `\n\n\uD83E\uDD16 \u0418\u043D\u0441\u0430\u0439\u0442 AI: \u00AB${escapeMarkdown(truncate(reviewData.aiInsight, 200))}\u00BB`;
+    }
+
+    const keyboard: TelegramBot.InlineKeyboardButton[][] = [
+      [
+        { text: "\uD83E\uDD16 \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u043E\u0442\u0432\u0435\u0442", callback_data: `gen_${reviewId}` },
+      ],
+      [
+        { text: "\uD83D\uDCAC \u0427\u0430\u0442 \u0441 \u043F\u043E\u043A\u0443\u043F\u0430\u0442\u0435\u043B\u0435\u043C", url: `${APP_DOMAIN}/chats` },
+      ],
+    ];
+
+    const photos = Array.isArray(reviewData.photoLinks) ? reviewData.photoLinks : [];
+    const firstPhotoUrl = photos.length > 0
+      ? (typeof photos[0] === "string" ? photos[0] : (photos[0]?.miniSize || photos[0]?.fullSize || null))
+      : null;
+
+    if (firstPhotoUrl) {
+      await bot.sendPhoto(cabinet.telegramChatId, firstPhotoUrl, {
+        caption: msg,
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: keyboard },
+      });
+    } else {
+      await bot.sendMessage(cabinet.telegramChatId, msg, {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: keyboard },
+      });
+    }
+  } catch (err) {
+    console.error("[telegram] Error sending new review notification:", err);
+  }
+}
+
+export async function sendAutoReplyNotification(
+  cabinetId: string,
+  review: { userName: string; rating: number; text: string; productName: string; productArticle?: string },
+  answer: string
+) {
+  if (!bot) return;
+  try {
+    const cabinet = await storage.getCabinetById(cabinetId);
+    if (!cabinet?.telegramChatId) return;
+
+    if (!shouldNotify(cabinet, review.rating, review.text)) return;
+
+    const emoji = ratingEmoji(review.rating);
+    const msg = `\u2705 *\u0410\u0432\u0442\u043E\\-\u043E\u0442\u0432\u0435\u0442 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D*\n\n` +
+      `${emoji} (${review.rating}/5) | \u0410\u0440\u0442: ${escapeMarkdown(review.productArticle || "")}\n` +
+      `\uD83D\uDCE6 ${escapeMarkdown(review.productName || "")}\n` +
+      `\uD83D\uDCAC \u00AB${escapeMarkdown(truncate(review.text || "", 200))}\u00BB\n\n` +
+      `\uD83D\uDCDD *\u041E\u0442\u0432\u0435\u0442:* ${escapeMarkdown(truncate(answer, 500))}`;
+    await bot.sendMessage(cabinet.telegramChatId, msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    console.error("[telegram] Error sending auto-reply notification:", err);
+  }
+}
+
+function buildDraftMessage(review: any, draft: string): string {
+  const emoji = ratingEmoji(review.rating || 0);
+  let msg = `${emoji} *\u041E\u0442\u0437\u044B\u0432* (${review.rating || 0}/5) | \u0410\u0440\u0442: ${escapeMarkdown(review.productArticle || "")}\n`;
+  msg += `\uD83D\uDCE6 ${escapeMarkdown(review.productName || "")}\n`;
+  msg += `\u041E\u0442: ${escapeMarkdown(review.authorName || "\u041F\u043E\u043A\u0443\u043F\u0430\u0442\u0435\u043B\u044C")}\n`;
+  if (review.text) {
+    msg += `\uD83D\uDCAC \u00AB${escapeMarkdown(truncate(review.text, 200))}\u00BB\n`;
+  }
+  msg += `\n\uD83D\uDCDD *\u0427\u0435\u0440\u043D\u043E\u0432\u0438\u043A AI:*\n${escapeMarkdown(truncate(draft, 500))}`;
+  return msg;
+}
+
+function draftKeyboard(reviewId: string): TelegramBot.InlineKeyboardButton[][] {
+  return [
+    [
+      { text: "\u2705 \u041E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u0442\u044C", callback_data: `pub_${reviewId}` },
+      { text: "\u270F\uFE0F \u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C", callback_data: `edit_${reviewId}` },
+    ],
+    [
+      { text: "\uD83D\uDD04 \u041F\u0435\u0440\u0435\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u043E\u0432\u0430\u0442\u044C", callback_data: `regen_${reviewId}` },
+    ],
+  ];
+}
 
 export function startTelegramBot() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -102,11 +250,52 @@ export function startTelegramBot() {
 
       await bot!.sendMessage(
         chatId,
-        `\u2705 \u0423\u0441\u043F\u0435\u0448\u043D\u043E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E!\n\n\u041A\u0430\u0431\u0438\u043D\u0435\u0442: ${cabinetName}\n\n\u0422\u0435\u043F\u0435\u0440\u044C \u0432\u044B \u0431\u0443\u0434\u0435\u0442\u0435 \u043F\u043E\u043B\u0443\u0447\u0430\u0442\u044C \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F \u043E\u0431 \u043E\u0442\u0432\u0435\u0442\u0430\u0445 \u043D\u0430 \u043E\u0442\u0437\u044B\u0432\u044B. \u0414\u043B\u044F \u043E\u0442\u0437\u044B\u0432\u043E\u0432 \u0432 \u0440\u0443\u0447\u043D\u043E\u043C \u0440\u0435\u0436\u0438\u043C\u0435 \u0432\u044B \u0441\u043C\u043E\u0436\u0435\u0442\u0435 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u0438 \u043F\u0435\u0440\u0435\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u043E\u0442\u0432\u0435\u0442\u044B \u043F\u0440\u044F\u043C\u043E \u0437\u0434\u0435\u0441\u044C.`
+        `\u2705 \u0423\u0441\u043F\u0435\u0448\u043D\u043E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E!\n\n\u041A\u0430\u0431\u0438\u043D\u0435\u0442: ${cabinetName}\n\n\u0422\u0435\u043F\u0435\u0440\u044C \u0432\u044B \u0431\u0443\u0434\u0435\u0442\u0435 \u043F\u043E\u043B\u0443\u0447\u0430\u0442\u044C \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F \u043E\u0431 \u043E\u0442\u0437\u044B\u0432\u0430\u0445.`
       );
+
+      await sendSettingsMenu(chatId, result.cabinetId);
     } catch (err) {
       console.error("[telegram] Error handling /start:", err);
       await bot!.sendMessage(chatId, "\u041F\u0440\u043E\u0438\u0437\u043E\u0448\u043B\u0430 \u043E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0438. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u043F\u043E\u0437\u0436\u0435.");
+    }
+  });
+
+  bot.onText(/\/settings/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    try {
+      const cabinet = await storage.getCabinetByTelegramChatId(chatId);
+      if (!cabinet) {
+        await bot!.sendMessage(chatId, "\u041A\u0430\u0431\u0438\u043D\u0435\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0431\u043E\u0442\u0430 \u0447\u0435\u0440\u0435\u0437 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u0430 \u043D\u0430 \u0441\u0430\u0439\u0442\u0435.");
+        return;
+      }
+      await sendSettingsMenu(chatId, cabinet.id);
+    } catch (err) {
+      console.error("[telegram] Error handling /settings:", err);
+    }
+  });
+
+  bot.on("message", async (msg) => {
+    if (!msg.text || msg.text.startsWith("/")) return;
+    const chatId = String(msg.chat.id);
+
+    const reviewId = pendingEdits.get(chatId);
+    if (!reviewId) return;
+
+    try {
+      pendingEdits.delete(chatId);
+      const newText = msg.text;
+
+      await storage.updateReview(reviewId, { aiDraft: newText, status: "pending" });
+      const review = await storage.getReviewById(reviewId);
+      if (!review) return;
+
+      const draftMsg = buildDraftMessage(review, newText);
+      await bot!.sendMessage(chatId, draftMsg, {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: draftKeyboard(reviewId) },
+      });
+    } catch (err) {
+      console.error("[telegram] Error handling edit text:", err);
     }
   });
 
@@ -114,15 +303,90 @@ export function startTelegramBot() {
     if (!query.data || !query.message) return;
     const chatId = String(query.message.chat.id);
     const messageId = query.message.message_id;
+    const isPhotoMessage = !!(query.message as any).photo;
 
     try {
-      if (query.data.startsWith("send_")) {
-        const reviewId = query.data.replace("send_", "");
+      if (query.data === "noop") {
+        await bot!.answerCallbackQuery(query.id);
+        return;
+      }
+
+      if (query.data.startsWith("notify_")) {
+        const parts = query.data.split("_");
+        const typeKey = parts[1];
+        const cabinetId = parts.slice(2).join("_");
+
+        const typeMap: Record<string, string> = { all: "all", neg: "negative", questions: "questions" };
+        const newType = typeMap[typeKey] || "all";
+
+        await storage.updateCabinet(cabinetId, { tgNotifyType: newType } as any);
+        await sendSettingsMenu(chatId, cabinetId, messageId);
+        await bot!.answerCallbackQuery(query.id);
+        return;
+      }
+
+      if (query.data.startsWith("mode_")) {
+        const parts = query.data.split("_");
+        const modeKey = parts[1];
+        const cabinetId = parts.slice(2).join("_");
+
+        const modeMap: Record<string, string> = { manual: "manual", auto: "auto", drafts: "drafts" };
+        const newMode = modeMap[modeKey] || "manual";
+
+        await storage.updateCabinet(cabinetId, { tgReplyMode: newMode } as any);
+        await sendSettingsMenu(chatId, cabinetId, messageId);
+        await bot!.answerCallbackQuery(query.id);
+        return;
+      }
+
+      if (query.data.startsWith("settings_done_")) {
+        await bot!.editMessageText("\u2705 \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B!", {
+          chat_id: chatId,
+          message_id: messageId,
+        });
+        await bot!.answerCallbackQuery(query.id);
+        return;
+      }
+
+      if (query.data.startsWith("gen_")) {
+        const reviewId = query.data.replace("gen_", "");
+        await bot!.answerCallbackQuery(query.id, { text: "\u0413\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u044F \u043E\u0442\u0432\u0435\u0442\u0430..." });
+
+        const review = await storage.getReviewById(reviewId);
+        if (!review) return;
+
         const cabinets = await storage.getCabinetsByTelegramChatId(chatId);
-        if (cabinets.length === 0) {
-          await bot!.answerCallbackQuery(query.id, { text: "\u041A\u0430\u0431\u0438\u043D\u0435\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
-          return;
+        const cabinet = cabinets.find(c => c.id === review.cabinetId) || cabinets[0];
+        if (!cabinet) return;
+
+        const { generateReplyForReview } = await import("./functions");
+        const newDraft = await generateReplyForReview(review, cabinet);
+
+        if (newDraft) {
+          await storage.updateReview(reviewId, { aiDraft: newDraft, status: "pending" });
+          const draftMsg = buildDraftMessage(review, newDraft);
+
+          if (isPhotoMessage) {
+            await bot!.editMessageCaption(draftMsg, {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+              reply_markup: { inline_keyboard: draftKeyboard(reviewId) },
+            });
+          } else {
+            await bot!.editMessageText(draftMsg, {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+              reply_markup: { inline_keyboard: draftKeyboard(reviewId) },
+            });
+          }
         }
+        return;
+      }
+
+      if (query.data.startsWith("pub_")) {
+        const reviewId = query.data.replace("pub_", "");
 
         const review = await storage.getReviewById(reviewId);
         if (!review || !review.aiDraft) {
@@ -130,8 +394,9 @@ export function startTelegramBot() {
           return;
         }
 
+        const cabinets = await storage.getCabinetsByTelegramChatId(chatId);
         const cabinet = cabinets.find(c => c.id === review.cabinetId) || cabinets[0];
-        if (!cabinet.wbApiKey) {
+        if (!cabinet?.wbApiKey) {
           await bot!.answerCallbackQuery(query.id, { text: "API \u043A\u043B\u044E\u0447 \u043D\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D" });
           return;
         }
@@ -172,52 +437,80 @@ export function startTelegramBot() {
           }
         }
 
-        await bot!.editMessageText(
-          `\u2705 \u041E\u0442\u0432\u0435\u0442 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D!\n\n${truncate(review.aiDraft, 500)}`,
-          { chat_id: chatId, message_id: messageId }
-        );
-        await bot!.answerCallbackQuery(query.id, { text: "\u041E\u0442\u0432\u0435\u0442 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D!" });
+        const pubText = `\u2705 *\u041E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u043E*\n\n${escapeMarkdown(truncate(review.aiDraft, 500))}`;
+        if (isPhotoMessage) {
+          await bot!.editMessageCaption(pubText, {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: "Markdown",
+          });
+        } else {
+          await bot!.editMessageText(pubText, {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: "Markdown",
+          });
+        }
+        await bot!.answerCallbackQuery(query.id, { text: "\u041E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u043E!" });
+        return;
+      }
 
-      } else if (query.data.startsWith("regen_")) {
+      if (query.data.startsWith("edit_")) {
+        const reviewId = query.data.replace("edit_", "");
+        pendingEdits.set(chatId, reviewId);
+        await bot!.answerCallbackQuery(query.id);
+        await bot!.sendMessage(chatId, "\u270F\uFE0F \u041E\u0442\u043F\u0440\u0430\u0432\u044C\u0442\u0435 \u043D\u043E\u0432\u044B\u0439 \u0442\u0435\u043A\u0441\u0442 \u043E\u0442\u0432\u0435\u0442\u0430 \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u043C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435\u043C:", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "\u274C \u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C", callback_data: `cancel_edit_${reviewId}` }]],
+          },
+        });
+        return;
+      }
+
+      if (query.data.startsWith("cancel_edit_")) {
+        pendingEdits.delete(chatId);
+        await bot!.editMessageText("\u274C \u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E.", { chat_id: chatId, message_id: messageId });
+        await bot!.answerCallbackQuery(query.id);
+        return;
+      }
+
+      if (query.data.startsWith("regen_")) {
         const reviewId = query.data.replace("regen_", "");
         await bot!.answerCallbackQuery(query.id, { text: "\u041F\u0435\u0440\u0435\u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u044F..." });
-
-        const cabinets = await storage.getCabinetsByTelegramChatId(chatId);
-        if (cabinets.length === 0) return;
 
         const review = await storage.getReviewById(reviewId);
         if (!review) return;
 
+        const cabinets = await storage.getCabinetsByTelegramChatId(chatId);
         const cabinet = cabinets.find(c => c.id === review.cabinetId) || cabinets[0];
+        if (!cabinet) return;
 
         const { generateReplyForReview } = await import("./functions");
         const newDraft = await generateReplyForReview(review, cabinet);
 
         if (newDraft) {
           await storage.updateReview(reviewId, { aiDraft: newDraft, status: "pending" });
+          const draftMsg = buildDraftMessage(review, newDraft);
 
-          const stars = "\u2B50".repeat(review.rating || 0);
-          const msg = `\uD83D\uDD14 *\u041D\u043E\u0432\u044B\u0439 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A \u0418\u0418*\n\n` +
-            `\uD83D\uDCE6 ${escapeMarkdown(review.productName || "")}\n` +
-            `${stars} \u043E\u0442 ${escapeMarkdown(review.authorName || "\u041F\u043E\u043A\u0443\u043F\u0430\u0442\u0435\u043B\u044C")}\n` +
-            `\uD83D\uDCAC _${escapeMarkdown(truncate(review.text || "", 300))}_\n\n` +
-            `\uD83D\uDCDD *\u0427\u0435\u0440\u043D\u043E\u0432\u0438\u043A \u0418\u0418:*\n${escapeMarkdown(truncate(newDraft, 500))}`;
-
-          await bot!.editMessageText(msg, {
-            chat_id: chatId,
-            message_id: messageId,
-            parse_mode: "Markdown",
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: "\u2705 \u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C", callback_data: `send_${reviewId}` },
-                  { text: "\uD83D\uDD04 \u041F\u0435\u0440\u0435\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u043E\u0432\u0430\u0442\u044C", callback_data: `regen_${reviewId}` },
-                ],
-              ],
-            },
-          });
+          if (isPhotoMessage) {
+            await bot!.editMessageCaption(draftMsg, {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+              reply_markup: { inline_keyboard: draftKeyboard(reviewId) },
+            });
+          } else {
+            await bot!.editMessageText(draftMsg, {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+              reply_markup: { inline_keyboard: draftKeyboard(reviewId) },
+            });
+          }
         }
+        return;
       }
+
     } catch (err) {
       console.error("[telegram] Callback error:", err);
       try {

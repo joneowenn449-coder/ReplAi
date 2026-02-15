@@ -17,6 +17,8 @@ export interface WbCabinet {
   telegram_chat_id: string | null;
   telegram_username: string | null;
   telegram_first_name: string | null;
+  tg_notify_type: string | null;
+  tg_reply_mode: string | null;
 }
 
 export function useCabinets() {

@@ -93,13 +93,21 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - Long polling via node-telegram-bot-api
 - /start with auth_TOKEN payload: validates token, links chat_id to cabinet
 - Auth tokens expire in 10 minutes, one-time use (stored in telegram_auth_tokens table)
-- sendAutoReplyNotification: sends formatted message after auto-reply
-- sendManualReviewForApproval: sends review + AI draft with inline buttons (Send/Regenerate)
-- Callback handlers: send_REVIEWID sends to WB API + deducts token; regen_REVIEWID calls generateReplyForReview
+- sendAutoReplyNotification: enhanced format with rating emoji, article, shouldNotify filtering
+- sendNewReviewNotification: rich format with rating emoji, article, pros/cons, AI insight, photo support (sendPhoto), URL button for chat
+- Settings menu: /start sends inline keyboard with notification type (all/negative/questions) + reply mode (manual/auto/drafts)
+- /settings command: reconfigure notification preferences
+- Callback handlers: gen_REVIEWID generates AI draft, pub_REVIEWID sends to WB + deducts token, edit_REVIEWID enters edit mode (pendingEdits Map), regen_REVIEWID regenerates, cancel_edit_REVIEWID cancels edit
+- Photo handling: reviews with photos sent via sendPhoto, edits use editMessageCaption; text reviews use sendMessage/editMessageText
+- Duplicate protection: keyboard removed after publish
+- shouldNotify(cabinet, rating, text): filters notifications based on tgNotifyType preference
+- Schema fields: tgNotifyType (all/negative/questions), tgReplyMode (manual/auto/drafts) on wbCabinets
 - API routes: POST /api/functions/telegram-link, POST /api/functions/telegram-unlink
 - Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
 
 ## Recent Changes
+- 2026-02-15: Enhanced Telegram bot: settings menu, notification preferences, rich notification format with photos, Generate/Publish/Edit/Regenerate flow, shouldNotify filtering
+- 2026-02-15: Added tgNotifyType & tgReplyMode fields to wbCabinets schema + DB migration
 - 2026-02-15: Telegram bot integration: notifications, manual review approval via inline buttons, auth token linking
 - 2026-02-15: Extracted generateReplyForReview as reusable function in functions.ts
 - 2026-02-15: Added telegramChatId to wbCabinets, telegramAuthTokens table

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { storage } from "./storage";
 import crypto from "crypto";
-import { sendAutoReplyNotification, sendManualReviewForApproval } from "./telegram";
+import { sendAutoReplyNotification, sendNewReviewNotification, shouldNotify } from "./telegram";
 
 const WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru";
 const WB_CHAT_BASE = "https://buyer-chat-api.wildberries.ru";
@@ -298,20 +298,22 @@ async function processCabinetReviews(
         rating: fb.productValuation || 5,
         text: fb.text || "",
         productName: fb.productDetails?.productName || fb.subjectName || "Товар",
+        productArticle: String(fb.productDetails?.nmId || fb.nmId || ""),
       }, aiDraft).catch(err => console.error("[telegram] auto-reply notification error:", err));
     }
 
-    if (status === "pending" && aiDraft && insertedReview) {
-      const ratingKey2 = String(rating);
-      const modeForRating2 = replyModes[ratingKey2] || "manual";
-      if (modeForRating2 === "manual") {
-        sendManualReviewForApproval(cabinetId, insertedReview.id, {
-          userName: fb.userName || "Покупатель",
-          rating: fb.productValuation || 5,
-          text: fb.text || "",
-          productName: fb.productDetails?.productName || fb.subjectName || "Товар",
-        }, aiDraft).catch(err => console.error("[telegram] manual review notification error:", err));
-      }
+    if (insertedReview && status !== "auto") {
+      sendNewReviewNotification(cabinetId, insertedReview.id, {
+        userName: fb.userName || "Покупатель",
+        rating: fb.productValuation || 5,
+        text: fb.text || "",
+        pros: fb.pros || null,
+        cons: fb.cons || null,
+        productName: fb.productDetails?.productName || fb.subjectName || "Товар",
+        productArticle: String(fb.productDetails?.nmId || fb.nmId || ""),
+        photoLinks: photoLinks,
+        aiInsight: null,
+      }).catch(err => console.error("[telegram] new review notification error:", err));
     }
   }
 

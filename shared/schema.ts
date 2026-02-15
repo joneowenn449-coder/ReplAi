@@ -176,6 +176,8 @@ export const wbCabinets = replaiSchema.table("wb_cabinets", {
   telegramChatId: text("telegram_chat_id"),
   telegramUsername: text("telegram_username"),
   telegramFirstName: text("telegram_first_name"),
+  tgNotifyType: text("tg_notify_type").default("all"),
+  tgReplyMode: text("tg_reply_mode").default("manual"),
 });
 
 export const telegramAuthTokens = replaiSchema.table("telegram_auth_tokens", {

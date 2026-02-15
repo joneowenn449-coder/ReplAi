@@ -4,6 +4,9 @@ import { router } from "./routes";
 import { setupVite } from "./vite";
 import { storage } from "./storage";
 import { runAutoSync } from "./functions";
+import { db } from "./db";
+import { userRoles } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 const app = express();
 
@@ -49,6 +52,18 @@ async function runPeriodicSync() {
 
   app.listen(5000, "0.0.0.0", () => {
     console.log("Server running on port 5000");
+    (async () => {
+      try {
+        const adminUserId = "5339ed4d-37c9-4fc1-bed9-dc4604bdffe6";
+        const existing = await db.select().from(userRoles).where(eq(userRoles.userId, adminUserId)).limit(1);
+        if (existing.length === 0) {
+          await db.insert(userRoles).values({ userId: adminUserId, role: "admin" });
+          console.log(`[admin] Granted admin role to user ${adminUserId}`);
+        }
+      } catch (err) {
+        console.error("[admin] Error granting admin role:", err);
+      }
+    })();
     runAutoArchive();
     setInterval(runAutoArchive, ARCHIVE_INTERVAL_MS);
     setTimeout(() => runPeriodicSync(), 10000);

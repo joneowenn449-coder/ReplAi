@@ -37,6 +37,12 @@ export const RecommendationsSection = () => {
     )
   );
 
+  const configuredSources = new Set(groups.map((g) => g.source_article));
+
+  const availableSources = articles.filter(
+    (a) => !configuredSources.has(a.article)
+  );
+
   const availableTargets = articles.filter(
     (a) =>
       a.article !== sourceArticle &&
@@ -168,12 +174,12 @@ export const RecommendationsSection = () => {
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
-              ) : articles.length === 0 ? (
+              ) : availableSources.length === 0 ? (
                 <div className="py-3 px-2 text-sm text-muted-foreground text-center">
-                  Нет артикулов
+                  {articles.length === 0 ? "Нет артикулов" : "Все артикулы уже настроены"}
                 </div>
               ) : (
-                articles.map((a) => (
+                availableSources.map((a) => (
                   <SelectItem key={a.article} value={a.article}>
                     <span className="font-mono text-xs">{a.article}</span>
                     {a.name && (

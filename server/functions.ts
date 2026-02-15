@@ -1348,3 +1348,48 @@ export async function fetchArchive(req: Request, res: Response) {
     res.status(500).json({ error: e.message });
   }
 }
+
+let autoSyncRunning = false;
+
+export async function runAutoSync() {
+  if (autoSyncRunning) {
+    console.log("[auto-sync] Skipping — previous sync still in progress");
+    return;
+  }
+  autoSyncRunning = true;
+  try {
+    await runAutoSyncInternal();
+  } finally {
+    autoSyncRunning = false;
+  }
+}
+
+async function runAutoSyncInternal() {
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  const allCabinets = await storage.getAllCabinetsWithApiKey();
+  if (!allCabinets || allCabinets.length === 0) return;
+
+  console.log(`[auto-sync] Processing ${allCabinets.length} cabinets`);
+
+  for (const cabinet of allCabinets) {
+    try {
+      if (OPENROUTER_API_KEY) {
+        const reviewResult = await processCabinetReviews(cabinet, OPENROUTER_API_KEY);
+        console.log(`[auto-sync] Reviews for cabinet=${cabinet.id}: new=${reviewResult.new_reviews}, auto=${reviewResult.auto_sent}`);
+      }
+    } catch (e: any) {
+      console.error(`[auto-sync] Review sync failed for cabinet=${cabinet.id}:`, e.message);
+    }
+
+    try {
+      const chatResult = await processCabinetChats(cabinet);
+      console.log(`[auto-sync] Chats for cabinet=${cabinet.id}: chats=${chatResult.chats}, messages=${chatResult.messages}`);
+    } catch (e: any) {
+      console.error(`[auto-sync] Chat sync failed for cabinet=${cabinet.id}:`, e.message);
+    }
+
+    await delay(2000);
+  }
+
+  console.log(`[auto-sync] Completed`);
+}

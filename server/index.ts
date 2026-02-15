@@ -3,6 +3,7 @@ import path from "path";
 import { router } from "./routes";
 import { setupVite } from "./vite";
 import { storage } from "./storage";
+import { runAutoSync } from "./functions";
 
 const app = express();
 
@@ -12,6 +13,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(router);
 
 const ARCHIVE_INTERVAL_MS = 60 * 60 * 1000;
+const SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 async function runAutoArchive() {
   try {
@@ -21,6 +23,14 @@ async function runAutoArchive() {
     }
   } catch (err) {
     console.error("[auto-archive] Error:", err);
+  }
+}
+
+async function runPeriodicSync() {
+  try {
+    await runAutoSync();
+  } catch (err) {
+    console.error("[auto-sync] Error:", err);
   }
 }
 
@@ -40,5 +50,7 @@ async function runAutoArchive() {
     console.log("Server running on port 5000");
     runAutoArchive();
     setInterval(runAutoArchive, ARCHIVE_INTERVAL_MS);
+    setTimeout(() => runPeriodicSync(), 10000);
+    setInterval(runPeriodicSync, SYNC_INTERVAL_MS);
   });
 })();

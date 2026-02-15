@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 
+// ── Admin role ──────────────────────────────────────────────
+
 export function useAdminRole() {
   const { user } = useAuth();
 
@@ -22,6 +24,8 @@ export function useAdminRole() {
     enabled: !!user,
   });
 }
+
+// ── Admin users ─────────────────────────────────────────────
 
 interface UserWithBalance {
   id: string;
@@ -68,15 +72,21 @@ export function useAdminUsers() {
   });
 }
 
-export function useAdminTransactions(typeFilter?: string) {
+// ── Generic transactions query ──────────────────────────────
+
+function useTransactionsQuery(
+  table: string,
+  queryKeyPrefix: string,
+  typeFilter?: string,
+) {
   return useQuery({
-    queryKey: ["admin-transactions", typeFilter],
+    queryKey: [queryKeyPrefix, typeFilter],
     queryFn: async () => {
-      let query = supabase
-        .from("token_transactions")
+      let query = (supabase
+        .from(table as any)
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(200);
+        .limit(200) as any);
 
       if (typeFilter && typeFilter !== "all") {
         query = query.eq("type", typeFilter);
@@ -87,28 +97,17 @@ export function useAdminTransactions(typeFilter?: string) {
       return data ?? [];
     },
   });
+}
+
+export function useAdminTransactions(typeFilter?: string) {
+  return useTransactionsQuery("token_transactions", "admin-transactions", typeFilter);
 }
 
 export function useAdminAiTransactions(typeFilter?: string) {
-  return useQuery({
-    queryKey: ["admin-ai-transactions", typeFilter],
-    queryFn: async () => {
-      let query = supabase
-        .from("ai_request_transactions")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      if (typeFilter && typeFilter !== "all") {
-        query = query.eq("type", typeFilter);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  return useTransactionsQuery("ai_request_transactions", "admin-ai-transactions", typeFilter);
 }
+
+// ── Admin overview ──────────────────────────────────────────
 
 export function useAdminOverview() {
   return useQuery({
@@ -143,7 +142,18 @@ export function useAdminOverview() {
   });
 }
 
-export function useUpdateBalance() {
+// ── Generic balance update mutation ─────────────────────────
+
+interface BalanceMutationConfig {
+  balanceTable: string;
+  transactionTable: string;
+  invalidateKeys: string[];
+  successMessage: string;
+  defaultTopupDesc: string;
+  defaultDeductDesc: string;
+}
+
+function useUpdateBalanceMutation(config: BalanceMutationConfig) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -159,44 +169,44 @@ export function useUpdateBalance() {
       type: "admin_topup" | "admin_deduct";
       description?: string;
     }) => {
-      const { data: current } = await supabase
-        .from("token_balances")
+      const { data: current } = await (supabase
+        .from(config.balanceTable as any)
         .select("balance")
         .eq("user_id", userId)
-        .maybeSingle();
+        .maybeSingle() as any);
 
       const delta = type === "admin_topup" ? amount : -amount;
-      const newBalance = (current?.balance ?? 0) + delta;
+      const newBalance = ((current as any)?.balance ?? 0) + delta;
       if (newBalance < 0) throw new Error("Баланс не может быть отрицательным");
 
       if (!current) {
-        const { error: insertError } = await supabase
-          .from("token_balances")
-          .insert({ user_id: userId, balance: newBalance });
+        const { error: insertError } = await (supabase
+          .from(config.balanceTable as any)
+          .insert({ user_id: userId, balance: newBalance }) as any);
         if (insertError) throw insertError;
       } else {
-        const { error: updateError } = await supabase
-          .from("token_balances")
+        const { error: updateError } = await (supabase
+          .from(config.balanceTable as any)
           .update({ balance: newBalance })
-          .eq("user_id", userId);
+          .eq("user_id", userId) as any);
         if (updateError) throw updateError;
       }
 
-      const { error: txError } = await supabase
-        .from("token_transactions")
+      const { error: txError } = await (supabase
+        .from(config.transactionTable as any)
         .insert({
           user_id: userId,
           amount: delta,
           type,
-          description: description || (type === "admin_topup" ? "Пополнение администратором" : "Списание администратором"),
-        });
+          description: description || (type === "admin_topup" ? config.defaultTopupDesc : config.defaultDeductDesc),
+        }) as any);
       if (txError) throw txError;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
-      toast({ title: "Баланс токенов обновлён" });
+      for (const key of config.invalidateKeys) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+      toast({ title: config.successMessage });
     },
     onError: (error: Error) => {
       toast({ title: "Ошибка", description: error.message, variant: "destructive" });
@@ -204,63 +214,24 @@ export function useUpdateBalance() {
   });
 }
 
+export function useUpdateBalance() {
+  return useUpdateBalanceMutation({
+    balanceTable: "token_balances",
+    transactionTable: "token_transactions",
+    invalidateKeys: ["admin-users", "admin-transactions", "admin-overview"],
+    successMessage: "Баланс токенов обновлён",
+    defaultTopupDesc: "Пополнение администратором",
+    defaultDeductDesc: "Списание администратором",
+  });
+}
+
 export function useUpdateAiBalance() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async ({
-      userId,
-      amount,
-      type,
-      description,
-    }: {
-      userId: string;
-      amount: number;
-      type: "admin_topup" | "admin_deduct";
-      description?: string;
-    }) => {
-      const { data: current } = await supabase
-        .from("ai_request_balances")
-        .select("balance")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      const delta = type === "admin_topup" ? amount : -amount;
-      const newBalance = (current?.balance ?? 0) + delta;
-      if (newBalance < 0) throw new Error("Баланс не может быть отрицательным");
-
-      if (!current) {
-        const { error: insertError } = await supabase
-          .from("ai_request_balances")
-          .insert({ user_id: userId, balance: newBalance });
-        if (insertError) throw insertError;
-      } else {
-        const { error: updateError } = await supabase
-          .from("ai_request_balances")
-          .update({ balance: newBalance })
-          .eq("user_id", userId);
-        if (updateError) throw updateError;
-      }
-
-      const { error: txError } = await supabase
-        .from("ai_request_transactions")
-        .insert({
-          user_id: userId,
-          amount: delta,
-          type,
-          description: description || (type === "admin_topup" ? "Пополнение AI-запросов администратором" : "Списание AI-запросов администратором"),
-        } as any);
-      if (txError) throw txError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-ai-transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
-      toast({ title: "Баланс AI-запросов обновлён" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
-    },
+  return useUpdateBalanceMutation({
+    balanceTable: "ai_request_balances",
+    transactionTable: "ai_request_transactions",
+    invalidateKeys: ["admin-users", "admin-ai-transactions", "admin-overview"],
+    successMessage: "Баланс AI-запросов обновлён",
+    defaultTopupDesc: "Пополнение AI-запросов администратором",
+    defaultDeductDesc: "Списание AI-запросов администратором",
   });
 }

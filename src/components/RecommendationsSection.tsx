@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -9,59 +10,70 @@ import {
 } from "@/components/ui/select";
 import {
   useProductArticles,
-  useRecommendations,
+  useAllRecommendationsGrouped,
   useAddRecommendation,
   useDeleteRecommendation,
-  useAllRecommendationsSummary,
 } from "@/hooks/useRecommendations";
 import { useActiveCabinet } from "@/hooks/useCabinets";
-import { Plus, X, Package, Loader2, ChevronRight } from "lucide-react";
+import { Plus, X, Package, Loader2, ArrowRight, ShoppingBag } from "lucide-react";
 
 export const RecommendationsSection = () => {
-  const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
-  const [newArticle, setNewArticle] = useState("");
+  const [sourceArticle, setSourceArticle] = useState("");
+  const [targetArticle, setTargetArticle] = useState("");
 
   const { data: activeCabinet } = useActiveCabinet();
   const cabinetId = activeCabinet?.id;
 
   const { data: articles = [], isLoading: articlesLoading } =
     useProductArticles(cabinetId);
-  const { data: recommendations = [], isLoading: recsLoading } =
-    useRecommendations(selectedArticle, cabinetId);
-  const { data: summary = [] } = useAllRecommendationsSummary(cabinetId);
+  const { data: groups = [], isLoading: groupsLoading } =
+    useAllRecommendationsGrouped(cabinetId);
   const addRecommendation = useAddRecommendation();
   const deleteRecommendation = useDeleteRecommendation();
 
-  const existingArticles = new Set(recommendations.map((r) => r.target_article));
-  const availableArticles = articles.filter(
-    (a) => a.article !== selectedArticle && !existingArticles.has(a.article)
+  const existingPairs = new Set(
+    groups.flatMap((g) =>
+      g.items.map((i) => `${g.source_article}:${i.target_article}`)
+    )
+  );
+
+  const availableTargets = articles.filter(
+    (a) =>
+      a.article !== sourceArticle &&
+      !existingPairs.has(`${sourceArticle}:${a.article}`)
   );
 
   const handleAdd = () => {
-    if (!selectedArticle || !newArticle || !cabinetId) return;
-    const targetName = articles.find((a) => a.article === newArticle)?.name || "";
+    if (!sourceArticle || !targetArticle || !cabinetId) return;
+    const targetName =
+      articles.find((a) => a.article === targetArticle)?.name || "";
     addRecommendation.mutate(
       {
-        sourceArticle: selectedArticle,
-        targetArticle: newArticle,
+        sourceArticle,
+        targetArticle,
         targetName,
         cabinetId,
       },
       {
         onSuccess: () => {
-          setNewArticle("");
+          setTargetArticle("");
         },
       }
     );
   };
 
-  const handleDelete = (id: string) => {
-    if (!selectedArticle || !cabinetId) return;
-    deleteRecommendation.mutate({ id, sourceArticle: selectedArticle, cabinetId });
+  const handleDelete = (id: string, sourceArt: string) => {
+    if (!cabinetId) return;
+    deleteRecommendation.mutate({ id, sourceArticle: sourceArt, cabinetId });
+  };
+
+  const truncateName = (name: string, maxLen = 30) => {
+    if (!name) return "";
+    return name.length > maxLen ? name.slice(0, maxLen) + "..." : name;
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4" data-testid="section-recommendations">
       <div className="flex items-center gap-2">
         <Package className="w-4 h-4 text-muted-foreground" />
         <label className="text-sm font-medium text-foreground">
@@ -69,139 +81,161 @@ export const RecommendationsSection = () => {
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        При ответе на отзыв ИИ добавит призыв посмотреть рекомендованные
-        артикулы.
+        При ответе на положительный отзыв (4-5 звезд) ИИ ненавязчиво предложит
+        покупателю посмотреть рекомендованные товары.
       </p>
 
-      {/* Summary of all recommendations */}
-      {summary.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">Настроенные связи:</p>
-          <div className="space-y-1">
-            {summary.map((s) => (
-              <button
-                key={s.article}
-                onClick={() => setSelectedArticle(s.article)}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors ${
-                  selectedArticle === s.article
-                    ? "bg-primary/10 border border-primary/30 text-primary"
-                    : "bg-muted/50 border border-border text-foreground hover:bg-muted"
-                }`}
-              >
-                <span className="font-mono">{s.article}</span>
-                <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                <span className="text-muted-foreground">
-                  {s.count === 1 ? "1 рекомендация" : s.count < 5 ? `${s.count} рекомендации` : `${s.count} рекомендаций`}
-                </span>
-              </button>
-            ))}
-          </div>
+      {groupsLoading ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
         </div>
-      )}
-
-      {/* Article selector */}
-      <Select
-        value={selectedArticle || ""}
-        onValueChange={(v) => setSelectedArticle(v || null)}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Выберите артикул..." />
-        </SelectTrigger>
-        <SelectContent className="bg-popover border border-border z-50">
-          {articlesLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            </div>
-          ) : articles.length === 0 ? (
-            <div className="py-3 px-2 text-sm text-muted-foreground text-center">
-              Нет артикулов в базе отзывов
-            </div>
-          ) : (
-            articles.map((a) => (
-              <SelectItem key={a.article} value={a.article}>
-                {a.article}
-              </SelectItem>
-            ))
-          )}
-        </SelectContent>
-      </Select>
-
-      {/* Recommendations list */}
-      {selectedArticle && (
-        <div className="space-y-2">
-          {recsLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            </div>
-          ) : recommendations.length > 0 ? (
-            <div className="space-y-1.5">
-              {recommendations.map((rec) => (
-                <div
-                  key={rec.id}
-                  className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/50 border border-border text-sm"
-                >
-                  <span className="font-mono text-xs text-foreground">
-                    {rec.target_article}
-                  </span>
-                  {rec.target_name && (
-                    <span className="text-muted-foreground truncate">
-                      — {rec.target_name}
-                    </span>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="ml-auto h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDelete(rec.id)}
-                    disabled={deleteRecommendation.isPending}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground py-2">
-              Нет рекомендаций для этого артикула
-            </p>
-          )}
-
-          {/* Add new recommendation */}
-          <div className="flex gap-2">
-            <Select value={newArticle} onValueChange={setNewArticle}>
-              <SelectTrigger className="flex-1 font-mono text-sm">
-                <SelectValue placeholder="Выберите артикул..." />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border border-border z-50">
-                {availableArticles.length === 0 ? (
-                  <div className="py-3 px-2 text-sm text-muted-foreground text-center">
-                    Нет доступных артикулов
-                  </div>
-                ) : (
-                  availableArticles.map((a) => (
-                    <SelectItem key={a.article} value={a.article}>
-                      {a.article}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleAdd}
-              disabled={!newArticle || addRecommendation.isPending}
-              title="Добавить рекомендацию"
+      ) : groups.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-6 text-center">
+          <ShoppingBag className="w-8 h-8 text-muted-foreground/40" />
+          <p className="text-sm text-muted-foreground">
+            Нет настроенных связей
+          </p>
+          <p className="text-xs text-muted-foreground/70">
+            Добавьте первую рекомендацию ниже
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {groups.map((group) => (
+            <Card
+              key={group.source_article}
+              className="p-3 space-y-2"
+              data-testid={`card-recommendation-group-${group.source_article}`}
             >
-              {addRecommendation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Plus className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-mono font-medium text-foreground" data-testid={`text-source-article-${group.source_article}`}>
+                  {group.source_article}
+                </span>
+                {group.source_name && (
+                  <span className="text-xs text-muted-foreground truncate max-w-[200px]" data-testid={`text-source-name-${group.source_article}`}>
+                    {group.source_name}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-2 pl-2 flex-wrap"
+                    data-testid={`item-recommendation-${item.id}`}
+                  >
+                    <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <span className="font-mono text-xs text-foreground" data-testid={`text-target-article-${item.id}`}>
+                      {item.target_article}
+                    </span>
+                    {item.target_name && (
+                      <span className="text-xs text-muted-foreground truncate" data-testid={`text-target-name-${item.id}`}>
+                        {truncateName(item.target_name, 30)}
+                      </span>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto shrink-0"
+                      onClick={() =>
+                        handleDelete(item.id, group.source_article)
+                      }
+                      disabled={deleteRecommendation.isPending}
+                      data-testid={`button-delete-recommendation-${item.id}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ))}
         </div>
       )}
+
+      <Card className="p-3" data-testid="card-add-recommendation">
+        <p className="text-xs font-medium text-muted-foreground mb-2">
+          Добавить рекомендацию
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={sourceArticle} onValueChange={(v) => { setSourceArticle(v); setTargetArticle(""); }}>
+            <SelectTrigger className="flex-1 min-w-[140px]" data-testid="select-source-article">
+              <SelectValue placeholder="Товар..." />
+            </SelectTrigger>
+            <SelectContent className="bg-popover border border-border z-50">
+              {articlesLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : articles.length === 0 ? (
+                <div className="py-3 px-2 text-sm text-muted-foreground text-center">
+                  Нет артикулов
+                </div>
+              ) : (
+                articles.map((a) => (
+                  <SelectItem key={a.article} value={a.article}>
+                    <span className="font-mono text-xs">{a.article}</span>
+                    {a.name && (
+                      <span className="text-xs text-muted-foreground ml-1.5">
+                        {truncateName(a.name, 25)}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+
+          <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+
+          <Select
+            value={targetArticle}
+            onValueChange={setTargetArticle}
+            disabled={!sourceArticle}
+          >
+            <SelectTrigger className="flex-1 min-w-[140px]" data-testid="select-target-article">
+              <SelectValue placeholder="Рекомендовать..." />
+            </SelectTrigger>
+            <SelectContent className="bg-popover border border-border z-50">
+              {availableTargets.length === 0 ? (
+                <div className="py-3 px-2 text-sm text-muted-foreground text-center">
+                  {sourceArticle ? "Все артикулы уже добавлены" : "Выберите товар"}
+                </div>
+              ) : (
+                availableTargets.map((a) => (
+                  <SelectItem key={a.article} value={a.article}>
+                    <span className="font-mono text-xs">{a.article}</span>
+                    {a.name && (
+                      <span className="text-xs text-muted-foreground ml-1.5">
+                        {truncateName(a.name, 25)}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleAdd}
+            disabled={
+              !sourceArticle ||
+              !targetArticle ||
+              addRecommendation.isPending
+            }
+            data-testid="button-add-recommendation"
+          >
+            {addRecommendation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 };

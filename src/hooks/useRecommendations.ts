@@ -35,6 +35,17 @@ export function useAllRecommendationsSummary(cabinetId: string | undefined) {
   });
 }
 
+export function useAllRecommendationsGrouped(cabinetId: string | undefined) {
+  return useQuery<{ source_article: string; source_name: string; items: { id: string; target_article: string; target_name: string }[] }[]>({
+    queryKey: ["recommendations-all", cabinetId],
+    queryFn: async () => {
+      if (!cabinetId) return [];
+      return apiRequest(`/api/recommendations/all?cabinet_id=${cabinetId}`);
+    },
+    enabled: !!cabinetId,
+  });
+}
+
 export function useAddRecommendation() {
   const queryClient = useQueryClient();
 
@@ -67,6 +78,9 @@ export function useAddRecommendation() {
       queryClient.invalidateQueries({
         queryKey: ["recommendations-summary", variables.cabinetId],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["recommendations-all", variables.cabinetId],
+      });
       toast.success("Рекомендация добавлена");
     },
     onError: (error: Error) => {
@@ -97,6 +111,9 @@ export function useDeleteRecommendation() {
       });
       queryClient.invalidateQueries({
         queryKey: ["recommendations-summary", cabinetId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["recommendations-all", cabinetId],
       });
       toast.success("Рекомендация удалена");
     },

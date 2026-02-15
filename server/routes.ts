@@ -553,6 +553,37 @@ router.get("/api/recommendations/summary", requireAuth, async (req: Request, res
   }
 });
 
+router.get("/api/recommendations/all", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const cabinetId = req.query.cabinet_id as string;
+    if (!cabinetId) {
+      res.status(400).json({ error: "cabinet_id is required" });
+      return;
+    }
+    const recs = await storage.getAllRecommendationsGrouped(cabinetId);
+    const articles = await storage.getProductArticles(cabinetId);
+    const nameMap = new Map(articles.map((a) => [a.article, a.name]));
+    const grouped: Record<string, { source_article: string; source_name: string; items: any[] }> = {};
+    for (const rec of recs) {
+      if (!grouped[rec.sourceArticle]) {
+        grouped[rec.sourceArticle] = {
+          source_article: rec.sourceArticle,
+          source_name: nameMap.get(rec.sourceArticle) || "",
+          items: [],
+        };
+      }
+      grouped[rec.sourceArticle].items.push({
+        id: rec.id,
+        target_article: rec.targetArticle,
+        target_name: rec.targetName || nameMap.get(rec.targetArticle) || "",
+      });
+    }
+    res.json(Object.values(grouped));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/api/recommendations", requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;

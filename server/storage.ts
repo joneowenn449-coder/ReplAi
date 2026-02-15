@@ -423,6 +423,14 @@ export class DatabaseStorage {
     return rows;
   }
 
+  async getAllRecommendationsGrouped(cabinetId: string): Promise<ProductRecommendation[]> {
+    return db
+      .select()
+      .from(productRecommendations)
+      .where(eq(productRecommendations.cabinetId, cabinetId))
+      .orderBy(asc(productRecommendations.sourceArticle), asc(productRecommendations.createdAt));
+  }
+
   async insertRecommendation(data: InsertProductRecommendation): Promise<void> {
     await db.insert(productRecommendations).values(data);
   }

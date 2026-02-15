@@ -114,6 +114,7 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 ## Recent Changes
 - 2026-02-15: Fixed race condition in ensureUserProvisioned (duplicate cabinet prevention via provisioningInProgress map)
 - 2026-02-15: Cleaned up duplicate empty cabinets from DB; fixed auth docs (email+password, not phone OTP)
+- 2026-02-15: AI assistant multimodal photo analysis: sends review photos to Gemini as image_url, detects photo-related queries, collectPhotoUrls helper, updated system prompt with photo analysis capabilities
 - 2026-02-15: Landing page on Auth.tsx: hero, 4 USP cards, how-it-works, auth form
 - 2026-02-15: Bot commands menu: /shops, /stats, /balance, /mode with setMyCommands; getTodayReviewStats storage method
 - 2026-02-15: Telegram bot reply modes: removed tgReplyMode, now uses cabinet's replyModes JSON directly; step-by-step config in bot (4-5 stars / 1-3 stars, only Ручной/Авто)

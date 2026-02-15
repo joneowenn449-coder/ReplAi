@@ -1096,9 +1096,25 @@ function formatReviewsForAI(reviews: any[]): string {
       if (r.cons) parts.push(`   Минусы: "${r.cons}"`);
       if (r.text) parts.push(`   Комментарий: "${r.text}"`);
       parts.push(`   Товар: ${r.productName} (${r.productArticle})`);
+      const photos = Array.isArray(r.photoLinks) ? r.photoLinks : [];
+      if (photos.length > 0) parts.push(`   Фото: ${photos.length} шт. [photo_review_${i}]`);
       return parts.join("\n");
     })
     .join("\n\n");
+}
+
+function collectPhotoUrls(reviews: any[], maxPhotos: number = 20): { url: string; reviewIndex: number; productArticle: string }[] {
+  const result: { url: string; reviewIndex: number; productArticle: string }[] = [];
+  for (let i = 0; i < reviews.length && result.length < maxPhotos; i++) {
+    const r = reviews[i];
+    const photos = Array.isArray(r.photoLinks) ? r.photoLinks : [];
+    for (const photo of photos) {
+      if (result.length >= maxPhotos) break;
+      const url = photo.miniSize || photo.fullSize;
+      if (url) result.push({ url, reviewIndex: i, productArticle: r.productArticle });
+    }
+  }
+  return result;
 }
 
 function detectIntent(message: string): { articles: string[]; wantsNegative: boolean; wantsPositive: boolean } {
@@ -1118,11 +1134,17 @@ function detectIntent(message: string): { articles: string[]; wantsNegative: boo
     "высок", "5 звезд", "4 звезд", "нрав",
   ];
 
+  const photoKeywords = [
+    "фото", "фотограф", "изображ", "картинк", "снимк", "внешн", "вид товар",
+    "упаковк", "дефект", "брак", "как выглядит", "покажи", "визуальн",
+  ];
+
   const lower = message.toLowerCase();
   return {
     articles,
     wantsNegative: negativeKeywords.some((kw) => lower.includes(kw)),
     wantsPositive: positiveKeywords.some((kw) => lower.includes(kw)),
+    wantsPhotos: photoKeywords.some((kw) => lower.includes(kw)),
   };
 }
 
@@ -1202,7 +1224,7 @@ export async function aiAssistant(req: Request, res: Response) {
 
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user");
     const userText = lastUserMessage?.content || "";
-    const { articles, wantsNegative, wantsPositive } = detectIntent(userText);
+    const { articles, wantsNegative, wantsPositive, wantsPhotos } = detectIntent(userText);
 
     const allReviews = await storage.getReviewsByUserId(userId);
 
@@ -1212,16 +1234,19 @@ export async function aiAssistant(req: Request, res: Response) {
       count: number;
       avgRating: number;
       ratings: Record<number, number>;
+      photosCount: number;
     }
     const statsMap = new Map<string, ProductStats>();
     for (const r of allReviews) {
       let s = statsMap.get(r.productArticle);
       if (!s) {
-        s = { productArticle: r.productArticle, productName: r.productName, count: 0, avgRating: 0, ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
+        s = { productArticle: r.productArticle, productName: r.productName, count: 0, avgRating: 0, ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, photosCount: 0 };
         statsMap.set(r.productArticle, s);
       }
       s.count++;
       s.ratings[r.rating] = (s.ratings[r.rating] || 0) + 1;
+      const photos = Array.isArray(r.photoLinks) ? r.photoLinks : [];
+      if (photos.length > 0) s.photosCount++;
     }
     for (const s of statsMap.values()) {
       const total = Object.entries(s.ratings).reduce((sum, [star, cnt]) => sum + Number(star) * cnt, 0);
@@ -1230,7 +1255,7 @@ export async function aiAssistant(req: Request, res: Response) {
 
     const productStats = Array.from(statsMap.values());
     const statsBlock = productStats
-      .map((s) => `- Артикул ${s.productArticle}: "${s.productName}" — ${s.count} отзывов, средний рейтинг ${s.avgRating} (1: ${s.ratings[1]}, 2: ${s.ratings[2]}, 3: ${s.ratings[3]}, 4: ${s.ratings[4]}, 5: ${s.ratings[5]})`)
+      .map((s) => `- Артикул ${s.productArticle}: "${s.productName}" — ${s.count} отзывов, средний рейтинг ${s.avgRating} (1: ${s.ratings[1]}, 2: ${s.ratings[2]}, 3: ${s.ratings[3]}, 4: ${s.ratings[4]}, 5: ${s.ratings[5]}), с фото: ${s.photosCount}`)
       .join("\n");
 
     const timeStatsText = await getTimeStats(userId);
@@ -1241,10 +1266,13 @@ export async function aiAssistant(req: Request, res: Response) {
 
     if (timeStatsText) contextParts.push(`\n${timeStatsText}`);
 
+    const reviewsWithContext: any[] = [];
+
     for (const article of articles) {
       const data = await storage.getReviewsByUserIdAndArticle(userId, article, 50);
       if (data && data.length > 0) {
         contextParts.push(`\nОтзывы по артикулу ${article} (последние ${data.length}):\n${formatReviewsForAI(data)}`);
+        reviewsWithContext.push(...data);
       } else {
         contextParts.push(`\nАртикул ${article} не найден в базе.`);
       }
@@ -1254,6 +1282,7 @@ export async function aiAssistant(req: Request, res: Response) {
       const data = await storage.getNegativeReviewsByUserId(userId, 50);
       if (data && data.length > 0) {
         contextParts.push(`\nОтзывы с низким рейтингом (1-3 звезды, последние ${data.length}):\n${formatReviewsForAI(data)}`);
+        reviewsWithContext.push(...data);
       }
     }
 
@@ -1261,8 +1290,26 @@ export async function aiAssistant(req: Request, res: Response) {
       const data = await storage.getPositiveReviewsByUserId(userId, 50);
       if (data && data.length > 0) {
         contextParts.push(`\nПоложительные отзывы (4-5 звёзд, последние ${data.length}):\n${formatReviewsForAI(data)}`);
+        reviewsWithContext.push(...data);
       }
     }
+
+    if (wantsPhotos && reviewsWithContext.length === 0 && articles.length === 0) {
+      const allWithPhotos = allReviews.filter((r: any) => {
+        const photos = Array.isArray(r.photoLinks) ? r.photoLinks : [];
+        return photos.length > 0;
+      }).slice(0, 30);
+      if (allWithPhotos.length > 0) {
+        contextParts.push(`\nОтзывы с фотографиями (${allWithPhotos.length} шт.):\n${formatReviewsForAI(allWithPhotos)}`);
+        reviewsWithContext.push(...allWithPhotos);
+      }
+    }
+
+    const photoUrls = collectPhotoUrls(
+      reviewsWithContext.length > 0 ? reviewsWithContext : (wantsPhotos ? allReviews.filter((r: any) => Array.isArray(r.photoLinks) && r.photoLinks.length > 0).slice(0, 20) : []),
+      20
+    );
+    const hasPhotos = photoUrls.length > 0;
 
     const systemPrompt = `Ты — AI-аналитик по отзывам маркетплейса Wildberries. У тебя есть полный доступ к базе отзывов покупателей.
 
@@ -1273,6 +1320,8 @@ export async function aiAssistant(req: Request, res: Response) {
 - Находить паттерны в отзывах
 - Анализировать динамику отзывов по дням недели и времени суток
 - Выявлять временные паттерны (когда приходит больше негатива, сезонность и т.д.)
+- Анализировать фотографии из отзывов: выявлять дефекты, оценивать качество упаковки, внешний вид товара, соответствие описанию
+- Сравнивать фото разных отзывов для выявления системных проблем с товаром
 - Отвечать на любые вопросы о товарах и мнении покупателей
 
 Правила:
@@ -1283,10 +1332,34 @@ export async function aiAssistant(req: Request, res: Response) {
 - Отвечай на русском языке
 - Будь кратким но информативным
 - Используй агрегированную статистику по дням недели и часам для анализа временных паттернов
+${hasPhotos ? "- К отзывам приложены фотографии покупателей. Внимательно анализируй их: качество товара, дефекты, упаковку, цвет, внешний вид. Соотноси увиденное на фото с текстом отзыва." : "- Если пользователь хочет анализ фото, предложи указать конкретный артикул товара — тогда ты получишь фотографии из отзывов по этому товару."}
 
 Данные из базы отзывов:
 
 ${contextParts.join("\n")}`;
+
+    const aiMessages: any[] = [{ role: "system", content: systemPrompt }];
+
+    const reverseIdx = [...messages].reverse().findIndex((m: any) => m.role === "user");
+    const lastUserIdx = reverseIdx >= 0 ? messages.length - 1 - reverseIdx : -1;
+
+    for (let mi = 0; mi < messages.length; mi++) {
+      const msg = messages[mi];
+      if (mi === lastUserIdx && hasPhotos) {
+        const content: any[] = [{ type: "text", text: msg.content }];
+        for (const photo of photoUrls) {
+          content.push({
+            type: "image_url",
+            image_url: { url: photo.url },
+          });
+        }
+        aiMessages.push({ role: msg.role, content });
+      } else {
+        aiMessages.push(msg);
+      }
+    }
+
+    console.log(`[ai-assistant] userId=${userId} photos=${photoUrls.length} wantsPhotos=${wantsPhotos} articles=${articles.join(",")}`);
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -1296,10 +1369,7 @@ ${contextParts.join("\n")}`;
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
+        messages: aiMessages,
         stream: true,
       }),
     });

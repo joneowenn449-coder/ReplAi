@@ -89,7 +89,13 @@ export function startTelegramBot() {
         return;
       }
 
-      await storage.updateCabinet(result.cabinetId, { telegramChatId: chatId } as any);
+      const telegramUsername = msg.from?.username || null;
+      const telegramFirstName = msg.from?.first_name || null;
+      await storage.updateCabinet(result.cabinetId, {
+        telegramChatId: chatId,
+        telegramUsername,
+        telegramFirstName,
+      } as any);
 
       const cabinet = await storage.getCabinetById(result.cabinetId);
       const cabinetName = cabinet?.name || "\u041A\u0430\u0431\u0438\u043D\u0435\u0442";

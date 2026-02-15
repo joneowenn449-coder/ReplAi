@@ -174,6 +174,8 @@ export const wbCabinets = replaiSchema.table("wb_cabinets", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   telegramChatId: text("telegram_chat_id"),
+  telegramUsername: text("telegram_username"),
+  telegramFirstName: text("telegram_first_name"),
 });
 
 export const telegramAuthTokens = replaiSchema.table("telegram_auth_tokens", {

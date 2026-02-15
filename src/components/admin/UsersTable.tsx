@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Minus, Loader2, BrainCircuit, Coins } from "lucide-react";
+import { Plus, Minus, Loader2, BrainCircuit, Coins, MessageCircle } from "lucide-react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 
@@ -73,6 +73,7 @@ export const UsersTable = () => {
             <TableRow>
               <TableHead>Пользователь</TableHead>
               <TableHead>Телефон</TableHead>
+              <TableHead data-testid="header-telegram">Telegram</TableHead>
               <TableHead>Регистрация</TableHead>
               <TableHead className="text-right">Токены</TableHead>
               <TableHead className="text-right">AI запросы</TableHead>
@@ -83,7 +84,7 @@ export const UsersTable = () => {
           <TableBody>
             {users?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   Нет пользователей
                 </TableCell>
               </TableRow>
@@ -97,6 +98,32 @@ export const UsersTable = () => {
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{user.phone || "—"}</TableCell>
+                <TableCell>
+                  {user.telegram ? (
+                    <div className="flex items-center gap-1.5">
+                      <MessageCircle className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                      <div>
+                        {user.telegram.username ? (
+                          <a
+                            href={`https://t.me/${user.telegram.username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-500 hover:underline"
+                            data-testid={`link-telegram-${user.id}`}
+                          >
+                            @{user.telegram.username}
+                          </a>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            {user.telegram.firstName || "Без username"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   {format(new Date(user.created_at), "dd MMM yyyy", { locale: ru })}
                 </TableCell>

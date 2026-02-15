@@ -26,6 +26,7 @@ interface UserWithBalance {
   balance: number;
   aiBalance: number;
   role: string;
+  telegram: { username: string | null; firstName: string | null; chatId: string | null } | null;
 }
 
 export function useAdminUsers() {

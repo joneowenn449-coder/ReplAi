@@ -215,6 +215,10 @@ export class DatabaseStorage {
     await db.delete(wbCabinets).where(eq(wbCabinets.id, id));
   }
 
+  async getAllCabinets(): Promise<WbCabinet[]> {
+    return db.select().from(wbCabinets);
+  }
+
   async getAllCabinetsWithApiKey(): Promise<WbCabinet[]> {
     return db.select().from(wbCabinets).where(not(isNull(wbCabinets.wbApiKey)));
   }

@@ -15,6 +15,8 @@ export interface WbCabinet {
   created_at: string;
   updated_at: string;
   telegram_chat_id: string | null;
+  telegram_username: string | null;
+  telegram_first_name: string | null;
 }
 
 export function useCabinets() {

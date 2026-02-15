@@ -338,16 +338,28 @@ router.post("/api/admin/balance/ai", requireAuth, async (req: Request, res: Resp
 
 router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response) => {
   try {
-    const [allProfiles, tokenBals, aiBals, roles] = await Promise.all([
+    const [allProfiles, tokenBals, aiBals, roles, allCabinets] = await Promise.all([
       storage.getAllProfiles(),
       storage.getAllTokenBalances(),
       storage.getAllAiRequestBalances(),
       storage.getAllUserRoles(),
+      storage.getAllCabinets(),
     ]);
 
     const balanceMap = new Map(tokenBals.map((b) => [b.userId, b.balance]));
     const aiBalanceMap = new Map(aiBals.map((b) => [b.userId, b.balance]));
     const roleMap = new Map(roles.map((r) => [r.userId, r.role]));
+
+    const telegramMap = new Map<string, { username: string | null; firstName: string | null; chatId: string | null }>();
+    for (const cab of allCabinets) {
+      if (cab.telegramChatId && !telegramMap.has(cab.userId)) {
+        telegramMap.set(cab.userId, {
+          username: cab.telegramUsername,
+          firstName: cab.telegramFirstName,
+          chatId: cab.telegramChatId,
+        });
+      }
+    }
 
     const users = allProfiles.map((p) => ({
       id: p.id,
@@ -358,6 +370,7 @@ router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response)
       balance: balanceMap.get(p.id) ?? 0,
       aiBalance: aiBalanceMap.get(p.id) ?? 0,
       role: roleMap.get(p.id) ?? "user",
+      telegram: telegramMap.get(p.id) || null,
     }));
 
     res.json(users);

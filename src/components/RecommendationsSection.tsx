@@ -2,6 +2,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Popover,
   PopoverContent,
@@ -21,12 +27,13 @@ import {
   useDeleteRecommendation,
 } from "@/hooks/useRecommendations";
 import { useActiveCabinet } from "@/hooks/useCabinets";
-import { Plus, X, Package, Loader2, ArrowRight, ShoppingBag, ChevronDown } from "lucide-react";
+import { Plus, X, Package, Loader2, ArrowRight, ShoppingBag, ChevronDown, ChevronRight, ChevronsUpDown } from "lucide-react";
 
 export const RecommendationsSection = () => {
   const [sourceArticle, setSourceArticle] = useState("");
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const { data: activeCabinet } = useActiveCabinet();
   const cabinetId = activeCabinet?.id;
@@ -66,6 +73,26 @@ export const RecommendationsSection = () => {
       }
       return next;
     });
+  };
+
+  const toggleGroup = (sourceArt: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(sourceArt)) {
+        next.delete(sourceArt);
+      } else {
+        next.add(sourceArt);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllGroups = () => {
+    if (expandedGroups.size === groups.length) {
+      setExpandedGroups(new Set());
+    } else {
+      setExpandedGroups(new Set(groups.map((g) => g.source_article)));
+    }
   };
 
   const handleAddAll = async () => {
@@ -127,56 +154,91 @@ export const RecommendationsSection = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {groups.map((group) => (
-            <Card
-              key={group.source_article}
-              className="p-3 space-y-2"
-              data-testid={`card-recommendation-group-${group.source_article}`}
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-mono font-medium text-foreground" data-testid={`text-source-article-${group.source_article}`}>
-                  {group.source_article}
+        <div className="space-y-1.5">
+          {groups.length > 1 && (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleAllGroups}
+                data-testid="button-toggle-all-groups"
+              >
+                <ChevronsUpDown className="w-3.5 h-3.5 mr-1.5" />
+                <span className="text-xs">
+                  {expandedGroups.size === groups.length ? "Свернуть все" : "Развернуть все"}
                 </span>
-                {group.source_name && (
-                  <span className="text-xs text-muted-foreground truncate max-w-[200px]" data-testid={`text-source-name-${group.source_article}`}>
-                    {group.source_name}
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                {group.items.map((item) => (
+              </Button>
+            </div>
+          )}
+          {groups.map((group) => (
+            <Collapsible
+              key={group.source_article}
+              open={expandedGroups.has(group.source_article)}
+              onOpenChange={() => toggleGroup(group.source_article)}
+            >
+              <Card
+                className="overflow-visible"
+                data-testid={`card-recommendation-group-${group.source_article}`}
+              >
+                <CollapsibleTrigger asChild>
                   <div
-                    key={item.id}
-                    className="flex items-center gap-2 pl-2 flex-wrap"
-                    data-testid={`item-recommendation-${item.id}`}
+                    className="flex items-center gap-2 px-3 py-2 cursor-pointer hover-elevate rounded-md flex-wrap"
+                    data-testid={`trigger-group-${group.source_article}`}
                   >
-                    <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-                    <span className="font-mono text-xs text-foreground" data-testid={`text-target-article-${item.id}`}>
-                      {item.target_article}
+                    <ChevronRight
+                      className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                        expandedGroups.has(group.source_article) ? "rotate-90" : ""
+                      }`}
+                    />
+                    <span className="text-xs font-mono font-medium text-foreground" data-testid={`text-source-article-${group.source_article}`}>
+                      {group.source_article}
                     </span>
-                    {item.target_name && (
-                      <span className="text-xs text-muted-foreground truncate" data-testid={`text-target-name-${item.id}`}>
-                        {truncateName(item.target_name, 30)}
+                    {group.source_name && (
+                      <span className="text-xs text-muted-foreground truncate max-w-[160px]" data-testid={`text-source-name-${group.source_article}`}>
+                        {truncateName(group.source_name, 25)}
                       </span>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="ml-auto shrink-0"
-                      onClick={() =>
-                        handleDelete(item.id, group.source_article)
-                      }
-                      disabled={deleteRecommendation.isPending}
-                      data-testid={`button-delete-recommendation-${item.id}`}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
+                    <Badge variant="secondary" className="ml-auto shrink-0 no-default-active-elevate">
+                      {group.items.length}
+                    </Badge>
                   </div>
-                ))}
-              </div>
-            </Card>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="space-y-0.5 px-3 pb-2 pt-0.5">
+                    {group.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-2 pl-5 flex-wrap"
+                        data-testid={`item-recommendation-${item.id}`}
+                      >
+                        <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                        <span className="font-mono text-xs text-foreground" data-testid={`text-target-article-${item.id}`}>
+                          {item.target_article}
+                        </span>
+                        {item.target_name && (
+                          <span className="text-xs text-muted-foreground truncate" data-testid={`text-target-name-${item.id}`}>
+                            {truncateName(item.target_name, 30)}
+                          </span>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="ml-auto shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(item.id, group.source_article);
+                          }}
+                          disabled={deleteRecommendation.isPending}
+                          data-testid={`button-delete-recommendation-${item.id}`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           ))}
         </div>
       )}

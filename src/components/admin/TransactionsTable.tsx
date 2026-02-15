@@ -12,21 +12,15 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 
-const tokenTypeLabels: Record<string, string> = {
+const baseTypeLabels: Record<string, string> = {
   bonus: "Бонус",
-  deduct: "Списание",
   purchase: "Покупка",
   admin_topup: "Пополнение (админ)",
   admin_deduct: "Списание (админ)",
 };
 
-const aiTypeLabels: Record<string, string> = {
-  bonus: "Бонус",
-  usage: "Использование",
-  purchase: "Покупка",
-  admin_topup: "Пополнение (админ)",
-  admin_deduct: "Списание (админ)",
-};
+const tokenTypeLabels: Record<string, string> = { ...baseTypeLabels, deduct: "Списание" };
+const aiTypeLabels: Record<string, string> = { ...baseTypeLabels, usage: "Использование" };
 
 const typeColors: Record<string, string> = {
   bonus: "default",
@@ -48,23 +42,18 @@ export const TransactionsTable = () => {
   const isLoading = tab === "tokens" ? tokenLoading : aiLoading;
   const labels = tab === "tokens" ? tokenTypeLabels : aiTypeLabels;
 
+  const baseFilterOptions = [
+    { value: "all", label: "Все" },
+    { value: "bonus", label: "Бонус" },
+  ];
+  const sharedSuffix = [
+    { value: "purchase", label: "Покупка" },
+    { value: "admin_topup", label: "Пополнение (админ)" },
+    { value: "admin_deduct", label: "Списание (админ)" },
+  ];
   const filterOptions = tab === "tokens"
-    ? [
-        { value: "all", label: "Все" },
-        { value: "bonus", label: "Бонус" },
-        { value: "deduct", label: "Списание" },
-        { value: "purchase", label: "Покупка" },
-        { value: "admin_topup", label: "Пополнение (админ)" },
-        { value: "admin_deduct", label: "Списание (админ)" },
-      ]
-    : [
-        { value: "all", label: "Все" },
-        { value: "bonus", label: "Бонус" },
-        { value: "usage", label: "Использование" },
-        { value: "purchase", label: "Покупка" },
-        { value: "admin_topup", label: "Пополнение (админ)" },
-        { value: "admin_deduct", label: "Списание (админ)" },
-      ];
+    ? [...baseFilterOptions, { value: "deduct", label: "Списание" }, ...sharedSuffix]
+    : [...baseFilterOptions, { value: "usage", label: "Использование" }, ...sharedSuffix];
 
   const handleTabChange = (v: string) => {
     setTab(v as "tokens" | "ai");

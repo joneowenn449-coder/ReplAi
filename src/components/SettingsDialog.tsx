@@ -43,6 +43,7 @@ import { RecommendationsSection } from "@/components/RecommendationsSection";
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialSection?: "telegram";
 }
 
 function maskKey(key: string): string {
@@ -50,7 +51,7 @@ function maskKey(key: string): string {
   return key.slice(0, 4) + "****...****" + key.slice(-4);
 }
 
-export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
+export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsDialogProps) => {
   const { data: activeCabinet } = useActiveCabinet();
   const updateCabinet = useUpdateCabinet();
   const validateApiKey = useValidateApiKey();
@@ -64,7 +65,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   const [isEditingKey, setIsEditingKey] = useState(false);
   const [ratingSectionOpen, setRatingSectionOpen] = useState(true);
   const [replyModes, setReplyModes] = useState<ReplyModes>(DEFAULT_REPLY_MODES);
-  const [telegramSectionOpen, setTelegramSectionOpen] = useState(false);
+  const [telegramSectionOpen, setTelegramSectionOpen] = useState(initialSection === "telegram");
   const [telegramLink, setTelegramLink] = useState<string | null>(null);
   const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
   const [telegramUnlinkLoading, setTelegramUnlinkLoading] = useState(false);
@@ -87,8 +88,10 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
       setIsEditingKey(false);
       setApiKeyInput("");
       setTelegramLink(null);
+    } else if (initialSection === "telegram") {
+      setTelegramSectionOpen(true);
     }
-  }, [open]);
+  }, [open, initialSection]);
 
   const handleSaveSettings = () => {
     if (!cabinet) return;

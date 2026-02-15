@@ -1,4 +1,4 @@
-import { Settings, LogOut, Coins, Shield, Plus, Store } from "lucide-react";
+import { Settings, LogOut, Coins, Shield, Plus, Store, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavTabs } from "./NavTabs";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,10 +27,11 @@ interface HeaderProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onSettingsClick: () => void;
+  onTelegramClick?: () => void;
   unreadChatsCount?: number;
 }
 
-export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCount }: HeaderProps) => {
+export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClick, unreadChatsCount }: HeaderProps) => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { data: tokenBalance } = useTokenBalance();
@@ -143,9 +144,14 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem onClick={onSettingsClick} className="cursor-pointer">
+              <DropdownMenuItem onClick={onSettingsClick} className="cursor-pointer" data-testid="menu-settings">
                 <Settings className="w-4 h-4 mr-2" />
                 Настройки
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={onTelegramClick} className="cursor-pointer" data-testid="menu-telegram">
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Telegram-бот
               </DropdownMenuItem>
 
               {isAdmin && (

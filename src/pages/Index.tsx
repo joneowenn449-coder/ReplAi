@@ -23,6 +23,7 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState("reviews");
   const [activeFilter, setActiveFilter] = useState("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<"telegram" | undefined>(undefined);
   const [syncingCabinetId, setSyncingCabinetId] = useState<string | null>(null);
 
   const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
@@ -73,7 +74,8 @@ const Index = () => {
       <Header
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onSettingsClick={() => setSettingsOpen(true)}
+        onSettingsClick={() => { setSettingsInitialSection(undefined); setSettingsOpen(true); }}
+        onTelegramClick={() => { setSettingsInitialSection("telegram"); setSettingsOpen(true); }}
         unreadChatsCount={unreadChatsCount}
       />
 
@@ -150,7 +152,7 @@ const Index = () => {
         )}
       </main>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} initialSection={settingsInitialSection} />
     </div>
   );
 };

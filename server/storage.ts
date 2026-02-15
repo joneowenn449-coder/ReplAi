@@ -54,6 +54,20 @@ export class DatabaseStorage {
     return result.length;
   }
 
+  async archiveImportedReviews(): Promise<number> {
+    const result = await db
+      .update(reviews)
+      .set({ status: "archived", updatedAt: new Date() })
+      .where(
+        and(
+          eq(reviews.status, "sent"),
+          not(isNull(reviews.sentAnswer))
+        )
+      )
+      .returning({ id: reviews.id });
+    return result.length;
+  }
+
   async getProductArticles(cabinetId: string): Promise<{ article: string; name: string }[]> {
     const rows = await db
       .selectDistinctOn([reviews.productArticle], {
@@ -266,23 +280,21 @@ export class DatabaseStorage {
   }
 
   async upsertTokenBalance(userId: string, balance: number): Promise<void> {
-    await db
-      .insert(tokenBalances)
-      .values({ userId, balance })
-      .onConflictDoUpdate({
-        target: tokenBalances.userId,
-        set: { balance },
-      });
+    const existing = await db.select().from(tokenBalances).where(eq(tokenBalances.userId, userId)).limit(1);
+    if (existing.length > 0) {
+      await db.update(tokenBalances).set({ balance }).where(eq(tokenBalances.userId, userId));
+    } else {
+      await db.insert(tokenBalances).values({ userId, balance });
+    }
   }
 
   async upsertAiRequestBalance(userId: string, balance: number): Promise<void> {
-    await db
-      .insert(aiRequestBalances)
-      .values({ userId, balance })
-      .onConflictDoUpdate({
-        target: aiRequestBalances.userId,
-        set: { balance },
-      });
+    const existing = await db.select().from(aiRequestBalances).where(eq(aiRequestBalances.userId, userId)).limit(1);
+    if (existing.length > 0) {
+      await db.update(aiRequestBalances).set({ balance }).where(eq(aiRequestBalances.userId, userId));
+    } else {
+      await db.insert(aiRequestBalances).values({ userId, balance });
+    }
   }
 
   async getAllTokenBalances(): Promise<{ userId: string; balance: number }[]> {

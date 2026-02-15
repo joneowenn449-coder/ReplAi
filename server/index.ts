@@ -15,6 +15,17 @@ app.use(router);
 const ARCHIVE_INTERVAL_MS = 60 * 60 * 1000;
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
+async function migrateImportedReviewsToArchive() {
+  try {
+    const count = await storage.archiveImportedReviews();
+    if (count > 0) {
+      console.log(`[migration] Archived ${count} previously imported answered reviews`);
+    }
+  } catch (err) {
+    console.error("[migration] Error archiving imported reviews:", err);
+  }
+}
+
 async function runAutoArchive() {
   try {
     const archived = await storage.archiveOldAnsweredReviews(7);
@@ -48,6 +59,7 @@ async function runPeriodicSync() {
 
   app.listen(5000, "0.0.0.0", () => {
     console.log("Server running on port 5000");
+    migrateImportedReviewsToArchive();
     runAutoArchive();
     setInterval(runAutoArchive, ARCHIVE_INTERVAL_MS);
     setTimeout(() => runPeriodicSync(), 10000);

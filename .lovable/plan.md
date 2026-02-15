@@ -1,107 +1,43 @@
 
-# DRY-рефакторинг: устранение дублирования в хуках и компонентах
 
-## Контекст
+# Исправление триггера и подготовка к повторному переносу
 
-Два независимых баланса -- **Токены** (автоответы на отзывы) и **AI-запросы** (AI аналитик, отдельная опция) -- обслуживаются практически идентичным кодом с разницей только в именах таблиц и текстовых метках.
+## Проблемы
 
----
+1. **Триггер `on_auth_user_created` не зарегистрирован** на таблице `auth.users`, хотя функция `handle_new_user` существует. При регистрации нового пользователя не создаются записи в `profiles`, `token_balances`, `ai_request_balances`, `settings`, `user_roles`, `wb_cabinets`.
+2. **Данные `auth.users` не переносятся** через GitHub -- только код и миграции. Нужно заново регистрироваться.
+3. **Токены и кнопка "Пополнить"** скрываются, когда баланс `null` (нет записи в `token_balances`).
 
-## 1. Общая утилита пагинации
+## План
 
-**Файл:** `src/lib/fetchAllRows.ts` (новый)
+### 1. Пересоздать триггер в текущем проекте
 
-Вынести функцию `fetchAllRows` из `src/hooks/useExportData.ts` в отдельный модуль, чтобы её можно было переиспользовать в любом месте (экспорт, отзывы и т.д.).
+Выполнить SQL-миграцию:
 
-Затем обновить `src/hooks/useExportData.ts` -- заменить локальную функцию на импорт из `src/lib/fetchAllRows.ts`.
-
----
-
-## 2. Компонент FullPageSpinner
-
-**Файл:** `src/components/FullPageSpinner.tsx` (новый)
-
-Общий компонент полноэкранного спиннера загрузки (Loader2 по центру экрана).
-
-**Обновляемые файлы:**
-- `src/components/ProtectedRoute.tsx` -- заменить inline-разметку спиннера на `<FullPageSpinner />`
-- `src/components/AdminRoute.tsx` -- аналогично
-
----
-
-## 3. Параметризованный хук баланса пользователя
-
-**Файл:** `src/hooks/useBalance.ts` (новый)
-
-Одна фабричная функция, принимающая тип баланса (`"tokens"` или `"ai"`), которая внутри маппит на нужную таблицу:
-- `"tokens"` --> таблица `token_balances`
-- `"ai"` --> таблица `ai_request_balances`
-
-**Обновляемые файлы:**
-- `src/hooks/useTokenBalance.ts` -- станет однострочным реэкспортом: `useBalance("tokens")`
-- `src/hooks/useAiRequestBalance.ts` -- станет однострочным реэкспортом: `useBalance("ai")`
-
-Обратная совместимость сохраняется: все существующие импорты `useTokenBalance` и `useAiRequestBalance` продолжат работать без изменений.
-
----
-
-## 4. Объединение admin-хуков
-
-**Файл:** `src/hooks/useAdmin.ts` (изменения)
-
-### 4a. useAdminTransactions + useAdminAiTransactions --> один хук
-
-Создать внутреннюю функцию `useTransactions(table, queryKeyPrefix, typeFilter)`, которая содержит всю логику запроса. Публичные хуки станут обёртками:
-
-```
-useAdminTransactions(filter) --> useTransactions("token_transactions", "admin-transactions", filter)
-useAdminAiTransactions(filter) --> useTransactions("ai_request_transactions", "admin-ai-transactions", filter)
+```sql
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
 ```
 
-### 4b. useUpdateBalance + useUpdateAiBalance --> один хук
+Это гарантирует, что при регистрации в текущем и в перенесённом проекте триггер будет работать.
 
-Создать внутреннюю функцию `useUpdateBalanceMutation(config)`, где `config` содержит:
-- `balanceTable`: `"token_balances"` | `"ai_request_balances"`
-- `transactionTable`: `"token_transactions"` | `"ai_request_transactions"`
-- `invalidateKeys`: массив query-ключей для инвалидации
-- `successMessage`: текст тоста
-- `defaultTopupDesc` / `defaultDeductDesc`: дефолтные описания
+### 2. Добавить защиту в Header (опционально)
 
-Публичные хуки станут обёртками с предзаданными конфигами для токенов и AI-запросов соответственно.
+Сейчас если запись `token_balances` отсутствует, хук возвращает `0` (fallback в `useBalance`). Этого достаточно для отображения. Но если `user` равен `null`, хук отключен. Текущая логика корректна -- проблема именно в отсутствии триггера.
 
-Все экспорты сохраняются -- ни один внешний файл не нужно менять.
+### 3. Инструкция для повторного переноса
 
----
+При переносе через GitHub в новый проект:
+- Миграции создадут все таблицы и функции, включая триггер
+- **Зарегистрируйтесь заново** -- `auth.users` не переносится
+- Триггер автоматически создаст `profiles`, `token_balances`, `settings`, `user_roles`, `wb_cabinets`
+- Токены и кнопка "Пополнить" появятся в шапке
+- **Секреты** (OPENROUTER_API_KEY и др.) нужно добавить вручную в новом проекте
 
-## 5. Объединение словарей меток в TransactionsTable
+## Технические детали
 
-**Файл:** `src/components/admin/TransactionsTable.tsx` (изменения)
+Единственное изменение -- одна SQL-миграция для пересоздания триггера. Файлы кода менять не нужно.
 
-Общие метки (`bonus`, `purchase`, `admin_topup`, `admin_deduct`) вынести в один базовый объект, а специфичные (`deduct` для токенов, `usage` для AI) добавлять через spread:
-
-```
-const baseLabels = { bonus: "Бонус", purchase: "Покупка", admin_topup: "Пополнение (админ)", admin_deduct: "Списание (админ)" };
-const tokenTypeLabels = { ...baseLabels, deduct: "Списание" };
-const aiTypeLabels = { ...baseLabels, usage: "Использование" };
-```
-
-Аналогично для `filterOptions` -- общий массив + специфичный элемент.
-
----
-
-## Итог изменений
-
-| Файл | Действие |
-|---|---|
-| `src/lib/fetchAllRows.ts` | Создать |
-| `src/components/FullPageSpinner.tsx` | Создать |
-| `src/hooks/useBalance.ts` | Создать |
-| `src/hooks/useTokenBalance.ts` | Упростить до реэкспорта |
-| `src/hooks/useAiRequestBalance.ts` | Упростить до реэкспорта |
-| `src/hooks/useExportData.ts` | Импортировать fetchAllRows |
-| `src/hooks/useAdmin.ts` | Объединить дублирующиеся хуки |
-| `src/components/ProtectedRoute.tsx` | Использовать FullPageSpinner |
-| `src/components/AdminRoute.tsx` | Использовать FullPageSpinner |
-| `src/components/admin/TransactionsTable.tsx` | Объединить словари меток |
-
-Все публичные API (имена хуков, их сигнатуры) сохраняются -- рефакторинг не затрагивает остальные компоненты.

@@ -8,6 +8,41 @@ import {
 
 export const router = Router();
 
+function camelToSnake(str: string): string {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+function toSnakeCase(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(toSnakeCase);
+  if (typeof obj === "object" && !(obj instanceof Date)) {
+    const result: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const snakeKey = camelToSnake(key);
+      result[snakeKey] = value instanceof Date ? value.toISOString() : toSnakeCase(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function toCamelCase(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(toCamelCase);
+  if (typeof obj === "object" && !(obj instanceof Date)) {
+    const result: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[snakeToCamel(key)] = toCamelCase(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
 function getUserIdFromToken(authHeader: string | undefined): string | null {
   if (!authHeader?.startsWith("Bearer ")) return null;
   try {
@@ -19,6 +54,39 @@ function getUserIdFromToken(authHeader: string | undefined): string | null {
   }
 }
 
+const provisionedUsers = new Set<string>();
+
+async function ensureUserProvisioned(userId: string): Promise<void> {
+  if (provisionedUsers.has(userId)) return;
+
+  try {
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      await storage.upsertProfile({ id: userId });
+      console.log(`[auto-provision] Created profile for user ${userId}`);
+    }
+
+    const userSettings = await storage.getSettings(userId);
+    if (!userSettings) {
+      await storage.insertSettings({ userId });
+      console.log(`[auto-provision] Created settings for user ${userId}`);
+    }
+
+    const cabinets = await storage.getCabinets(userId);
+    if (!cabinets || cabinets.length === 0) {
+      await storage.createCabinet({ userId, name: "Основной кабинет", isActive: true });
+      console.log(`[auto-provision] Created default cabinet for user ${userId}`);
+    }
+
+    await storage.upsertTokenBalance(userId, await storage.getTokenBalance(userId));
+    await storage.upsertAiRequestBalance(userId, await storage.getAiRequestBalance(userId));
+
+    provisionedUsers.add(userId);
+  } catch (err) {
+    console.error(`[auto-provision] Failed for user ${userId}:`, err);
+  }
+}
+
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const userId = getUserIdFromToken(req.headers.authorization);
   if (!userId) {
@@ -26,7 +94,10 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     return;
   }
   (req as any).userId = userId;
-  next();
+  ensureUserProvisioned(userId).then(() => next()).catch((err) => {
+    console.error("[auto-provision] Error:", err);
+    next();
+  });
 }
 
 router.get("/api/health", (_req, res) => {
@@ -41,7 +112,7 @@ router.get("/api/reviews", requireAuth, async (req: Request, res: Response) => {
       return;
     }
     const data = await storage.getReviews(cabinetId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -54,7 +125,7 @@ router.get("/api/reviews/:id", requireAuth, async (req: Request, res: Response) 
       res.status(404).json({ error: "Review not found" });
       return;
     }
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -62,7 +133,7 @@ router.get("/api/reviews/:id", requireAuth, async (req: Request, res: Response) 
 
 router.patch("/api/reviews/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    await storage.updateReview(req.params.id, req.body);
+    await storage.updateReview(req.params.id, toCamelCase(req.body));
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -77,7 +148,7 @@ router.get("/api/product-articles", requireAuth, async (req: Request, res: Respo
       return;
     }
     const data = await storage.getProductArticles(cabinetId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -91,7 +162,7 @@ router.get("/api/chats", requireAuth, async (req: Request, res: Response) => {
       return;
     }
     const data = await storage.getChats(cabinetId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -105,7 +176,7 @@ router.get("/api/chat-messages", requireAuth, async (req: Request, res: Response
       return;
     }
     const data = await storage.getChatMessages(chatId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -124,7 +195,7 @@ router.get("/api/cabinets", requireAuth, async (req: Request, res: Response) => 
   try {
     const userId = (req as any).userId;
     const data = await storage.getCabinets(userId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -133,8 +204,8 @@ router.get("/api/cabinets", requireAuth, async (req: Request, res: Response) => 
 router.post("/api/cabinets", requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const data = await storage.createCabinet({ ...req.body, userId });
-    res.json(data);
+    const data = await storage.createCabinet({ ...toCamelCase(req.body), userId });
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -142,7 +213,7 @@ router.post("/api/cabinets", requireAuth, async (req: Request, res: Response) =>
 
 router.patch("/api/cabinets/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    await storage.updateCabinet(req.params.id, req.body);
+    await storage.updateCabinet(req.params.id, toCamelCase(req.body));
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -162,7 +233,7 @@ router.get("/api/settings", requireAuth, async (req: Request, res: Response) => 
   try {
     const userId = (req as any).userId;
     const data = await storage.getSettings(userId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -176,7 +247,7 @@ router.patch("/api/settings", requireAuth, async (req: Request, res: Response) =
       res.status(404).json({ error: "Settings not found" });
       return;
     }
-    await storage.updateSettings(existing.id, req.body);
+    await storage.updateSettings(existing.id, toCamelCase(req.body));
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -325,7 +396,7 @@ router.get("/api/admin/transactions", requireAuth, async (req: Request, res: Res
   try {
     const typeFilter = req.query.type as string | undefined;
     const data = await storage.getTokenTransactions(typeFilter);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -335,7 +406,7 @@ router.get("/api/admin/ai-transactions", requireAuth, async (req: Request, res: 
   try {
     const typeFilter = req.query.type as string | undefined;
     const data = await storage.getAiRequestTransactions(typeFilter);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -355,7 +426,7 @@ router.get("/api/conversations", requireAuth, async (req: Request, res: Response
   try {
     const userId = (req as any).userId;
     const data = await storage.getConversations(userId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -364,8 +435,8 @@ router.get("/api/conversations", requireAuth, async (req: Request, res: Response
 router.post("/api/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const data = await storage.createConversation({ ...req.body, userId });
-    res.json(data);
+    const data = await storage.createConversation({ ...toCamelCase(req.body), userId });
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -373,7 +444,7 @@ router.post("/api/conversations", requireAuth, async (req: Request, res: Respons
 
 router.patch("/api/conversations/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    await storage.updateConversation(req.params.id, req.body);
+    await storage.updateConversation(req.params.id, toCamelCase(req.body));
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -397,7 +468,7 @@ router.get("/api/ai-messages", requireAuth, async (req: Request, res: Response) 
       return;
     }
     const data = await storage.getAiMessages(conversationId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -405,7 +476,7 @@ router.get("/api/ai-messages", requireAuth, async (req: Request, res: Response) 
 
 router.post("/api/ai-messages", requireAuth, async (req: Request, res: Response) => {
   try {
-    await storage.insertAiMessage(req.body);
+    await storage.insertAiMessage(toCamelCase(req.body));
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -421,7 +492,7 @@ router.get("/api/recommendations", requireAuth, async (req: Request, res: Respon
       return;
     }
     const data = await storage.getRecommendations(sourceArticle, cabinetId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -435,7 +506,7 @@ router.get("/api/recommendations/summary", requireAuth, async (req: Request, res
       return;
     }
     const data = await storage.getRecommendationsSummary(cabinetId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -444,7 +515,7 @@ router.get("/api/recommendations/summary", requireAuth, async (req: Request, res
 router.post("/api/recommendations", requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    await storage.insertRecommendation({ ...req.body, userId });
+    await storage.insertRecommendation({ ...toCamelCase(req.body), userId });
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -464,7 +535,7 @@ router.get("/api/profiles/me", requireAuth, async (req: Request, res: Response) 
   try {
     const userId = (req as any).userId;
     const data = await storage.getProfile(userId);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -473,7 +544,7 @@ router.get("/api/profiles/me", requireAuth, async (req: Request, res: Response) 
 router.post("/api/profiles", requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    await storage.upsertProfile({ ...req.body, id: userId });
+    await storage.upsertProfile({ ...toCamelCase(req.body), id: userId });
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -505,7 +576,7 @@ router.get("/api/export/:table", requireAuth, async (req: Request, res: Response
     const table = req.params.table;
     const columns = req.query.columns ? (req.query.columns as string).split(",") : [];
     const data = await storage.getTableData(table, columns);
-    res.json(data);
+    res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

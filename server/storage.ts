@@ -200,6 +200,11 @@ export class DatabaseStorage {
     await db.update(settings).set(data).where(eq(settings.id, id));
   }
 
+  async insertSettings(data: { userId: string }): Promise<Setting> {
+    const rows = await db.insert(settings).values(data).returning();
+    return rows[0];
+  }
+
   async getProfile(userId: string): Promise<Profile | null> {
     const rows = await db.select().from(profiles).where(eq(profiles.id, userId)).limit(1);
     return rows[0] ?? null;

@@ -65,7 +65,7 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
   const [isEditingKey, setIsEditingKey] = useState(false);
   const [ratingSectionOpen, setRatingSectionOpen] = useState(true);
   const [replyModes, setReplyModes] = useState<ReplyModes>(DEFAULT_REPLY_MODES);
-  const [telegramSectionOpen, setTelegramSectionOpen] = useState(initialSection === "telegram");
+  const [telegramSectionOpen, setTelegramSectionOpen] = useState(false);
   const [telegramLink, setTelegramLink] = useState<string | null>(null);
   const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
   const [telegramUnlinkLoading, setTelegramUnlinkLoading] = useState(false);
@@ -88,8 +88,16 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
       setIsEditingKey(false);
       setApiKeyInput("");
       setTelegramLink(null);
-    } else if (initialSection === "telegram") {
+      setTelegramSectionOpen(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open && initialSection === "telegram") {
       setTelegramSectionOpen(true);
+      setTimeout(() => {
+        document.getElementById("settings-telegram-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     }
   }, [open, initialSection]);
 
@@ -345,7 +353,7 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
 
           {/* Telegram Bot Section */}
           <Collapsible open={telegramSectionOpen} onOpenChange={setTelegramSectionOpen}>
-            <div className="space-y-3">
+            <div id="settings-telegram-section" className="space-y-3">
               <CollapsibleTrigger asChild>
                 <div className="flex items-center gap-2 cursor-pointer hover-elevate rounded-md py-1 px-1 -mx-1" data-testid="trigger-section-telegram">
                   <ChevronRight

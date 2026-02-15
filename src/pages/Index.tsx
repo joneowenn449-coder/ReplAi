@@ -152,7 +152,14 @@ const Index = () => {
         )}
       </main>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} initialSection={settingsInitialSection} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={(v) => {
+          setSettingsOpen(v);
+          if (!v) setSettingsInitialSection(undefined);
+        }}
+        initialSection={settingsInitialSection}
+      />
     </div>
   );
 };

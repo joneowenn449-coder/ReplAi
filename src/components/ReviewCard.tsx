@@ -245,12 +245,6 @@ export const ReviewCard = ({
         <div className="mt-3 border-t border-border pt-3">
           <div className="flex items-center gap-2 mb-1">
             <p className="text-xs font-medium text-success">Отправленный ответ:</p>
-            {status === "auto" && (
-              <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0">Автоответ</Badge>
-            )}
-            {status === "sent" && (
-              <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0">Ручной</Badge>
-            )}
             {isEdited && (
               <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px] px-1.5 py-0">Редактировано</Badge>
             )}

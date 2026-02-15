@@ -152,11 +152,19 @@ async function processCabinetReviews(
   const cabinetId = cabinet.id;
   const WB_API_KEY = cabinet.wbApiKey!;
   const defaultModes: Record<string, string> = { "1": "manual", "2": "manual", "3": "manual", "4": "manual", "5": "manual" };
-  const replyModes = (cabinet.replyModes as Record<string, string>) || defaultModes;
+
+  let cabinetModes = cabinet.replyModes as Record<string, string> | null;
+  if (!cabinetModes || Object.keys(cabinetModes).length === 0) {
+    const userSettings = await storage.getSettings(userId);
+    cabinetModes = (userSettings?.replyModes as Record<string, string>) || null;
+  }
+  const replyModes = (cabinetModes && Object.keys(cabinetModes).length > 0) ? cabinetModes : defaultModes;
 
   let currentBalance = await storage.getTokenBalance(userId);
   const promptTemplate = cabinet.aiPromptTemplate ||
     "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
+
+  console.log(`[sync-reviews] cabinet=${cabinetId} replyModes=${JSON.stringify(replyModes)} balance=${currentBalance}`);
 
   const allFeedbacks: any[] = [];
   let skip = 0;
@@ -1400,7 +1408,7 @@ async function runAutoSyncInternal() {
     try {
       if (OPENROUTER_API_KEY) {
         const reviewResult = await processCabinetReviews(cabinet, OPENROUTER_API_KEY);
-        console.log(`[auto-sync] Reviews for cabinet=${cabinet.id}: new=${reviewResult.new_reviews}, auto=${reviewResult.auto_sent}`);
+        console.log(`[auto-sync] Reviews for cabinet=${cabinet.id}: new=${reviewResult.new}, auto=${reviewResult.autoSent}`);
       }
     } catch (e: any) {
       console.error(`[auto-sync] Review sync failed for cabinet=${cabinet.id}:`, e.message);

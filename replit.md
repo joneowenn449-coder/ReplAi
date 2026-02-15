@@ -101,13 +101,15 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - Photo handling: reviews with photos sent via sendPhoto, edits use editMessageCaption; text reviews use sendMessage/editMessageText
 - Duplicate protection: keyboard removed after publish
 - shouldNotify(cabinet, rating, text): filters notifications based on tgNotifyType preference
-- Schema fields: tgNotifyType (all/negative/questions), tgReplyMode (manual/auto/drafts) on wbCabinets
+- Schema fields: tgNotifyType (all/negative/questions) on wbCabinets
+- Reply modes: configured via replyModes JSON on wbCabinets (per-rating: {"1":"manual",...,"5":"auto"}), editable from bot via step-by-step flow (rmcfg_start/rmset callbacks)
 - API routes: POST /api/functions/telegram-link, POST /api/functions/telegram-unlink
 - Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
 
 ## Recent Changes
+- 2026-02-15: Telegram bot reply modes: removed tgReplyMode, now uses cabinet's replyModes JSON directly; step-by-step config in bot (4-5 stars / 1-3 stars, only Ручной/Авто)
 - 2026-02-15: Enhanced Telegram bot: settings menu, notification preferences, rich notification format with photos, Generate/Publish/Edit/Regenerate flow, shouldNotify filtering
-- 2026-02-15: Added tgNotifyType & tgReplyMode fields to wbCabinets schema + DB migration
+- 2026-02-15: Added tgNotifyType field to wbCabinets schema + DB migration
 - 2026-02-15: Telegram bot integration: notifications, manual review approval via inline buttons, auth token linking
 - 2026-02-15: Extracted generateReplyForReview as reusable function in functions.ts
 - 2026-02-15: Added telegramChatId to wbCabinets, telegramAuthTokens table

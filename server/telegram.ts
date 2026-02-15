@@ -42,16 +42,28 @@ export function shouldNotify(cabinet: any, rating: number, reviewText: string | 
   }
 }
 
+function formatReplyModes(replyModes: Record<string, string> | null): string {
+  const modes = replyModes && Object.keys(replyModes).length > 0
+    ? replyModes
+    : { "1": "manual", "2": "manual", "3": "manual", "4": "auto", "5": "auto" };
+
+  const modeLabel = (m: string) => m === "auto" ? "Авто" : "Ручной";
+
+  const high = modes["4"] || modes["5"] || "auto";
+  const low = modes["1"] || modes["2"] || modes["3"] || "manual";
+
+  return `⭐⭐⭐⭐-⭐⭐⭐⭐⭐ → ${modeLabel(high)}\n⭐-⭐⭐⭐ → ${modeLabel(low)}`;
+}
+
 async function sendSettingsMenu(chatId: string, cabinetId: string, messageId?: number) {
   try {
     const cabinet = await storage.getCabinetById(cabinetId);
     if (!cabinet || !bot) return;
 
     const notifyType = cabinet.tgNotifyType || "all";
-    const replyMode = cabinet.tgReplyMode || "manual";
-
     const checkN = (type: string) => notifyType === type ? "\u2705 " : "";
-    const checkM = (type: string) => replyMode === type ? "\u2705 " : "";
+
+    const modesInfo = formatReplyModes(cabinet.replyModes as Record<string, string> | null);
 
     const keyboard: TelegramBot.InlineKeyboardButton[][] = [
       [{ text: "\uD83D\uDD14 \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F:", callback_data: "noop" }],
@@ -60,16 +72,11 @@ async function sendSettingsMenu(chatId: string, cabinetId: string, messageId?: n
         { text: `${checkN("negative")}\u041D\u0435\u0433\u0430\u0442\u0438\u0432`, callback_data: `notify_neg_${cabinetId}` },
         { text: `${checkN("questions")}\u0412\u043E\u043F\u0440\u043E\u0441\u044B`, callback_data: `notify_questions_${cabinetId}` },
       ],
-      [{ text: "\uD83D\uDCDD \u0420\u0435\u0436\u0438\u043C \u043E\u0442\u0432\u0435\u0442\u043E\u0432:", callback_data: "noop" }],
-      [
-        { text: `${checkM("manual")}\u0420\u0443\u0447\u043D\u043E\u0439`, callback_data: `mode_manual_${cabinetId}` },
-        { text: `${checkM("auto")}\u0410\u0432\u0442\u043E (AI)`, callback_data: `mode_auto_${cabinetId}` },
-        { text: `${checkM("drafts")}\u0427\u0435\u0440\u043D\u043E\u0432\u0438\u043A`, callback_data: `mode_drafts_${cabinetId}` },
-      ],
+      [{ text: "\u2699\uFE0F \u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C \u0440\u0435\u0436\u0438\u043C \u043E\u0442\u0432\u0435\u0442\u043E\u0432", callback_data: `rmcfg_start_${cabinetId}` }],
       [{ text: "\u2705 \u0413\u043E\u0442\u043E\u0432\u043E", callback_data: `settings_done_${cabinetId}` }],
     ];
 
-    const text = "\u2699\uFE0F \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F \u0434\u043B\u044F \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u0430:";
+    const text = `\u2699\uFE0F \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u043A\u0430\u0431\u0438\u043D\u0435\u0442\u0430:\n\n\uD83D\uDCDD \u0420\u0435\u0436\u0438\u043C \u043E\u0442\u0432\u0435\u0442\u043E\u0432:\n${modesInfo}`;
 
     if (messageId) {
       await bot.editMessageText(text, {
@@ -84,6 +91,42 @@ async function sendSettingsMenu(chatId: string, cabinetId: string, messageId?: n
     }
   } catch (err) {
     console.error("[telegram] Error sending settings menu:", err);
+  }
+}
+
+async function sendReplyModeStep(chatId: string, cabinetId: string, step: "high" | "low", messageId: number) {
+  try {
+    if (!bot) return;
+    const cabinet = await storage.getCabinetById(cabinetId);
+    if (!cabinet) return;
+
+    const modes = (cabinet.replyModes as Record<string, string>) || {};
+    const currentHigh = modes["4"] || modes["5"] || "auto";
+    const currentLow = modes["1"] || modes["2"] || modes["3"] || "manual";
+
+    if (step === "high") {
+      const checkH = (m: string) => currentHigh === m ? "\u2705 " : "";
+      const text = "\u2B50\u2B50\u2B50\u2B50-\u2B50\u2B50\u2B50\u2B50\u2B50 \u0420\u0435\u0436\u0438\u043C \u0434\u043B\u044F 4-5 \u0437\u0432\u0451\u0437\u0434:";
+      const keyboard: TelegramBot.InlineKeyboardButton[][] = [
+        [
+          { text: `${checkH("manual")}\u0420\u0443\u0447\u043D\u043E\u0439`, callback_data: `rmset_high_manual_${cabinetId}` },
+          { text: `${checkH("auto")}\u0410\u0432\u0442\u043E`, callback_data: `rmset_high_auto_${cabinetId}` },
+        ],
+      ];
+      await bot.editMessageText(text, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: keyboard } });
+    } else {
+      const checkL = (m: string) => currentLow === m ? "\u2705 " : "";
+      const text = "\u2B50-\u2B50\u2B50\u2B50 \u0420\u0435\u0436\u0438\u043C \u0434\u043B\u044F 1-3 \u0437\u0432\u0451\u0437\u0434:";
+      const keyboard: TelegramBot.InlineKeyboardButton[][] = [
+        [
+          { text: `${checkL("manual")}\u0420\u0443\u0447\u043D\u043E\u0439`, callback_data: `rmset_low_manual_${cabinetId}` },
+          { text: `${checkL("auto")}\u0410\u0432\u0442\u043E`, callback_data: `rmset_low_auto_${cabinetId}` },
+        ],
+      ];
+      await bot.editMessageText(text, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: keyboard } });
+    }
+  } catch (err) {
+    console.error("[telegram] Error sending reply mode step:", err);
   }
 }
 
@@ -325,17 +368,36 @@ export function startTelegramBot() {
         return;
       }
 
-      if (query.data.startsWith("mode_")) {
-        const parts = query.data.split("_");
-        const modeKey = parts[1];
-        const cabinetId = parts.slice(2).join("_");
-
-        const modeMap: Record<string, string> = { manual: "manual", auto: "auto", drafts: "drafts" };
-        const newMode = modeMap[modeKey] || "manual";
-
-        await storage.updateCabinet(cabinetId, { tgReplyMode: newMode } as any);
-        await sendSettingsMenu(chatId, cabinetId, messageId);
+      if (query.data.startsWith("rmcfg_start_")) {
+        const cabinetId = query.data.replace("rmcfg_start_", "");
+        await sendReplyModeStep(chatId, cabinetId, "high", messageId);
         await bot!.answerCallbackQuery(query.id);
+        return;
+      }
+
+      if (query.data.startsWith("rmset_")) {
+        const parts = query.data.split("_");
+        const group = parts[1];
+        const mode = parts[2];
+        const cabinetId = parts.slice(3).join("_");
+
+        const cabinet = await storage.getCabinetById(cabinetId);
+        const currentModes = (cabinet?.replyModes as Record<string, string>) || {};
+
+        if (group === "high") {
+          currentModes["4"] = mode;
+          currentModes["5"] = mode;
+          await storage.updateCabinet(cabinetId, { replyModes: currentModes } as any);
+          await sendReplyModeStep(chatId, cabinetId, "low", messageId);
+          await bot!.answerCallbackQuery(query.id);
+        } else if (group === "low") {
+          currentModes["1"] = mode;
+          currentModes["2"] = mode;
+          currentModes["3"] = mode;
+          await storage.updateCabinet(cabinetId, { replyModes: currentModes } as any);
+          await sendSettingsMenu(chatId, cabinetId, messageId);
+          await bot!.answerCallbackQuery(query.id, { text: "\u0420\u0435\u0436\u0438\u043C \u043E\u0442\u0432\u0435\u0442\u043E\u0432 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D!" });
+        }
         return;
       }
 

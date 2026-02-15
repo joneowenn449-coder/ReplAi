@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -15,11 +21,12 @@ import {
   useDeleteRecommendation,
 } from "@/hooks/useRecommendations";
 import { useActiveCabinet } from "@/hooks/useCabinets";
-import { Plus, X, Package, Loader2, ArrowRight, ShoppingBag } from "lucide-react";
+import { Plus, X, Package, Loader2, ArrowRight, ShoppingBag, ChevronDown } from "lucide-react";
 
 export const RecommendationsSection = () => {
   const [sourceArticle, setSourceArticle] = useState("");
-  const [targetArticle, setTargetArticle] = useState("");
+  const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
+  const [isAdding, setIsAdding] = useState(false);
 
   const { data: activeCabinet } = useActiveCabinet();
   const cabinetId = activeCabinet?.id;
@@ -49,23 +56,37 @@ export const RecommendationsSection = () => {
       !existingPairs.has(`${sourceArticle}:${a.article}`)
   );
 
-  const handleAdd = () => {
-    if (!sourceArticle || !targetArticle || !cabinetId) return;
-    const targetName =
-      articles.find((a) => a.article === targetArticle)?.name || "";
-    addRecommendation.mutate(
-      {
-        sourceArticle,
-        targetArticle,
-        targetName,
-        cabinetId,
-      },
-      {
-        onSuccess: () => {
-          setTargetArticle("");
-        },
+  const toggleTarget = (article: string) => {
+    setSelectedTargets((prev) => {
+      const next = new Set(prev);
+      if (next.has(article)) {
+        next.delete(article);
+      } else {
+        next.add(article);
       }
-    );
+      return next;
+    });
+  };
+
+  const handleAddAll = async () => {
+    if (!sourceArticle || selectedTargets.size === 0 || !cabinetId) return;
+    setIsAdding(true);
+    try {
+      const targets = Array.from(selectedTargets);
+      for (const targetArt of targets) {
+        const targetName = articles.find((a) => a.article === targetArt)?.name || "";
+        await new Promise<void>((resolve, reject) => {
+          addRecommendation.mutate(
+            { sourceArticle, targetArticle: targetArt, targetName, cabinetId },
+            { onSuccess: () => resolve(), onError: () => reject() }
+          );
+        });
+      }
+      setSelectedTargets(new Set());
+      setSourceArticle("");
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   const handleDelete = (id: string, sourceArt: string) => {
@@ -165,7 +186,7 @@ export const RecommendationsSection = () => {
           Добавить рекомендацию
         </p>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={sourceArticle} onValueChange={(v) => { setSourceArticle(v); setTargetArticle(""); }}>
+          <Select value={sourceArticle} onValueChange={(v) => { setSourceArticle(v); setSelectedTargets(new Set()); }}>
             <SelectTrigger className="flex-1 min-w-[140px]" data-testid="select-source-article">
               <SelectValue placeholder="Товар..." />
             </SelectTrigger>
@@ -195,46 +216,66 @@ export const RecommendationsSection = () => {
 
           <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
 
-          <Select
-            value={targetArticle}
-            onValueChange={setTargetArticle}
-            disabled={!sourceArticle}
-          >
-            <SelectTrigger className="flex-1 min-w-[140px]" data-testid="select-target-article">
-              <SelectValue placeholder="Рекомендовать..." />
-            </SelectTrigger>
-            <SelectContent className="bg-popover border border-border z-50">
-              {availableTargets.length === 0 ? (
-                <div className="py-3 px-2 text-sm text-muted-foreground text-center">
-                  {sourceArticle ? "Все артикулы уже добавлены" : "Выберите товар"}
-                </div>
-              ) : (
-                availableTargets.map((a) => (
-                  <SelectItem key={a.article} value={a.article}>
-                    <span className="font-mono text-xs">{a.article}</span>
-                    {a.name && (
-                      <span className="text-xs text-muted-foreground ml-1.5">
-                        {truncateName(a.name, 25)}
-                      </span>
-                    )}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="flex-1 min-w-[140px] justify-between font-normal"
+                disabled={!sourceArticle}
+                data-testid="button-select-targets"
+              >
+                <span className="text-sm truncate">
+                  {selectedTargets.size === 0
+                    ? "Выберите артикулы..."
+                    : `Выбрано: ${selectedTargets.size}`}
+                </span>
+                <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[280px] p-0" align="start">
+              <div className="max-h-[240px] overflow-y-auto">
+                {availableTargets.length === 0 ? (
+                  <div className="py-4 px-3 text-sm text-muted-foreground text-center">
+                    {sourceArticle ? "Все артикулы уже добавлены" : "Выберите товар"}
+                  </div>
+                ) : (
+                  availableTargets.map((a) => (
+                    <label
+                      key={a.article}
+                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover-elevate"
+                      data-testid={`checkbox-target-${a.article}`}
+                    >
+                      <Checkbox
+                        checked={selectedTargets.has(a.article)}
+                        onCheckedChange={() => toggleTarget(a.article)}
+                      />
+                      <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                        <span className="font-mono text-xs">{a.article}</span>
+                        {a.name && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {truncateName(a.name, 22)}
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
 
           <Button
             variant="outline"
             size="icon"
-            onClick={handleAdd}
+            onClick={handleAddAll}
             disabled={
               !sourceArticle ||
-              !targetArticle ||
-              addRecommendation.isPending
+              selectedTargets.size === 0 ||
+              isAdding
             }
             data-testid="button-add-recommendation"
           >
-            {addRecommendation.isPending ? (
+            {isAdding ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Plus className="w-4 h-4" />

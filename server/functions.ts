@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { storage } from "./storage";
 import crypto from "crypto";
+import { sendAutoReplyNotification, sendManualReviewForApproval } from "./telegram";
 
 const WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru";
 const WB_CHAT_BASE = "https://buyer-chat-api.wildberries.ru";
@@ -292,6 +293,25 @@ async function processCabinetReviews(
         userId, amount: -1, type: "usage",
         description: "Автоответ на отзыв", reviewId: insertedReview.id,
       });
+      sendAutoReplyNotification(cabinetId, {
+        userName: fb.userName || "Покупатель",
+        rating: fb.productValuation || 5,
+        text: fb.text || "",
+        productName: fb.productDetails?.productName || fb.subjectName || "Товар",
+      }, aiDraft).catch(err => console.error("[telegram] auto-reply notification error:", err));
+    }
+
+    if (status === "pending" && aiDraft && insertedReview) {
+      const ratingKey2 = String(rating);
+      const modeForRating2 = replyModes[ratingKey2] || "manual";
+      if (modeForRating2 === "manual") {
+        sendManualReviewForApproval(cabinetId, insertedReview.id, {
+          userName: fb.userName || "Покупатель",
+          rating: fb.productValuation || 5,
+          text: fb.text || "",
+          productName: fb.productDetails?.productName || fb.subjectName || "Товар",
+        }, aiDraft).catch(err => console.error("[telegram] manual review notification error:", err));
+      }
     }
   }
 
@@ -800,6 +820,126 @@ export async function generateReply(req: Request, res: Response) {
   } catch (e: any) {
     console.error("generate-reply error:", e);
     res.status(500).json({ error: e.message });
+  }
+}
+
+export async function generateReplyForReview(review: any, cabinet: any): Promise<string | null> {
+  try {
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+    if (!OPENROUTER_API_KEY) return null;
+
+    const globalPrompt = await storage.getGlobalSetting("default_prompt");
+    const globalExamples = await storage.getGlobalSetting("response_examples");
+    const globalRules = await storage.getGlobalSetting("rules");
+    let basePrompt = cabinet?.aiPromptTemplate || globalPrompt ||
+      "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
+    const cabinetBrand = cabinet?.brandName || "";
+
+    const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules);
+
+    let recommendationInstruction = "";
+    if (review.productArticle && review.cabinetId) {
+      const recommendations = await storage.getRecommendationsByArticle(review.productArticle, review.cabinetId);
+      if (recommendations && recommendations.length > 0 && review.rating >= 4) {
+        const recList = recommendations
+          .map((r: any) => `- Артикул ${r.targetArticle}${r.targetName ? `: "${r.targetName}"` : ""}`)
+          .join("\n");
+        recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
+      }
+    }
+
+    const isEmptyReview = !review.text && !review.pros && !review.cons;
+    let emptyInstruction = "";
+    if (isEmptyReview) {
+      emptyInstruction = review.rating >= 4
+        ? `\n\n[Это пустой отзыв без текста. Покупатель поставил только оценку ${review.rating} из 5.\nНапиши КОРОТКУЮ благодарность за отзыв и высокую оценку. Максимум 1-2 предложения.]`
+        : `\n\n[Это пустой отзыв без текста. Покупатель поставил низкую оценку ${review.rating} из 5 без пояснения.\nВырази сожаление. Предложи написать в чат с продавцом.\nМаксимум 1-2 предложения.]`;
+    }
+
+    const photoLinks = Array.isArray(review.photoLinks) ? review.photoLinks : [];
+    const photoCount = photoLinks.length;
+    const hasVideo = review.hasVideo === true;
+    let attachmentInfo = "";
+    if (photoCount > 0 || hasVideo) {
+      const parts: string[] = [];
+      if (photoCount > 0) {
+        const photoWord = photoCount === 1 ? "фотографию" : photoCount < 5 ? "фотографии" : "фотографий";
+        parts.push(`${photoCount} ${photoWord}`);
+      }
+      if (hasVideo) parts.push("видео");
+      attachmentInfo = photoCount > 0
+        ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже — проанализируй их и учти в ответе, если это уместно.]`
+        : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
+    }
+
+    let reviewContent = "";
+    const contentParts: string[] = [];
+    if (review.text) contentParts.push(`Комментарий: ${review.text}`);
+    if (review.pros) contentParts.push(`Плюсы: ${review.pros}`);
+    if (review.cons) contentParts.push(`Недостатки: ${review.cons}`);
+    reviewContent = contentParts.length > 0 ? contentParts.join("\n\n") : "(Без текста, только оценка)";
+
+    const authorName = review.authorName || "";
+    const nameInstruction = authorName && authorName !== "Покупатель"
+      ? `\n\nИмя покупателя: ${authorName}. Обратись к покупателю по имени в ответе.`
+      : "";
+
+    const isRefusal = detectRefusal(review.text, review.pros, review.cons);
+    const refusalWarning = isRefusal
+      ? `\n\n[ВНИМАНИЕ: Покупатель НЕ выкупил товар. НЕ благодари за покупку. Поблагодари за внимание к бренду, вырази сожаление и пригласи вернуться.]`
+      : "";
+
+    const brandName = review.brandName || cabinetBrand || "";
+    const brandInstruction = brandName
+      ? `\n\nНазвание бренда продавца: ${brandName}. Используй это название при обращении к покупателю.`
+      : "";
+
+    const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.productName}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
+
+    const model = photoCount > 0
+      ? "openai/gpt-4-vision-preview"
+      : review.rating >= 4
+        ? "google/gemini-2.0-flash-001"
+        : "openai/gpt-4o";
+
+    const userContent: any = photoCount > 0
+      ? [
+          { type: "text", text: userMessage },
+          ...photoLinks.slice(0, 5).map((photo: any) => ({
+            type: "image_url",
+            image_url: { url: photo.miniSize || photo.fullSize },
+          })).filter((p: any) => p.image_url.url),
+        ]
+      : userMessage;
+
+    const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: promptTemplate },
+          { role: "user", content: userContent },
+        ],
+        max_tokens: isEmptyReview ? 300 : 1000,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!aiResp.ok) {
+      const text = await aiResp.text();
+      console.error(`[generateReplyForReview] AI error ${aiResp.status}: ${text}`);
+      return null;
+    }
+
+    const aiData = await aiResp.json();
+    return aiData.choices?.[0]?.message?.content || null;
+  } catch (e: any) {
+    console.error("[generateReplyForReview] Error:", e);
+    return null;
   }
 }
 

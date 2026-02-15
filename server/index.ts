@@ -7,6 +7,7 @@ import { runAutoSync } from "./functions";
 import { db } from "./db";
 import { userRoles } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { startTelegramBot } from "./telegram";
 
 const app = express();
 
@@ -64,6 +65,7 @@ async function runPeriodicSync() {
         console.error("[admin] Error granting admin role:", err);
       }
     })();
+    startTelegramBot();
     runAutoArchive();
     setInterval(runAutoArchive, ARCHIVE_INTERVAL_MS);
     setTimeout(() => runPeriodicSync(), 10000);

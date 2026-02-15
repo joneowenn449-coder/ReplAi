@@ -4,7 +4,7 @@ import {
   reviews, chats, chatMessages, wbCabinets, settings, profiles,
   tokenBalances, aiRequestBalances, tokenTransactions, aiRequestTransactions,
   userRoles, aiConversations, aiMessages, productRecommendations, payments,
-  globalSettings,
+  globalSettings, telegramAuthTokens,
   type Review, type InsertReview,
   type Chat, type InsertChat,
   type ChatMessage, type InsertChatMessage,
@@ -600,6 +600,32 @@ export class DatabaseStorage {
         target: globalSettings.key,
         set: { value, updatedAt: new Date() },
       });
+  }
+
+  async createTelegramAuthToken(token: string, userId: string, cabinetId: string, expiresAt: Date): Promise<void> {
+    await db.insert(telegramAuthTokens).values({ token, userId, cabinetId, expiresAt });
+  }
+
+  async validateAndConsumeTelegramAuthToken(token: string): Promise<{ userId: string; cabinetId: string } | null> {
+    const results = await db.select().from(telegramAuthTokens).where(eq(telegramAuthTokens.token, token)).limit(1);
+    if (results.length === 0) return null;
+    const authToken = results[0];
+    await db.delete(telegramAuthTokens).where(eq(telegramAuthTokens.token, token));
+    if (new Date() > authToken.expiresAt) return null;
+    return { userId: authToken.userId, cabinetId: authToken.cabinetId };
+  }
+
+  async getCabinetByTelegramChatId(chatId: string): Promise<WbCabinet | null> {
+    const results = await db.select().from(wbCabinets).where(eq(wbCabinets.telegramChatId, chatId)).limit(1);
+    return results[0] || null;
+  }
+
+  async getCabinetsByTelegramChatId(chatId: string): Promise<WbCabinet[]> {
+    return await db.select().from(wbCabinets).where(eq(wbCabinets.telegramChatId, chatId));
+  }
+
+  async cleanupExpiredTelegramTokens(): Promise<void> {
+    await db.delete(telegramAuthTokens).where(sql`${telegramAuthTokens.expiresAt} < NOW()`);
   }
 }
 

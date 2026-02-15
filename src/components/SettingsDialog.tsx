@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +31,8 @@ import {
 import { useActiveCabinet, useUpdateCabinet, useDeleteCabinet } from "@/hooks/useCabinets";
 import type { WbCabinet } from "@/hooks/useCabinets";
 import { toast } from "sonner";
-import { Check, Pencil, Trash2, Loader2, KeyRound, Star, ChevronRight } from "lucide-react";
+import { Check, Pencil, Trash2, Loader2, KeyRound, Star, ChevronRight, MessageCircle, Link2, Unlink, Copy } from "lucide-react";
+import { apiRequest } from "@/lib/api";
 import {
   Collapsible,
   CollapsibleContent,
@@ -62,6 +64,11 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
   const [isEditingKey, setIsEditingKey] = useState(false);
   const [ratingSectionOpen, setRatingSectionOpen] = useState(true);
   const [replyModes, setReplyModes] = useState<ReplyModes>(DEFAULT_REPLY_MODES);
+  const [telegramSectionOpen, setTelegramSectionOpen] = useState(false);
+  const [telegramLink, setTelegramLink] = useState<string | null>(null);
+  const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
+  const [telegramUnlinkLoading, setTelegramUnlinkLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   const cabinet = activeCabinet;
   const hasKey = !!cabinet?.wb_api_key;
@@ -79,6 +86,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
     if (!open) {
       setIsEditingKey(false);
       setApiKeyInput("");
+      setTelegramLink(null);
     }
   }, [open]);
 
@@ -331,6 +339,149 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
 
           {/* Recommendations Section */}
           <RecommendationsSection />
+
+          {/* Telegram Bot Section */}
+          <Collapsible open={telegramSectionOpen} onOpenChange={setTelegramSectionOpen}>
+            <div className="space-y-3">
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center gap-2 cursor-pointer hover-elevate rounded-md py-1 px-1 -mx-1" data-testid="trigger-section-telegram">
+                  <ChevronRight
+                    className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                      telegramSectionOpen ? "rotate-90" : ""
+                    }`}
+                  />
+                  <MessageCircle className="w-4 h-4 text-muted-foreground" />
+                  <label className="text-sm font-medium text-foreground cursor-pointer">
+                    Telegram-бот
+                  </label>
+                  {cabinet?.telegram_chat_id && (
+                    <span className="text-xs text-success font-medium ml-auto">
+                      Подключен
+                    </span>
+                  )}
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-3 pt-1">
+                  {cabinet?.telegram_chat_id ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted border border-border">
+                        <Check className="w-4 h-4 text-success shrink-0" />
+                        <span className="text-sm text-foreground">Telegram подключен</span>
+                        <span className="text-xs text-success font-medium ml-auto">Подключен</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={telegramUnlinkLoading}
+                        data-testid="button-telegram-unlink"
+                        onClick={async () => {
+                          if (!cabinet) return;
+                          setTelegramUnlinkLoading(true);
+                          try {
+                            await apiRequest("/api/functions/telegram-unlink", {
+                              method: "POST",
+                              body: JSON.stringify({ cabinetId: cabinet.id }),
+                            });
+                            queryClient.invalidateQueries({ queryKey: ["wb_cabinets"] });
+                            toast.success("Telegram отключен");
+                          } catch (e: any) {
+                            toast.error(e.message || "Ошибка отключения");
+                          } finally {
+                            setTelegramUnlinkLoading(false);
+                          }
+                        }}
+                      >
+                        {telegramUnlinkLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Отключение...
+                          </>
+                        ) : (
+                          <>
+                            <Unlink className="w-4 h-4 mr-2" />
+                            Отключить Telegram
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        Подключите Telegram-бот для получения уведомлений об отзывах и управления ответами прямо из мессенджера.
+                      </p>
+                      {!telegramLink ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={telegramLinkLoading}
+                          data-testid="button-telegram-link"
+                          onClick={async () => {
+                            if (!cabinet) return;
+                            setTelegramLinkLoading(true);
+                            try {
+                              const result = await apiRequest("/api/functions/telegram-link", {
+                                method: "POST",
+                                body: JSON.stringify({ cabinetId: cabinet.id }),
+                              }) as { link: string };
+                              setTelegramLink(result.link);
+                            } catch (e: any) {
+                              toast.error(e.message || "Ошибка генерации ссылки");
+                            } finally {
+                              setTelegramLinkLoading(false);
+                            }
+                          }}
+                        >
+                          {telegramLinkLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Генерация ссылки...
+                            </>
+                          ) : (
+                            <>
+                              <Link2 className="w-4 h-4 mr-2" />
+                              Подключить Telegram
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            Нажмите на ссылку или скопируйте и откройте в Telegram:
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={telegramLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary underline break-all flex-1"
+                              data-testid="link-telegram-connect"
+                            >
+                              {telegramLink}
+                            </a>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              data-testid="button-copy-telegram-link"
+                              onClick={() => {
+                                navigator.clipboard.writeText(telegramLink);
+                                toast.success("Ссылка скопирована");
+                              }}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Ссылка действительна 10 минут.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
 
           {/* Brand Name Section */}
           <div className="space-y-2">

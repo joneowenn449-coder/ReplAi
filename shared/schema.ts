@@ -173,6 +173,15 @@ export const wbCabinets = replaiSchema.table("wb_cabinets", {
   lastSyncAt: timestamp("last_sync_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  telegramChatId: text("telegram_chat_id"),
+});
+
+export const telegramAuthTokens = replaiSchema.table("telegram_auth_tokens", {
+  token: text("token").primaryKey(),
+  userId: text("user_id").notNull(),
+  cabinetId: uuid("cabinet_id").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertAiConversationSchema = createInsertSchema(aiConversations).omit({ id: true, createdAt: true, updatedAt: true });
@@ -191,6 +200,7 @@ export const insertTokenTransactionSchema = createInsertSchema(tokenTransactions
 export const insertGlobalSettingSchema = createInsertSchema(globalSettings).omit({ id: true, updatedAt: true });
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true });
 export const insertWbCabinetSchema = createInsertSchema(wbCabinets).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTelegramAuthTokenSchema = createInsertSchema(telegramAuthTokens).omit({ createdAt: true });
 
 export type AiConversation = typeof aiConversations.$inferSelect;
 export type InsertAiConversation = z.infer<typeof insertAiConversationSchema>;
@@ -224,3 +234,5 @@ export type UserRole = typeof userRoles.$inferSelect;
 export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
 export type WbCabinet = typeof wbCabinets.$inferSelect;
 export type InsertWbCabinet = z.infer<typeof insertWbCabinetSchema>;
+export type TelegramAuthToken = typeof telegramAuthTokens.$inferSelect;
+export type InsertTelegramAuthToken = z.infer<typeof insertTelegramAuthTokenSchema>;

@@ -643,6 +643,65 @@ router.post("/api/functions/robokassa-webhook", robokassaWebhook);
 
 router.post("/api/functions/fetch-archive", requireAuth, fetchArchive);
 
+router.post("/api/functions/telegram-link", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { cabinetId } = req.body;
+    if (!cabinetId) {
+      res.status(400).json({ error: "cabinetId required" });
+      return;
+    }
+
+    const cabinet = await storage.getCabinetById(cabinetId);
+    if (!cabinet || cabinet.userId !== userId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const crypto = await import("crypto");
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await storage.createTelegramAuthToken(token, userId, cabinetId, expiresAt);
+
+    const { getTelegramBot } = await import("./telegram");
+    const bot = getTelegramBot();
+    let botUsername = "YourBot";
+    if (bot) {
+      try {
+        const me = await bot.getMe();
+        botUsername = me.username || "YourBot";
+      } catch {}
+    }
+
+    const link = `https://t.me/${botUsername}?start=auth_${token}`;
+    res.json({ link, token, expiresIn: 600 });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/api/functions/telegram-unlink", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { cabinetId } = req.body;
+    if (!cabinetId) {
+      res.status(400).json({ error: "cabinetId required" });
+      return;
+    }
+
+    const cabinet = await storage.getCabinetById(cabinetId);
+    if (!cabinet || cabinet.userId !== userId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    await storage.updateCabinet(cabinetId, { telegramChatId: null } as any);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get("/api/export/:table", requireAuth, async (req: Request, res: Response) => {
   try {
     const table = req.params.table;

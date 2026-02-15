@@ -88,7 +88,21 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - `POST /api/functions/robokassa-webhook` - Handles Robokassa payment callback (no auth)
 - `POST /api/functions/fetch-archive` - Imports archived (answered) reviews from WB
 
+## Telegram Bot (server/telegram.ts)
+- Uses TELEGRAM_BOT_TOKEN secret, gracefully skips init if not set
+- Long polling via node-telegram-bot-api
+- /start with auth_TOKEN payload: validates token, links chat_id to cabinet
+- Auth tokens expire in 10 minutes, one-time use (stored in telegram_auth_tokens table)
+- sendAutoReplyNotification: sends formatted message after auto-reply
+- sendManualReviewForApproval: sends review + AI draft with inline buttons (Send/Regenerate)
+- Callback handlers: send_REVIEWID sends to WB API + deducts token; regen_REVIEWID calls generateReplyForReview
+- API routes: POST /api/functions/telegram-link, POST /api/functions/telegram-unlink
+- Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
+
 ## Recent Changes
+- 2026-02-15: Telegram bot integration: notifications, manual review approval via inline buttons, auth token linking
+- 2026-02-15: Extracted generateReplyForReview as reusable function in functions.ts
+- 2026-02-15: Added telegramChatId to wbCabinets, telegramAuthTokens table
 - 2026-02-15: Ported all 10 Edge Functions to Express (server/functions.ts)
 - 2026-02-15: Added 8 new storage methods for business logic support
 - 2026-02-15: Migrated all frontend hooks from direct Supabase queries to server API

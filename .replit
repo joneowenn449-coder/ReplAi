@@ -8,8 +8,8 @@ channel = "stable-25_05"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bash", "-c", "NODE_ENV=production npx tsx server/index.ts"]
-build = ["bash", "-c", "npm run build"]
+run = ["npx", "tsx", "server/index.ts"]
+build = ["npm", "run", "build"]
 publicDir = "dist"
 
 [userenv]
@@ -22,6 +22,9 @@ POSTGRESQL_HOST = "85.193.81.180"
 POSTGRESQL_PORT = "5432"
 POSTGRESQL_USER = "gen_user"
 POSTGRESQL_DBNAME = "default_db"
+
+[userenv.production]
+NODE_ENV = "production"
 
 [workflows]
 runButton = "Project"

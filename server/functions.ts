@@ -106,10 +106,10 @@ async function generateAIReply(
   const userMessage = `ВАЖНО: следуй правилам промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating}/5) на "${productName}":\n\n${reviewText || "(Без текста)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
   const model = photoCount > 0 && photoLinks.length > 0
-    ? "google/gemini-2.5-flash"
+    ? "openai/gpt-4-vision-preview"
     : rating >= 4
-      ? "google/gemini-2.5-flash-lite"
-      : "google/gemini-2.5-flash";
+      ? "google/gemini-2.0-flash-001"
+      : "openai/gpt-4o";
 
   const userContent: any = photoCount > 0 && photoLinks.length > 0
     ? [
@@ -732,10 +732,10 @@ export async function generateReply(req: Request, res: Response) {
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.productName}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
     const model = photoCount > 0
-      ? "google/gemini-2.5-flash"
+      ? "openai/gpt-4-vision-preview"
       : review.rating >= 4
-        ? "google/gemini-2.5-flash-lite"
-        : "openai/gpt-5.2";
+        ? "google/gemini-2.0-flash-001"
+        : "openai/gpt-4o";
 
     const userContent: any = photoCount > 0
       ? [

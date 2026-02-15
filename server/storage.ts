@@ -59,10 +59,7 @@ export class DatabaseStorage {
       .update(reviews)
       .set({ status: "archived", updatedAt: new Date() })
       .where(
-        and(
-          eq(reviews.status, "sent"),
-          not(isNull(reviews.sentAnswer))
-        )
+        sql`${reviews.status} IN ('sent', 'new', 'pending')`
       )
       .returning({ id: reviews.id });
     return result.length;

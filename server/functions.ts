@@ -1309,7 +1309,7 @@ async function fetchArchiveInternal(userId: string, cabinetId: string, wbApiKey:
       brandName: reviewBrandName,
       photoLinks,
       hasVideo,
-      status: answer ? "archived" : "new",
+      status: "archived",
       aiDraft: null,
       sentAnswer: answer,
     });

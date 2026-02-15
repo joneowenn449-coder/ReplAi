@@ -113,7 +113,7 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, unreadChatsCou
           </div>
 
           <div className="flex items-center gap-3">
-            {tokenBalance !== null && tokenBalance !== undefined && (
+            {user && (
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5 text-sm">
                   <Coins className="w-4 h-4 text-primary" />

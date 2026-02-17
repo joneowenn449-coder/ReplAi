@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useAdminUsers, useUpdateBalance, useUpdateAiBalance } from "@/hooks/useAdmin";
+import { useAdminUsers, useUpdateBalance, useUpdateAiBalance, useDeleteUser } from "@/hooks/useAdmin";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -8,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import { Plus, Minus, Loader2, BrainCircuit, Coins, MessageCircle } from "lucide-react";
+import { Plus, Minus, Loader2, BrainCircuit, Coins, MessageCircle, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 
@@ -18,8 +19,10 @@ type BalanceTarget = "token" | "ai";
 
 export const UsersTable = () => {
   const { data: users, isLoading } = useAdminUsers();
+  const { user: currentUser } = useAuth();
   const updateBalance = useUpdateBalance();
   const updateAiBalance = useUpdateAiBalance();
+  const deleteUser = useDeleteUser();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<{ id: string; name: string } | null>(null);
@@ -27,6 +30,9 @@ export const UsersTable = () => {
   const [balanceTarget, setBalanceTarget] = useState<BalanceTarget>("token");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const openDialog = (userId: string, userName: string, type: "admin_topup" | "admin_deduct", target: BalanceTarget) => {
     setSelectedUser({ id: userId, name: userName });
@@ -161,6 +167,20 @@ export const UsersTable = () => {
                         </Button>
                       </div>
                     </div>
+                    {user.id !== currentUser?.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Удалить пользователя"
+                        data-testid={`button-delete-user-${user.id}`}
+                        onClick={() => {
+                          setDeleteTarget({ id: user.id, name: userName(user) });
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -198,6 +218,45 @@ export const UsersTable = () => {
             <Button onClick={handleSubmit} disabled={!amount || Number(amount) <= 0 || mutation.isPending}>
               {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               {actionType === "admin_topup" ? "Пополнить" : "Списать"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Удалить пользователя
+            </DialogTitle>
+            <DialogDescription>
+              Все данные пользователя будут безвозвратно удалены: кабинеты, отзывы, чаты, балансы и настройки.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-muted-foreground">
+              Пользователь: <span className="font-medium text-foreground">{deleteTarget?.name}</span>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} data-testid="button-cancel-delete">
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteTarget) {
+                  deleteUser.mutate(deleteTarget.id, {
+                    onSuccess: () => setDeleteDialogOpen(false),
+                  });
+                }
+              }}
+              disabled={deleteUser.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteUser.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Удалить
             </Button>
           </DialogFooter>
         </DialogContent>

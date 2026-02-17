@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Lock, Loader2, Check } from "lucide-react";
+import { ArrowLeft, User, Lock, Loader2, Check, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, signOut } = useAuth();
 
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [savingProfile, setSavingProfile] = useState(false);
@@ -20,6 +23,10 @@ export default function Profile() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +42,27 @@ export default function Profile() {
       toast.error(err.message || "Ошибка сохранения");
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      toast.error("Введите пароль для подтверждения");
+      return;
+    }
+    setDeleting(true);
+    try {
+      await apiRequest("/api/auth/account", {
+        method: "DELETE",
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      toast.success("Аккаунт удалён");
+      signOut();
+      navigate("/auth");
+    } catch (err: any) {
+      toast.error(err.message || "Ошибка удаления аккаунта");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -190,8 +218,81 @@ export default function Profile() {
               </form>
             </CardContent>
           </Card>
+
+          <Card className="border-destructive/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg text-destructive">
+                <Trash2 className="w-5 h-5" />
+                Удалить аккаунт
+              </CardTitle>
+              <CardDescription>
+                Все ваши данные будут безвозвратно удалены: кабинеты, отзывы, чаты, балансы и настройки.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setDeletePassword("");
+                  setDeleteDialogOpen(true);
+                }}
+                data-testid="button-open-delete-account"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Удалить аккаунт
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Удаление аккаунта
+            </DialogTitle>
+            <DialogDescription>
+              Это действие необратимо. Все ваши данные будут полностью удалены. Для подтверждения введите пароль.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="deletePassword">Пароль</Label>
+              <Input
+                id="deletePassword"
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Введите пароль для подтверждения"
+                autoComplete="current-password"
+                data-testid="input-delete-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} data-testid="button-cancel-delete-account">
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={deleting || !deletePassword}
+              data-testid="button-confirm-delete-account"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Удаление...
+                </>
+              ) : (
+                "Удалить навсегда"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

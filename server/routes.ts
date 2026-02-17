@@ -262,6 +262,35 @@ router.post("/api/auth/change-password", requireAuth, async (req: Request, res: 
   }
 });
 
+router.delete("/api/auth/account", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { password } = req.body;
+    if (!password) {
+      res.status(400).json({ error: "Необходимо ввести пароль" });
+      return;
+    }
+
+    const user = await storage.getAuthUser(userId);
+    if (!user) {
+      res.status(404).json({ error: "Пользователь не найден" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Неверный пароль" });
+      return;
+    }
+
+    await storage.deleteUser(userId);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("[auth/delete-account] Error:", e);
+    res.status(500).json({ error: "Ошибка удаления аккаунта" });
+  }
+});
+
 router.get("/api/reviews", requireAuth, async (req: Request, res: Response) => {
   try {
     const cabinetId = req.query.cabinet_id as string;
@@ -546,6 +575,35 @@ router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response)
     res.json(users);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete("/api/admin/users/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).userId;
+    const role = await storage.getUserRole(adminId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Доступ запрещён" });
+      return;
+    }
+
+    const targetId = req.params.id;
+    if (targetId === adminId) {
+      res.status(400).json({ error: "Нельзя удалить собственный аккаунт" });
+      return;
+    }
+
+    const profile = await storage.getProfile(targetId);
+    if (!profile) {
+      res.status(404).json({ error: "Пользователь не найден" });
+      return;
+    }
+
+    await storage.deleteUser(targetId);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("[admin/delete-user] Error:", e);
+    res.status(500).json({ error: "Ошибка удаления пользователя" });
   }
 });
 

@@ -724,6 +724,40 @@ export class DatabaseStorage {
   async getAllAuthUsers(): Promise<AuthUser[]> {
     return db.select().from(authUsers);
   }
+
+  async deleteUser(userId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      const userCabinets = await tx.select({ id: wbCabinets.id }).from(wbCabinets).where(eq(wbCabinets.userId, userId));
+      const cabinetIds = userCabinets.map(c => c.id);
+
+      if (cabinetIds.length > 0) {
+        for (const cabId of cabinetIds) {
+          await tx.delete(chatMessages).where(eq(chatMessages.cabinetId, cabId));
+          await tx.delete(chats).where(eq(chats.cabinetId, cabId));
+          await tx.delete(reviews).where(eq(reviews.cabinetId, cabId));
+          await tx.delete(productRecommendations).where(eq(productRecommendations.cabinetId, cabId));
+          await tx.delete(telegramAuthTokens).where(eq(telegramAuthTokens.cabinetId, cabId));
+        }
+        await tx.delete(wbCabinets).where(eq(wbCabinets.userId, userId));
+      }
+
+      const userConversations = await tx.select({ id: aiConversations.id }).from(aiConversations).where(eq(aiConversations.userId, userId));
+      for (const conv of userConversations) {
+        await tx.delete(aiMessages).where(eq(aiMessages.conversationId, conv.id));
+      }
+      await tx.delete(aiConversations).where(eq(aiConversations.userId, userId));
+
+      await tx.delete(aiRequestTransactions).where(eq(aiRequestTransactions.userId, userId));
+      await tx.delete(aiRequestBalances).where(eq(aiRequestBalances.userId, userId));
+      await tx.delete(tokenTransactions).where(eq(tokenTransactions.userId, userId));
+      await tx.delete(tokenBalances).where(eq(tokenBalances.userId, userId));
+      await tx.delete(payments).where(eq(payments.userId, userId));
+      await tx.delete(settings).where(eq(settings.userId, userId));
+      await tx.delete(userRoles).where(eq(userRoles.userId, userId));
+      await tx.delete(profiles).where(eq(profiles.id, userId));
+      await tx.delete(authUsers).where(eq(authUsers.id, userId));
+    });
+  }
 }
 
 export const storage = new DatabaseStorage();

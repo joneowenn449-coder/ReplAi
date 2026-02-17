@@ -112,6 +112,7 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
 
 ## Recent Changes
+- 2026-02-17: Account deletion: admin can delete users from UsersTable (with confirmation dialog, self-deletion blocked); users can self-delete from Profile page (password confirmation required, auto-logout); deleteUser storage method cleans all 15+ related tables in a transaction
 - 2026-02-17: Telegram bot section "Coming Soon" teaser for non-owner users (owner ID gated); full functionality only for owner account
 - 2026-02-17: Fixed review photo display: snake_case key mismatch in toSnakeCase conversion; added lightbox with keyboard navigation
 - 2026-02-17: External answer detection during sync: checks all pending reviews against WB API, marks as "answered_externally" if answered outside the service; frontend displays new status in Answered tab

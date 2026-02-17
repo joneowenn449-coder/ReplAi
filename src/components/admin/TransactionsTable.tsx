@@ -96,47 +96,49 @@ export const TransactionsTable = () => {
       </div>
 
       <div className="rounded-lg border border-border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>User ID</TableHead>
-              <TableHead>Тип</TableHead>
-              <TableHead className="text-right">Сумма</TableHead>
-              <TableHead>Описание</TableHead>
-              <TableHead>Дата</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {transactions?.length === 0 && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                  Нет транзакций
-                </TableCell>
+                <TableHead>User ID</TableHead>
+                <TableHead>Тип</TableHead>
+                <TableHead className="text-right">Сумма</TableHead>
+                <TableHead>Описание</TableHead>
+                <TableHead>Дата</TableHead>
               </TableRow>
-            )}
-            {transactions?.map((tx) => (
-              <TableRow key={tx.id}>
-                <TableCell className="text-xs text-muted-foreground font-mono">
-                  {tx.user_id.slice(0, 8)}...
-                </TableCell>
-                <TableCell>
-                  <Badge variant={(typeColors[tx.type] as "default" | "destructive") || "secondary"}>
-                    {labels[tx.type] || tx.type}
-                  </Badge>
-                </TableCell>
-                <TableCell className={`text-right font-semibold ${tx.amount > 0 ? "text-success" : "text-destructive"}`}>
-                  {tx.amount > 0 ? "+" : ""}{tx.amount}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
-                  {tx.description || "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {format(new Date(tx.created_at), "dd MMM yyyy, HH:mm", { locale: ru })}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {transactions?.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    Нет транзакций
+                  </TableCell>
+                </TableRow>
+              )}
+              {transactions?.map((tx) => (
+                <TableRow key={tx.id}>
+                  <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">
+                    {tx.user_id.slice(0, 8)}...
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={(typeColors[tx.type] as "default" | "destructive") || "secondary"}>
+                      {labels[tx.type] || tx.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className={`text-right font-semibold whitespace-nowrap ${tx.amount > 0 ? "text-success" : "text-destructive"}`}>
+                    {tx.amount > 0 ? "+" : ""}{tx.amount}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm max-w-[140px] sm:max-w-[200px] truncate">
+                    {tx.description || "\u2014"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
+                    {format(new Date(tx.created_at), "dd MMM yyyy, HH:mm", { locale: ru })}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );

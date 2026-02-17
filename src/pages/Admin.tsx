@@ -17,41 +17,46 @@ const Admin = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="bg-card border-b border-border">
-        <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-4">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Button variant="ghost" size="icon" asChild>
               <Link to="/">
                 <ArrowLeft className="w-4 h-4" />
               </Link>
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-foreground" data-testid="text-admin-title">Админ-панель</h1>
-              <p className="text-sm text-muted-foreground">Управление пользователями и настройками</p>
+              <h1 className="text-lg sm:text-xl font-bold text-foreground" data-testid="text-admin-title">Админ-панель</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">Управление пользователями и настройками</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-6">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="mb-6 flex-wrap gap-1">
-            <TabsTrigger value="overview" className="gap-2" data-testid="tab-overview">
-              <LayoutDashboard className="w-4 h-4" />
-              Обзор
-            </TabsTrigger>
-            <TabsTrigger value="users" className="gap-2" data-testid="tab-users">
-              <Users className="w-4 h-4" />
-              Пользователи
-            </TabsTrigger>
-            <TabsTrigger value="transactions" className="gap-2" data-testid="tab-transactions">
-              <ArrowRightLeft className="w-4 h-4" />
-              Транзакции
-            </TabsTrigger>
-            <TabsTrigger value="ai-settings" className="gap-2" data-testid="tab-ai-settings">
-              <Bot className="w-4 h-4" />
-              Настройки ИИ
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto scrollbar-hide mb-4 sm:mb-6">
+            <TabsList className="gap-1 w-max">
+              <TabsTrigger value="overview" className="gap-1.5 sm:gap-2 text-xs sm:text-sm" data-testid="tab-overview">
+                <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Обзор
+              </TabsTrigger>
+              <TabsTrigger value="users" className="gap-1.5 sm:gap-2 text-xs sm:text-sm" data-testid="tab-users">
+                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Пользователи</span>
+                <span className="sm:hidden">Юзеры</span>
+              </TabsTrigger>
+              <TabsTrigger value="transactions" className="gap-1.5 sm:gap-2 text-xs sm:text-sm" data-testid="tab-transactions">
+                <ArrowRightLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Транзакции</span>
+                <span className="sm:hidden">Тр-ции</span>
+              </TabsTrigger>
+              <TabsTrigger value="ai-settings" className="gap-1.5 sm:gap-2 text-xs sm:text-sm" data-testid="tab-ai-settings">
+                <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Настройки ИИ</span>
+                <span className="sm:hidden">ИИ</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview">
             <AdminOverview />

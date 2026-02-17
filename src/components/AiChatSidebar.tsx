@@ -174,7 +174,7 @@ export function AiChatSidebar({ activeId, onSelect, onNewChat }: Props) {
   };
 
   return (
-    <div className="w-64 border-r border-border/40 flex flex-col bg-background/50 shrink-0">
+    <div className="w-full sm:w-64 border-r border-border/40 flex flex-col bg-background shrink-0 h-full">
       <div className="p-3 border-b border-border/40">
         <Button
           onClick={onNewChat}

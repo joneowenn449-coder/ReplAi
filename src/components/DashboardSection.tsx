@@ -80,11 +80,10 @@ export const DashboardSection = ({ reviews, isLoading }: DashboardSectionProps) 
   }));
 
   return (
-    <div className="space-y-6">
-      {/* Filters */}
+    <div className="space-y-4 sm:space-y-6">
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-center gap-3">
+        <CardContent className="pt-4 sm:pt-6">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Date from */}
             <Popover>
               <PopoverTrigger asChild>
@@ -171,56 +170,55 @@ export const DashboardSection = ({ reviews, isLoading }: DashboardSectionProps) 
         </CardContent>
       </Card>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
         <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary">
-                <TrendingUp className="w-4 h-4 text-muted-foreground" />
+          <CardContent className="pt-3 sm:pt-5 pb-3 sm:pb-4 px-3 sm:px-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 rounded-lg bg-secondary">
+                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{data.totalReviews}</p>
-                <p className="text-xs text-muted-foreground">Всего отзывов</p>
+                <p className="text-lg sm:text-2xl font-bold">{data.totalReviews}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">Всего отзывов</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary">
-                <Star className="w-4 h-4 text-warning" />
+          <CardContent className="pt-3 sm:pt-5 pb-3 sm:pb-4 px-3 sm:px-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 rounded-lg bg-secondary">
+                <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-warning" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{data.avgRating}</p>
-                <p className="text-xs text-muted-foreground">Средний рейтинг</p>
+                <p className="text-lg sm:text-2xl font-bold">{data.avgRating}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">Средний рейтинг</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary">
-                <Clock className="w-4 h-4 text-warning" />
+          <CardContent className="pt-3 sm:pt-5 pb-3 sm:pb-4 px-3 sm:px-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 rounded-lg bg-secondary">
+                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-warning" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{data.pendingCount}</p>
-                <p className="text-xs text-muted-foreground">Ожидают ответа</p>
+                <p className="text-lg sm:text-2xl font-bold">{data.pendingCount}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">Ожидают ответа</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary">
-                <MessageSquare className="w-4 h-4 text-primary" />
+          <CardContent className="pt-3 sm:pt-5 pb-3 sm:pb-4 px-3 sm:px-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 rounded-lg bg-secondary">
+                <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{data.answeredCount}</p>
-                <p className="text-xs text-muted-foreground">Отвечено</p>
+                <p className="text-lg sm:text-2xl font-bold">{data.answeredCount}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">Отвечено</p>
               </div>
             </div>
           </CardContent>
@@ -305,33 +303,35 @@ export const DashboardSection = ({ reviews, isLoading }: DashboardSectionProps) 
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Топ артикулов</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Артикул</TableHead>
-                  <TableHead>Товар</TableHead>
-                  <TableHead className="text-right">Отзывы</TableHead>
-                  <TableHead className="text-right">Ср. рейтинг</TableHead>
-                  <TableHead className="text-right">% негативных</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.topArticles.slice(0, 20).map((a) => (
-                  <TableRow key={a.article}>
-                    <TableCell className="font-mono text-sm">{a.article}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{a.productName}</TableCell>
-                    <TableCell className="text-right">{a.count}</TableCell>
-                    <TableCell className="text-right">{a.avgRating}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={cn(a.negativePercent > 30 ? "text-destructive font-semibold" : "")}>
-                        {a.negativePercent}%
-                      </span>
-                    </TableCell>
+          <CardContent className="px-0 sm:px-6">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Артикул</TableHead>
+                    <TableHead>Товар</TableHead>
+                    <TableHead className="text-right">Отзывы</TableHead>
+                    <TableHead className="text-right">Ср. рейтинг</TableHead>
+                    <TableHead className="text-right">% негативных</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {data.topArticles.slice(0, 20).map((a) => (
+                    <TableRow key={a.article}>
+                      <TableCell className="font-mono text-xs sm:text-sm whitespace-nowrap">{a.article}</TableCell>
+                      <TableCell className="max-w-[140px] sm:max-w-[200px] truncate text-xs sm:text-sm">{a.productName}</TableCell>
+                      <TableCell className="text-right text-xs sm:text-sm">{a.count}</TableCell>
+                      <TableCell className="text-right text-xs sm:text-sm">{a.avgRating}</TableCell>
+                      <TableCell className="text-right text-xs sm:text-sm">
+                        <span className={cn(a.negativePercent > 30 ? "text-destructive font-semibold" : "")}>
+                          {a.negativePercent}%
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}

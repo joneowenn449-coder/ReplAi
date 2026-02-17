@@ -122,15 +122,15 @@ export const ReviewCard = ({
   const hasAnswer = sentAnswer && (status === "sent" || status === "auto" || status === "answered_externally" || isArchived);
 
   return (
-    <div className="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
+    <div className="bg-card rounded-xl border border-border p-3 sm:p-5 hover:shadow-md transition-shadow">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-0 mb-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="flex items-center gap-0.5">
             {[...Array(5)].map((_, i) => (
               <Star
                 key={i}
                 className={cn(
-                  "w-4 h-4",
+                  "w-3.5 h-3.5 sm:w-4 sm:h-4",
                   i < rating
                     ? "fill-warning text-warning"
                     : "fill-muted text-muted"
@@ -138,14 +138,14 @@ export const ReviewCard = ({
               />
             ))}
           </div>
-          <span className="font-medium text-foreground">{authorName}</span>
-          <span className="text-muted-foreground">•</span>
-          <span className="text-muted-foreground text-sm">{date}</span>
+          <span className="font-medium text-foreground text-sm sm:text-base">{authorName}</span>
+          <span className="text-muted-foreground hidden sm:inline">&bull;</span>
+          <span className="text-muted-foreground text-xs sm:text-sm">{date}</span>
         </div>
-        <span className={statusClasses[status]}>{statusLabels[status]}</span>
+        <span className={cn(statusClasses[status], "text-xs sm:text-sm self-start shrink-0")}>{statusLabels[status]}</span>
       </div>
 
-      <p className="text-foreground mb-2">{productName}</p>
+      <p className="text-foreground text-sm sm:text-base mb-2">{productName}</p>
 
       <a
         href={`https://www.wildberries.ru/catalog/${productArticle}/detail.aspx`}
@@ -282,7 +282,7 @@ export const ReviewCard = ({
                 </p>
               )}
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button
                   size="sm"
                   onClick={() => handleSend()}
@@ -300,7 +300,8 @@ export const ReviewCard = ({
                   className="gap-1"
                 >
                   <RefreshCw className={cn("w-3 h-3", generateReply.isPending && "animate-spin")} />
-                  Перегенерировать
+                  <span className="hidden sm:inline">Перегенерировать</span>
+                  <span className="sm:hidden">Заново</span>
                 </Button>
                 <Button
                   size="sm"
@@ -312,7 +313,7 @@ export const ReviewCard = ({
                   className="gap-1"
                 >
                   <Pencil className="w-3 h-3" />
-                  {editMode ? "Отмена" : "Редактировать"}
+                  {editMode ? "Отмена" : "Ред."}
                 </Button>
               </div>
             </div>

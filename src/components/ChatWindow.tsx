@@ -5,13 +5,14 @@ import { ChatMessageBubble } from "@/components/ChatMessage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Send, Loader2, MessageSquare } from "lucide-react";
+import { Send, Loader2, MessageSquare, ArrowLeft } from "lucide-react";
 
 interface ChatWindowProps {
   chat: Chat | null;
+  onBack?: () => void;
 }
 
-export const ChatWindow = ({ chat }: ChatWindowProps) => {
+export const ChatWindow = ({ chat, onBack }: ChatWindowProps) => {
   const [messageText, setMessageText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -54,9 +55,19 @@ export const ChatWindow = ({ chat }: ChatWindowProps) => {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Header */}
-      <div className="border-b border-border px-4 py-3 flex items-center gap-3 shrink-0">
-        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-medium">
+      <div className="border-b border-border px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3 shrink-0">
+        {onBack && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            className="sm:hidden shrink-0"
+            data-testid="button-chat-back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+        )}
+        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-medium shrink-0">
           {chat.client_name.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0">
@@ -69,8 +80,7 @@ export const ChatWindow = ({ chat }: ChatWindowProps) => {
         </div>
       </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 px-4 py-4">
+      <ScrollArea className="flex-1 px-3 sm:px-4 py-3 sm:py-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -89,8 +99,7 @@ export const ChatWindow = ({ chat }: ChatWindowProps) => {
         )}
       </ScrollArea>
 
-      {/* Input */}
-      <div className="border-t border-border p-3 shrink-0">
+      <div className="border-t border-border p-2.5 sm:p-3 shrink-0">
         <div className="flex gap-2 items-end">
           <Textarea
             value={messageText}
@@ -113,8 +122,8 @@ export const ChatWindow = ({ chat }: ChatWindowProps) => {
             )}
           </Button>
         </div>
-        <p className="text-[11px] text-muted-foreground mt-1">
-          {messageText.length}/1000 · Enter для отправки, Shift+Enter для переноса
+        <p className="text-[11px] text-muted-foreground mt-1 hidden sm:block">
+          {messageText.length}/1000 &middot; Enter для отправки, Shift+Enter для переноса
         </p>
       </div>
     </div>

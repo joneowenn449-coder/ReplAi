@@ -42,20 +42,20 @@ export default function Pricing() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <Button variant="ghost" onClick={() => navigate("/")} className="mb-6 gap-2">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
+        <Button variant="ghost" onClick={() => navigate("/")} className="mb-4 sm:mb-6 gap-2">
           <ArrowLeft className="w-4 h-4" />
           Назад
         </Button>
 
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-foreground">Пополнение токенов</h1>
-          <p className="text-muted-foreground mt-2">
+        <div className="text-center mb-6 sm:mb-10">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Пополнение токенов</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-2">
             Токены расходуются на отправку ответов на отзывы — 1 ответ = 1 токен
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {PACKAGES.map((pkg) => {
             const Icon = pkg.icon;
             const pricePerToken = (pkg.price / pkg.tokens).toFixed(1);

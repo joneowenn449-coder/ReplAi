@@ -58,26 +58,24 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
 
   return (
     <div className="bg-card border-b border-border">
-      <div className="max-w-6xl mx-auto px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
-          {/* Logo + Cabinet Switcher */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
+        <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="sm:w-8 sm:h-8">
                 <rect width="32" height="32" rx="8" fill="hsl(var(--primary))" />
                 <path d="M10 12C10 10.8954 10.8954 10 12 10H16C18.2091 10 20 11.7909 20 14C20 16.2091 18.2091 18 16 18H13V22H10V12ZM13 15H16C16.5523 15 17 14.5523 17 14C17 13.4477 16.5523 13 16 13H13V15Z" fill="white" />
                 <path d="M16 16L21 22" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
               </svg>
-              <span className="text-xl font-bold tracking-tight">
+              <span className="text-lg sm:text-xl font-bold tracking-tight hidden sm:inline">
                 Repl<span className="text-primary">Ai</span>
               </span>
             </div>
 
-            {/* Cabinet Switcher */}
             {showSwitcher && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5 text-sm h-8 max-w-[200px]">
+                  <Button variant="outline" size="sm" className="gap-1 sm:gap-1.5 text-xs sm:text-sm h-8 max-w-[120px] sm:max-w-[200px]">
                     <Store className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">{activeCabinet?.name || "Кабинет"}</span>
                   </Button>
@@ -96,7 +94,7 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
                       <Store className="w-4 h-4 mr-2 shrink-0" />
                       <span className="truncate">{cab.name}</span>
                       {cab.is_active && (
-                        <span className="ml-auto text-xs text-primary">✓</span>
+                        <span className="ml-auto text-xs text-primary">&#10003;</span>
                       )}
                     </DropdownMenuItem>
                   ))}
@@ -113,34 +111,34 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {user && (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 text-sm">
-                  <Coins className="w-4 h-4 text-primary" />
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm">
+                  <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
                   <span className="font-semibold">{tokenBalance}</span>
-                  <span className="text-muted-foreground">токенов</span>
+                  <span className="text-muted-foreground hidden sm:inline">токенов</span>
                 </div>
                 <Button
                   size="sm"
-                  className="text-xs h-8 px-3"
+                  className="text-xs h-7 sm:h-8 px-2 sm:px-3"
                   onClick={() => navigate("/pricing")}
                 >
-                  Пополнить
+                  <span className="hidden sm:inline">Пополнить</span>
+                  <Plus className="w-3.5 h-3.5 sm:hidden" />
                 </Button>
               </div>
             )}
 
-            {/* Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
-                <span className="text-sm font-semibold">{userInitial}</span>
+              <Button variant="ghost" size="icon" className="relative h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-primary text-primary-foreground">
+                <span className="text-xs sm:text-sm font-semibold">{userInitial}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 bg-popover z-50">
               <DropdownMenuLabel className="font-normal">
-                <p className="text-sm font-medium leading-none">{user?.email ?? "—"}</p>
+                <p className="text-sm font-medium leading-none truncate">{user?.email ?? "\u2014"}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
 
@@ -179,11 +177,11 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
 
         <NavTabs activeTab={activeTab} onTabChange={onTabChange} unreadChatsCount={unreadChatsCount} />
 
-        <div className="mt-6">
-          <h1 className="text-2xl font-bold text-foreground">
+        <div className="mt-4 sm:mt-6">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">
             {activeTab === "dashboard" ? "Сводка" : activeTab === "guide" ? "Как начать" : "Отзывы Wildberries"}
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             {activeTab === "dashboard"
               ? "Аналитика и статистика по отзывам"
               : activeTab === "guide"
@@ -193,7 +191,6 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
         </div>
       </div>
 
-      {/* New Cabinet Dialog */}
       <Dialog open={newCabinetOpen} onOpenChange={setNewCabinetOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>

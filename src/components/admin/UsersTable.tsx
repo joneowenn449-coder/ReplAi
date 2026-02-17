@@ -136,6 +136,7 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
       </div>
 
       <div className="rounded-lg border border-border overflow-hidden">
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -260,6 +261,7 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
             })}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

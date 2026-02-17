@@ -24,13 +24,13 @@ export const FilterTabs = ({
   ];
 
   return (
-    <div className="flex items-center gap-1 border-b border-border pb-4">
+    <div className="flex items-center gap-1 border-b border-border pb-4 overflow-x-auto scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
       {filters.map((filter) => (
         <button
           key={filter.id}
           onClick={() => onFilterChange(filter.id)}
           className={cn(
-            "tab-filter flex items-center gap-2",
+            "tab-filter flex items-center gap-1.5 sm:gap-2 shrink-0 text-xs sm:text-sm",
             activeFilter === filter.id && "tab-filter-active"
           )}
         >
@@ -38,7 +38,7 @@ export const FilterTabs = ({
           {(filter.count > 0 || filter.id === "all") && (
             <span
               className={cn(
-                "text-xs px-1.5 py-0.5 rounded",
+                "text-[10px] sm:text-xs px-1.5 py-0.5 rounded",
                 activeFilter === filter.id
                   ? "bg-foreground/10"
                   : "bg-muted text-muted-foreground"

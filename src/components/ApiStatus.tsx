@@ -23,16 +23,16 @@ function formatReplyModesSummary(modes: ReplyModes): string {
     }
   }
 
-  if (autoRatings.length === 0) return "Все ответы вручную";
-  if (autoRatings.length === 5) return "Все ответы автоматически";
+  if (autoRatings.length === 0) return "Все вручную";
+  if (autoRatings.length === 5) return "Все авто";
 
   const formatRange = (nums: number[]) => {
     if (nums.length === 0) return "";
     const sorted = [...nums].sort((a, b) => a - b);
-    if (sorted.length === 1) return `★${sorted[0]}`;
+    if (sorted.length === 1) return `${sorted[0]}`;
     const isConsecutive = sorted.every((n, i) => i === 0 || n === sorted[i - 1] + 1);
-    if (isConsecutive) return `★${sorted[0]}-${sorted[sorted.length - 1]}`;
-    return sorted.map((n) => `★${n}`).join(", ");
+    if (isConsecutive) return `${sorted[0]}-${sorted[sorted.length - 1]}`;
+    return sorted.map((n) => `${n}`).join(", ");
   };
 
   const parts: string[] = [];
@@ -51,32 +51,34 @@ export const ApiStatus = ({
   const summary = formatReplyModesSummary(replyModes);
 
   return (
-    <div className="bg-card rounded-xl border border-border p-4 flex items-center justify-between">
-      <div className="flex items-center gap-3">
+    <div className="bg-card rounded-xl border border-border p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <div
-          className={`w-3 h-3 rounded-full ${
+          className={`w-3 h-3 rounded-full shrink-0 ${
             isConnected ? "bg-success" : "bg-destructive"
           }`}
         />
-        <div>
-          <p className="font-medium text-foreground">
+        <div className="min-w-0">
+          <p className="font-medium text-foreground text-sm sm:text-base">
             WB API {isConnected ? "подключён" : "отключён"}
           </p>
-          <p className="text-sm text-muted-foreground">
-            Последняя синхронизация: {lastSync}
+          <p className="text-xs sm:text-sm text-muted-foreground truncate">
+            {lastSync}
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-muted-foreground">{summary}</span>
+      <div className="flex items-center gap-2 sm:gap-4 justify-between sm:justify-end">
+        <span className="text-xs sm:text-sm text-muted-foreground truncate">{summary}</span>
         <Button
           onClick={onSync}
           variant="outline"
+          size="sm"
           disabled={isSyncing}
-          className="bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
+          className="bg-primary/10 border-primary/20 text-primary shrink-0 text-xs sm:text-sm"
         >
-          <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
-          {isSyncing ? "Синхронизация..." : "Синхронизировать"}
+          <RefreshCw className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2", isSyncing && "animate-spin")} />
+          <span className="hidden sm:inline">{isSyncing ? "Синхронизация..." : "Синхронизировать"}</span>
+          <span className="sm:hidden">{isSyncing ? "Синхр..." : "Синхр."}</span>
         </Button>
       </div>
     </div>

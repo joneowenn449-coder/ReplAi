@@ -77,7 +77,8 @@ async function ensureUserProvisioned(userId: string, email?: string | null): Pro
   const promise = (async () => {
     try {
       const profile = await storage.getProfile(userId);
-      if (!profile) {
+      const isNewUser = !profile;
+      if (isNewUser) {
         await storage.upsertProfile({ id: userId, email: email || undefined });
         console.log(`[auto-provision] Created profile for user ${userId}`);
       } else if (email && !profile.email) {
@@ -96,8 +97,21 @@ async function ensureUserProvisioned(userId: string, email?: string | null): Pro
         console.log(`[auto-provision] Created default cabinet for user ${userId}`);
       }
 
-      await storage.upsertTokenBalance(userId, await storage.getTokenBalance(userId));
       await storage.upsertAiRequestBalance(userId, await storage.getAiRequestBalance(userId));
+
+      if (isNewUser) {
+        const WELCOME_TOKENS = 50;
+        await storage.upsertTokenBalance(userId, WELCOME_TOKENS);
+        await storage.insertTokenTransaction({
+          userId,
+          amount: WELCOME_TOKENS,
+          type: "welcome_bonus",
+          description: "Приветственные токены",
+        });
+        console.log(`[auto-provision] Credited ${WELCOME_TOKENS} welcome tokens to user ${userId}`);
+      } else {
+        await storage.upsertTokenBalance(userId, await storage.getTokenBalance(userId));
+      }
 
       provisionedUsers.add(userId);
     } catch (err) {
@@ -198,6 +212,8 @@ router.post("/api/auth/register", async (req: Request, res: Response) => {
       passwordHash,
       displayName: displayName || null,
     });
+
+    await ensureUserProvisioned(user.id, user.email);
 
     const token = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: "30d" });
 

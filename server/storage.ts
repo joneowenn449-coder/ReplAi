@@ -4,7 +4,7 @@ import {
   reviews, chats, chatMessages, wbCabinets, settings, profiles,
   tokenBalances, aiRequestBalances, tokenTransactions, aiRequestTransactions,
   userRoles, aiConversations, aiMessages, productRecommendations, payments,
-  globalSettings, telegramAuthTokens,
+  globalSettings, telegramAuthTokens, authUsers,
   type Review, type InsertReview,
   type Chat, type InsertChat,
   type ChatMessage, type InsertChatMessage,
@@ -19,6 +19,7 @@ import {
   type ProductRecommendation, type InsertProductRecommendation,
   type Payment, type InsertPayment,
   type GlobalSetting,
+  type AuthUser, type InsertAuthUser,
 } from "@shared/schema";
 
 export class DatabaseStorage {
@@ -681,6 +682,29 @@ export class DatabaseStorage {
     }
 
     return { total, answered, avgRating, byRating };
+  }
+
+  async getLatestPayment(userId: string) {
+    const rows = await db.select().from(payments)
+      .where(eq(payments.userId, userId))
+      .orderBy(desc(payments.createdAt))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async getAuthUserByEmail(email: string): Promise<AuthUser | null> {
+    const rows = await db.select().from(authUsers).where(eq(authUsers.email, email)).limit(1);
+    return rows[0] ?? null;
+  }
+
+  async getAuthUser(id: string): Promise<AuthUser | null> {
+    const rows = await db.select().from(authUsers).where(eq(authUsers.id, id)).limit(1);
+    return rows[0] ?? null;
+  }
+
+  async createAuthUser(data: InsertAuthUser): Promise<AuthUser> {
+    const rows = await db.insert(authUsers).values(data).returning();
+    return rows[0];
   }
 }
 

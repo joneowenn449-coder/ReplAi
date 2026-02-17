@@ -1,8 +1,7 @@
-import { supabase } from "@/integrations/supabase/client";
+const TOKEN_KEY = "replai_token";
 
 export async function apiRequest(path: string, options: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  const token = localStorage.getItem(TOKEN_KEY);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

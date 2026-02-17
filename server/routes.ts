@@ -1,10 +1,14 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import {
   syncReviews, syncChats, sendReply, generateReply,
   validateApiKey, sendChatMessage, aiAssistant,
   createPayment, robokassaWebhook, fetchArchive,
 } from "./functions";
+
+const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-change-me";
 
 export const router = Router();
 
@@ -47,7 +51,7 @@ function parseToken(authHeader: string | undefined): { userId: string; email: st
   if (!authHeader?.startsWith("Bearer ")) return null;
   try {
     const token = authHeader.slice(7);
-    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
+    const payload = jwt.verify(token, JWT_SECRET) as any;
     if (!payload.sub) return null;
     return { userId: payload.sub, email: payload.email || null };
   } catch {
@@ -124,6 +128,89 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 router.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+router.post("/api/auth/register", async (req: Request, res: Response) => {
+  try {
+    const { email, password, displayName } = req.body;
+    if (!email || !password) {
+      res.status(400).json({ error: "Email и пароль обязательны" });
+      return;
+    }
+    if (password.length < 6) {
+      res.status(400).json({ error: "Пароль должен быть не менее 6 символов" });
+      return;
+    }
+
+    const existing = await storage.getAuthUserByEmail(email.toLowerCase().trim());
+    if (existing) {
+      res.status(409).json({ error: "Пользователь с таким email уже существует" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await storage.createAuthUser({
+      email: email.toLowerCase().trim(),
+      passwordHash,
+      displayName: displayName || null,
+    });
+
+    const token = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: "30d" });
+
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, displayName: user.displayName },
+    });
+  } catch (e: any) {
+    console.error("[auth/register] Error:", e);
+    res.status(500).json({ error: "Ошибка регистрации" });
+  }
+});
+
+router.post("/api/auth/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      res.status(400).json({ error: "Email и пароль обязательны" });
+      return;
+    }
+
+    const user = await storage.getAuthUserByEmail(email.toLowerCase().trim());
+    if (!user) {
+      res.status(401).json({ error: "Неверный email или пароль" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Неверный email или пароль" });
+      return;
+    }
+
+    const token = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: "30d" });
+
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, displayName: user.displayName },
+    });
+  } catch (e: any) {
+    console.error("[auth/login] Error:", e);
+    res.status(500).json({ error: "Ошибка входа" });
+  }
+});
+
+router.get("/api/auth/me", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const user = await storage.getAuthUser(userId);
+    if (!user) {
+      res.status(404).json({ error: "Пользователь не найден" });
+      return;
+    }
+    res.json({ id: user.id, email: user.email, displayName: user.displayName });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 router.get("/api/reviews", requireAuth, async (req: Request, res: Response) => {
@@ -271,6 +358,16 @@ router.patch("/api/settings", requireAuth, async (req: Request, res: Response) =
     }
     await storage.updateSettings(existing.id, toCamelCase(req.body));
     res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/api/payments/latest", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const payment = await storage.getLatestPayment(userId);
+    res.json(payment || { status: "none" });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

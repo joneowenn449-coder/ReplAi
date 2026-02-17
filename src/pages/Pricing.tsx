@@ -2,7 +2,7 @@ import { ArrowLeft, Coins, Zap, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -19,11 +19,10 @@ export default function Pricing() {
   const handlePurchase = async (tokens: number, price: number) => {
     setLoadingPackage(tokens);
     try {
-      const { data, error } = await supabase.functions.invoke("create-payment", {
-        body: { amount: price, tokens },
+      const data = await apiRequest("/api/functions/create-payment", {
+        method: "POST",
+        body: JSON.stringify({ amount: price, tokens }),
       });
-
-      if (error) throw error;
 
       if (data?.error) {
         toast.error(data.error);

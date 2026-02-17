@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CheckCircle, Clock, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 
 export default function PaymentReturn() {
   const navigate = useNavigate();
@@ -11,30 +11,23 @@ export default function PaymentReturn() {
 
   useEffect(() => {
     const checkPayment = async () => {
-      // Check the most recent payment for this user
-      const { data } = await supabase
-        .from("payments")
-        .select("status")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data?.status === "completed") {
-        setStatus("completed");
-      } else {
+      try {
+        const data = await apiRequest("/api/payments/latest");
+        if (data?.status === "completed") {
+          setStatus("completed");
+        } else {
+          setStatus("pending");
+          setTimeout(async () => {
+            try {
+              const retryData = await apiRequest("/api/payments/latest");
+              if (retryData?.status === "completed") {
+                setStatus("completed");
+              }
+            } catch {}
+          }, 5000);
+        }
+      } catch {
         setStatus("pending");
-        // Retry after a few seconds in case webhook hasn't arrived yet
-        setTimeout(async () => {
-          const { data: retryData } = await supabase
-            .from("payments")
-            .select("status")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (retryData?.status === "completed") {
-            setStatus("completed");
-          }
-        }, 5000);
       }
     };
 

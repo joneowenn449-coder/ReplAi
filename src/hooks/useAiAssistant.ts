@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useRenameConversation } from "@/hooks/useAiConversations";
 import { apiRequest } from "@/lib/api";
 
@@ -86,8 +85,7 @@ export function useAiAssistant(conversationId: string | null) {
       };
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const accessToken = session?.access_token;
+        const accessToken = localStorage.getItem("replai_token");
 
         const resp = await fetch(CHAT_URL, {
           method: "POST",

@@ -89,6 +89,14 @@ export const productRecommendations = replaiSchema.table("product_recommendation
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const authUsers = replaiSchema.table("auth_users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  displayName: text("display_name"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const profiles = replaiSchema.table("profiles", {
   id: text("id").primaryKey(),
   displayName: text("display_name"),
@@ -188,6 +196,7 @@ export const telegramAuthTokens = replaiSchema.table("telegram_auth_tokens", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const insertAuthUserSchema = createInsertSchema(authUsers).omit({ id: true, createdAt: true });
 export const insertAiConversationSchema = createInsertSchema(aiConversations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAiMessageSchema = createInsertSchema(aiMessages).omit({ id: true, createdAt: true });
 export const insertAiRequestBalanceSchema = createInsertSchema(aiRequestBalances).omit({ id: true, updatedAt: true });
@@ -240,3 +249,5 @@ export type WbCabinet = typeof wbCabinets.$inferSelect;
 export type InsertWbCabinet = z.infer<typeof insertWbCabinetSchema>;
 export type TelegramAuthToken = typeof telegramAuthTokens.$inferSelect;
 export type InsertTelegramAuthToken = z.infer<typeof insertTelegramAuthTokenSchema>;
+export type AuthUser = typeof authUsers.$inferSelect;
+export type InsertAuthUser = z.infer<typeof insertAuthUserSchema>;

@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { Navigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,7 @@ import {
 } from "lucide-react";
 
 const Auth = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signIn, signUp } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,22 +30,10 @@ const Auth = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: window.location.origin,
-            data: { display_name: displayName },
-          },
-        });
-        if (error) throw error;
+        await signUp(email, password, displayName || undefined);
         toast.success("Регистрация успешна!");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+        await signIn(email, password);
       }
     } catch (error: any) {
       toast.error(error.message || "Ошибка авторизации");

@@ -125,10 +125,15 @@ const Index = () => {
                     productName={review.product_name}
                     productArticle={review.product_article}
                     status={review.status}
-                    images={
+                    photoLinks={
                       (Array.isArray(review.photo_links) ? review.photo_links : []).map((link: any) =>
-                        typeof link === "string" ? link : (link?.miniSize || link?.fullSize || "")
-                      ).filter(Boolean)
+                        typeof link === "string"
+                          ? { mini: link, full: link }
+                          : {
+                              mini: link?.mini_size || link?.miniSize || link?.full_size || link?.fullSize || "",
+                              full: link?.full_size || link?.fullSize || link?.mini_size || link?.miniSize || "",
+                            }
+                      ).filter((l: any) => l.mini || l.full)
                     }
                     text={review.text}
                     pros={review.pros}

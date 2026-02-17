@@ -1,20 +1,25 @@
 import { useState, useEffect } from "react";
-import { Star, ExternalLink, Send, RefreshCw, Pencil, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Star, ExternalLink, Send, RefreshCw, Pencil, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendReply, useGenerateReply } from "@/hooks/useReviews";
 
+interface PhotoLink {
+  mini: string;
+  full: string;
+}
+
 interface ReviewCardProps {
   id: string;
   rating: number;
   authorName: string;
-date: string;
+  date: string;
   productName: string;
   productArticle: string;
   status: "pending" | "auto" | "sent" | "archived" | "answered_externally";
-  images?: string[];
+  photoLinks?: PhotoLink[];
   text?: string | null;
   pros?: string | null;
   cons?: string | null;
@@ -31,7 +36,7 @@ export const ReviewCard = ({
   productName,
   productArticle,
   status,
-  images = [],
+  photoLinks = [],
   text,
   pros,
   cons,
@@ -42,8 +47,8 @@ export const ReviewCard = ({
   const [showDraft, setShowDraft] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedText, setEditedText] = useState(aiDraft || "");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  // Sent answer editing states
   const [sentActionsOpen, setSentActionsOpen] = useState(false);
   const [sentEditMode, setSentEditMode] = useState(false);
   const [editingSentText, setEditingSentText] = useState(sentAnswer || "");
@@ -51,12 +56,22 @@ export const ReviewCard = ({
   const sendReply = useSendReply();
   const generateReply = useGenerateReply();
 
-  // Sync editedText when aiDraft changes (e.g. after regeneration)
   useEffect(() => {
     if (!editMode) {
       setEditedText(aiDraft || "");
     }
   }, [aiDraft]);
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxIndex(null);
+      if (e.key === "ArrowLeft") setLightboxIndex((prev) => prev !== null ? (prev - 1 + photoLinks.length) % photoLinks.length : null);
+      if (e.key === "ArrowRight") setLightboxIndex((prev) => prev !== null ? (prev + 1) % photoLinks.length : null);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [lightboxIndex, photoLinks.length]);
 
   const statusLabels: Record<string, string> = {
     pending: "Ожидает",
@@ -162,20 +177,83 @@ export const ReviewCard = ({
         </div>
       )}
 
-      {images.length > 0 && (
+      {photoLinks.length > 0 && (
         <div className="flex gap-2 flex-wrap mb-3">
-          {images.map((img, i) => (
-            <div
+          {photoLinks.map((photo, i) => (
+            <button
               key={i}
-              className="w-16 h-16 rounded-lg bg-muted overflow-hidden"
+              type="button"
+              onClick={() => setLightboxIndex(i)}
+              className="w-16 h-16 rounded-md bg-muted overflow-hidden cursor-pointer ring-offset-background transition-all hover:ring-2 hover:ring-primary hover:ring-offset-1"
+              data-testid={`button-photo-${id}-${i}`}
             >
               <img
-                src={img}
+                src={photo.mini}
                 alt={`Фото ${i + 1}`}
                 className="w-full h-full object-cover"
+                loading="lazy"
               />
-            </div>
+            </button>
           ))}
+        </div>
+      )}
+
+      {lightboxIndex !== null && photoLinks[lightboxIndex] && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setLightboxIndex(null)}
+          data-testid={`lightbox-${id}`}
+        >
+          <Button
+            size="icon"
+            variant="ghost"
+            className="absolute top-4 right-4 text-white"
+            onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }}
+            data-testid="button-lightbox-close"
+          >
+            <X className="w-5 h-5" />
+          </Button>
+          {photoLinks.length > 1 && (
+            <>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute left-4 text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxIndex((lightboxIndex - 1 + photoLinks.length) % photoLinks.length);
+                }}
+                data-testid="button-lightbox-prev"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </Button>
+              <span
+                className="absolute right-16 top-5 text-white text-sm font-medium"
+                onClick={(e) => e.stopPropagation()}
+                data-testid="text-lightbox-counter"
+              >
+                {lightboxIndex + 1}/{photoLinks.length}
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute right-4 text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxIndex((lightboxIndex + 1) % photoLinks.length);
+                }}
+                data-testid="button-lightbox-next"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </Button>
+            </>
+          )}
+          <img
+            src={photoLinks[lightboxIndex].full}
+            alt={`Фото ${lightboxIndex + 1}`}
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
 

@@ -112,6 +112,7 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
 
 ## Recent Changes
+- 2026-02-17: Full mobile responsive adaptation: Header compact layout with hidden labels; NavTabs/FilterTabs horizontal scroll with scrollbar-hide; ApiStatus vertical stacking; ReviewCard header wrap + shorter button labels; ChatsSection list/chat toggle pattern with back button; AiAssistant sidebar overlay with backdrop on mobile; DashboardSection compact stats cards + horizontal scroll tables; Admin page responsive tabs + UsersTable/TransactionsTable horizontal scroll; global padding px-3 sm:px-6 on Index/Admin/Pricing pages
 - 2026-02-17: Legal section: PrivacyPolicy (/privacy) and Terms (/terms) public pages; CookieBanner with localStorage persistence; registration form checkbox for terms agreement; footer links on Auth page; token count fixed to 50
 - 2026-02-17: Welcome bonus: 50 tokens credited at registration via ensureUserProvisioned (type: welcome_bonus), called directly from /api/auth/register endpoint
 - 2026-02-17: Session & device tracking: user_sessions table (IP, user-agent parsed via ua-parser-js: browser, OS, device type), recorded on each auth with 30-min throttle per user+IP+UA combo; admin API endpoints GET /api/admin/sessions, GET /api/admin/users/:id/sessions; sessions section in UserDetailModal with device icons (desktop/mobile/tablet)

@@ -176,12 +176,14 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
 
         <div className="mt-6">
           <h1 className="text-2xl font-bold text-foreground">
-            {activeTab === "dashboard" ? "Сводка" : "Отзывы Wildberries"}
+            {activeTab === "dashboard" ? "Сводка" : activeTab === "guide" ? "Как начать" : "Отзывы Wildberries"}
           </h1>
           <p className="text-muted-foreground mt-1">
             {activeTab === "dashboard"
               ? "Аналитика и статистика по отзывам"
-              : "Управление отзывами и автоответами с помощью ИИ"}
+              : activeTab === "guide"
+                ? "Пошаговая инструкция для новых пользователей"
+                : "Управление отзывами и автоответами с помощью ИИ"}
           </p>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { ChatsSection } from "@/components/ChatsSection";
 import { AiAssistant } from "@/components/AiAssistant";
 import { DashboardSection } from "@/components/DashboardSection";
+import { GuideSection } from "@/components/GuideSection";
 import {
   useReviews,
   useSyncReviews,
@@ -80,7 +81,9 @@ const Index = () => {
       />
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
-        {activeTab === "ai" ? (
+        {activeTab === "guide" ? (
+          <GuideSection />
+        ) : activeTab === "ai" ? (
           <AiAssistant />
         ) : activeTab === "chats" ? (
           <ChatsSection />

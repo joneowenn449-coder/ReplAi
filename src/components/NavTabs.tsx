@@ -1,5 +1,7 @@
 import { cn } from "@/lib/utils";
-import { BarChart3, Bot, MessageCircle } from "lucide-react";
+import { BarChart3, Bot, MessageCircle, BookOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface NavTabsProps {
   activeTab: string;
@@ -9,59 +11,60 @@ interface NavTabsProps {
 
 export const NavTabs = ({ activeTab, onTabChange, unreadChatsCount = 0 }: NavTabsProps) => {
   return (
-    <div className="flex items-center gap-2">
-      <button
+    <div className="flex items-center gap-2 flex-wrap">
+      <Button
+        variant={activeTab === "reviews" ? "default" : "ghost"}
+        size="sm"
         onClick={() => onTabChange("reviews")}
-        className={cn(
-          "px-4 py-2 rounded-lg text-sm font-medium transition-all",
-          activeTab === "reviews"
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-        )}
+        data-testid="tab-reviews"
       >
         Отзывы
-      </button>
-      <button
+      </Button>
+      <Button
+        variant={activeTab === "dashboard" ? "default" : "ghost"}
+        size="sm"
         onClick={() => onTabChange("dashboard")}
-        className={cn(
-          "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
-          activeTab === "dashboard"
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-        )}
+        data-testid="tab-dashboard"
+        className="gap-2"
       >
         <BarChart3 className="w-4 h-4" />
         Сводка
-      </button>
-      <button
+      </Button>
+      <Button
+        variant={activeTab === "chats" ? "default" : "ghost"}
+        size="sm"
         onClick={() => onTabChange("chats")}
-        className={cn(
-          "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
-          activeTab === "chats"
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-        )}
+        data-testid="tab-chats"
+        className="gap-2"
       >
         <MessageCircle className="w-4 h-4" />
         Чаты
         {unreadChatsCount > 0 && (
-          <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold leading-none">
+          <Badge variant="destructive" className="ml-1 text-[11px]" data-testid="badge-unread-chats">
             {unreadChatsCount > 99 ? "99+" : unreadChatsCount}
-          </span>
+          </Badge>
         )}
-      </button>
-      <button
+      </Button>
+      <Button
+        variant={activeTab === "ai" ? "default" : "ghost"}
+        size="sm"
         onClick={() => onTabChange("ai")}
-        className={cn(
-          "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
-          activeTab === "ai"
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-        )}
+        data-testid="tab-ai"
+        className="gap-2"
       >
         <Bot className="w-4 h-4" />
         AI аналитик
-      </button>
+      </Button>
+      <Button
+        variant={activeTab === "guide" ? "default" : "ghost"}
+        size="sm"
+        onClick={() => onTabChange("guide")}
+        data-testid="tab-guide"
+        className="gap-2"
+      >
+        <BookOpen className="w-4 h-4" />
+        Как начать
+      </Button>
     </div>
   );
 };

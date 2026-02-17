@@ -65,7 +65,11 @@ async function runPeriodicSync() {
         console.error("[admin] Error granting admin role:", err);
       }
     })();
-    startTelegramBot();
+    if (process.env.NODE_ENV === "production" || process.env.REPL_DEPLOYMENT) {
+      startTelegramBot().catch(err => console.error("[telegram] Failed to start bot:", err));
+    } else {
+      console.log("[telegram] Skipping bot in dev mode (runs in production only)");
+    }
     runAutoArchive();
     setInterval(runAutoArchive, ARCHIVE_INTERVAL_MS);
     setTimeout(() => runPeriodicSync(), 10000);

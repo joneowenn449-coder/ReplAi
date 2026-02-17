@@ -253,14 +253,37 @@ function draftKeyboard(reviewId: string): TelegramBot.InlineKeyboardButton[][] {
   ];
 }
 
-export function startTelegramBot() {
+export async function startTelegramBot() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     console.log("[telegram] TELEGRAM_BOT_TOKEN not set, skipping bot init");
     return;
   }
 
-  bot = new TelegramBot(token, { polling: true });
+  if (bot) {
+    try {
+      await bot.stopPolling();
+      console.log("[telegram] Stopped previous bot polling");
+    } catch (e) {
+    }
+    bot = null;
+  }
+
+  bot = new TelegramBot(token, {
+    polling: {
+      autoStart: true,
+      params: { timeout: 30 },
+    },
+  });
+
+  bot.on("polling_error", (err: any) => {
+    if (err?.code === "ETELEGRAM" && err?.response?.body?.error_code === 409) {
+      console.warn("[telegram] Polling conflict (409) — another instance may be running, will retry...");
+    } else {
+      console.error("[telegram] Polling error:", err?.message || err);
+    }
+  });
+
   console.log("[telegram] Bot started with long polling");
 
   bot.setMyCommands([

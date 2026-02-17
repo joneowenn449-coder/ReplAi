@@ -706,6 +706,20 @@ export class DatabaseStorage {
     const rows = await db.insert(authUsers).values(data).returning();
     return rows[0];
   }
+
+  async updateAuthUserProfile(id: string, data: { displayName?: string | null }): Promise<AuthUser | null> {
+    const rows = await db.update(authUsers)
+      .set(data)
+      .where(eq(authUsers.id, id))
+      .returning();
+    return rows[0] ?? null;
+  }
+
+  async updateAuthUserPassword(id: string, passwordHash: string): Promise<void> {
+    await db.update(authUsers)
+      .set({ passwordHash })
+      .where(eq(authUsers.id, id));
+  }
 }
 
 export const storage = new DatabaseStorage();

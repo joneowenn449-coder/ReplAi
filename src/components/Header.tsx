@@ -1,4 +1,4 @@
-import { Settings, LogOut, Coins, Shield, Plus, Store, MessageCircle } from "lucide-react";
+import { Settings, LogOut, Coins, Shield, Plus, Store, MessageCircle, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavTabs } from "./NavTabs";
 import { useAuth } from "@/hooks/useAuth";
@@ -143,6 +143,11 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
                 <p className="text-sm font-medium leading-none">{user?.email ?? "—"}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+
+              <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer" data-testid="menu-profile">
+                <User className="w-4 h-4 mr-2" />
+                Профиль
+              </DropdownMenuItem>
 
               <DropdownMenuItem onClick={onSettingsClick} className="cursor-pointer" data-testid="menu-settings">
                 <Settings className="w-4 h-4 mr-2" />

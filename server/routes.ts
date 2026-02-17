@@ -213,6 +213,55 @@ router.get("/api/auth/me", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.patch("/api/auth/profile", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { displayName } = req.body;
+    const updated = await storage.updateAuthUserProfile(userId, { displayName: displayName || null });
+    if (!updated) {
+      res.status(404).json({ error: "Пользователь не найден" });
+      return;
+    }
+    res.json({ id: updated.id, email: updated.email, displayName: updated.displayName });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/api/auth/change-password", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: "Текущий и новый пароль обязательны" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: "Новый пароль должен быть не менее 6 символов" });
+      return;
+    }
+
+    const user = await storage.getAuthUser(userId);
+    if (!user) {
+      res.status(404).json({ error: "Пользователь не найден" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Неверный текущий пароль" });
+      return;
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await storage.updateAuthUserPassword(userId, newHash);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("[auth/change-password] Error:", e);
+    res.status(500).json({ error: "Ошибка смены пароля" });
+  }
+});
+
 router.get("/api/reviews", requireAuth, async (req: Request, res: Response) => {
   try {
     const cabinetId = req.query.cabinet_id as string;

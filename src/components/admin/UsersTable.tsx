@@ -62,8 +62,8 @@ export const UsersTable = () => {
     );
   }
 
-  const userName = (user: { display_name: string | null; id: string }) =>
-    user.display_name || user.id.slice(0, 8);
+  const userName = (user: { display_name: string | null; email?: string; id: string }) =>
+    user.display_name || user.email || user.id.slice(0, 8);
 
   return (
     <>
@@ -94,6 +94,7 @@ export const UsersTable = () => {
                 <TableCell>
                   <div>
                     <p className="font-medium text-foreground">{userName(user)}</p>
+                    {user.email && <p className="text-xs text-muted-foreground">{user.email}</p>}
                     <p className="text-xs text-muted-foreground">{user.id.slice(0, 8)}...</p>
                   </div>
                 </TableCell>

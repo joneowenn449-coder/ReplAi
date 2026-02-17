@@ -720,6 +720,10 @@ export class DatabaseStorage {
       .set({ passwordHash })
       .where(eq(authUsers.id, id));
   }
+
+  async getAllAuthUsers(): Promise<AuthUser[]> {
+    return db.select().from(authUsers);
+  }
 }
 
 export const storage = new DatabaseStorage();

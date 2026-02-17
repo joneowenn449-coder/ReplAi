@@ -506,17 +506,19 @@ router.post("/api/admin/balance/ai", requireAuth, async (req: Request, res: Resp
 
 router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response) => {
   try {
-    const [allProfiles, tokenBals, aiBals, roles, allCabinets] = await Promise.all([
+    const [allProfiles, tokenBals, aiBals, roles, allCabinets, allAuthUsers] = await Promise.all([
       storage.getAllProfiles(),
       storage.getAllTokenBalances(),
       storage.getAllAiRequestBalances(),
       storage.getAllUserRoles(),
       storage.getAllCabinets(),
+      storage.getAllAuthUsers(),
     ]);
 
     const balanceMap = new Map(tokenBals.map((b) => [b.userId, b.balance]));
     const aiBalanceMap = new Map(aiBals.map((b) => [b.userId, b.balance]));
     const roleMap = new Map(roles.map((r) => [r.userId, r.role]));
+    const authEmailMap = new Map(allAuthUsers.map((u) => [u.id, u.email]));
 
     const telegramMap = new Map<string, { username: string | null; firstName: string | null; chatId: string | null }>();
     for (const cab of allCabinets) {
@@ -531,7 +533,7 @@ router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response)
 
     const users = allProfiles.map((p) => ({
       id: p.id,
-      email: p.email || "",
+      email: p.email || authEmailMap.get(p.id) || "",
       display_name: p.displayName,
       phone: p.phone,
       created_at: p.createdAt,

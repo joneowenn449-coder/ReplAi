@@ -7,9 +7,12 @@ import { AdminOverview } from "@/components/admin/AdminOverview";
 import { UsersTable } from "@/components/admin/UsersTable";
 import { TransactionsTable } from "@/components/admin/TransactionsTable";
 import { AISettings } from "@/components/admin/AISettings";
+import { UserDetailModal } from "@/components/admin/UserDetailModal";
+import type { AdminUser } from "@/hooks/useAdmin";
 
 const Admin = () => {
   const [tab, setTab] = useState("overview");
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
   return (
     <div className="min-h-screen bg-background">
@@ -55,7 +58,7 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="users">
-            <UsersTable />
+            <UsersTable onSelectUser={setSelectedUser} />
           </TabsContent>
 
           <TabsContent value="transactions">
@@ -67,6 +70,12 @@ const Admin = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <UserDetailModal
+        user={selectedUser}
+        open={!!selectedUser}
+        onClose={() => setSelectedUser(null)}
+      />
     </div>
   );
 };

@@ -103,6 +103,8 @@ export const profiles = replaiSchema.table("profiles", {
   phone: text("phone"),
   email: text("email"),
   createdAt: timestamp("created_at").defaultNow(),
+  lastSeenAt: timestamp("last_seen_at"),
+  adminNotes: text("admin_notes"),
 });
 
 export const reviews = replaiSchema.table("reviews", {

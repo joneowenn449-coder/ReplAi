@@ -110,6 +110,9 @@ async function ensureUserProvisioned(userId: string, email?: string | null): Pro
   return promise;
 }
 
+const lastSeenCache = new Map<string, number>();
+const LAST_SEEN_THROTTLE = 5 * 60 * 1000;
+
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const parsed = parseToken(req.headers.authorization);
   if (!parsed) {
@@ -120,6 +123,14 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   console.log(`[auth] userId=${userId} path=${req.path}`);
   (req as any).userId = userId;
   (req as any).userEmail = email;
+
+  const now = Date.now();
+  const lastSeen = lastSeenCache.get(userId) || 0;
+  if (now - lastSeen > LAST_SEEN_THROTTLE) {
+    lastSeenCache.set(userId, now);
+    storage.updateLastSeen(userId).catch(() => {});
+  }
+
   ensureUserProvisioned(userId, email).then(() => next()).catch((err) => {
     console.error("[auto-provision] Error:", err);
     next();
@@ -533,21 +544,36 @@ router.post("/api/admin/balance/ai", requireAuth, async (req: Request, res: Resp
   }
 });
 
-router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response) => {
+router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) => {
   try {
-    const [allProfiles, tokenBals, aiBals, roles, allCabinets, allAuthUsers] = await Promise.all([
+    const adminId = (req as any).userId;
+    const adminRole = await storage.getUserRole(adminId);
+    if (adminRole !== "admin") {
+      res.status(403).json({ error: "Доступ запрещён" });
+      return;
+    }
+
+    const [allProfiles, tokenBals, aiBals, roles, allCabinets, allAuthUsers, allPayments] = await Promise.all([
       storage.getAllProfiles(),
       storage.getAllTokenBalances(),
       storage.getAllAiRequestBalances(),
       storage.getAllUserRoles(),
       storage.getAllCabinets(),
       storage.getAllAuthUsers(),
+      storage.getAllPayments(),
     ]);
 
     const balanceMap = new Map(tokenBals.map((b) => [b.userId, b.balance]));
     const aiBalanceMap = new Map(aiBals.map((b) => [b.userId, b.balance]));
     const roleMap = new Map(roles.map((r) => [r.userId, r.role]));
     const authUserMap = new Map(allAuthUsers.map((u) => [u.id, u]));
+
+    const paymentsMap = new Map<string, typeof allPayments>();
+    for (const pay of allPayments) {
+      const arr = paymentsMap.get(pay.userId) || [];
+      arr.push(pay);
+      paymentsMap.set(pay.userId, arr);
+    }
 
     const telegramMap = new Map<string, { username: string | null; firstName: string | null; chatId: string | null }>();
     for (const cab of allCabinets) {
@@ -560,22 +586,70 @@ router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response)
       }
     }
 
+    const cabinetsCountMap = new Map<string, number>();
+    for (const cab of allCabinets) {
+      cabinetsCountMap.set(cab.userId, (cabinetsCountMap.get(cab.userId) || 0) + 1);
+    }
+
     const users = allProfiles.map((p) => {
       const authUser = authUserMap.get(p.id);
+      const balance = balanceMap.get(p.id) ?? 0;
+      const userPayments = paymentsMap.get(p.id) || [];
+      const completedPayments = userPayments.filter(pay => pay.status === "completed");
+      const totalPaid = completedPayments.reduce((sum, pay) => sum + Number(pay.amount || 0), 0);
+
+      let status: "active" | "trial" | "expired" = "trial";
+      if (completedPayments.length > 0) {
+        status = balance > 0 ? "active" : "expired";
+      } else if (balance > 0) {
+        status = "trial";
+      } else {
+        status = "expired";
+      }
+
       return {
-      id: p.id,
-      email: (p.email && p.email.trim()) || authUser?.email || "",
-      display_name: p.displayName,
-      phone: p.phone,
-      created_at: p.createdAt || authUser?.createdAt,
-      balance: balanceMap.get(p.id) ?? 0,
-      aiBalance: aiBalanceMap.get(p.id) ?? 0,
-      role: roleMap.get(p.id) ?? "user",
-      telegram: telegramMap.get(p.id) || null,
-    };
+        id: p.id,
+        email: (p.email && p.email.trim()) || authUser?.email || "",
+        display_name: p.displayName,
+        phone: p.phone,
+        created_at: p.createdAt || authUser?.createdAt,
+        last_seen_at: p.lastSeenAt,
+        admin_notes: p.adminNotes,
+        balance,
+        aiBalance: aiBalanceMap.get(p.id) ?? 0,
+        role: roleMap.get(p.id) ?? "user",
+        status,
+        totalPaid,
+        paymentsCount: completedPayments.length,
+        cabinetsCount: cabinetsCountMap.get(p.id) || 0,
+        telegram: telegramMap.get(p.id) || null,
+        payments: userPayments.map(pay => ({
+          id: pay.id,
+          amount: pay.amount,
+          tokens: pay.tokens,
+          status: pay.status,
+          created_at: pay.createdAt,
+        })),
+      };
     });
 
     res.json(users);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.patch("/api/admin/users/:id/notes", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).userId;
+    const role = await storage.getUserRole(adminId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Доступ запрещён" });
+      return;
+    }
+    const { notes } = req.body;
+    await storage.updateAdminNotes(req.params.id, notes || "");
+    res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -610,8 +684,11 @@ router.delete("/api/admin/users/:id", requireAuth, async (req: Request, res: Res
   }
 });
 
-router.get("/api/admin/overview", requireAuth, async (_req: Request, res: Response) => {
+router.get("/api/admin/overview", requireAuth, async (req: Request, res: Response) => {
   try {
+    const adminRole = await storage.getUserRole((req as any).userId);
+    if (adminRole !== "admin") { res.status(403).json({ error: "Доступ запрещён" }); return; }
+
     const [totalUsers, totalReviews, tokenBals, aiBals, totalTransactions, todayTransactions] = await Promise.all([
       storage.countProfiles(),
       storage.countReviews(),
@@ -638,6 +715,8 @@ router.get("/api/admin/overview", requireAuth, async (_req: Request, res: Respon
 
 router.get("/api/admin/transactions", requireAuth, async (req: Request, res: Response) => {
   try {
+    const adminRole = await storage.getUserRole((req as any).userId);
+    if (adminRole !== "admin") { res.status(403).json({ error: "Доступ запрещён" }); return; }
     const typeFilter = req.query.type as string | undefined;
     const data = await storage.getTokenTransactions(typeFilter);
     res.json(toSnakeCase(data));
@@ -648,6 +727,8 @@ router.get("/api/admin/transactions", requireAuth, async (req: Request, res: Res
 
 router.get("/api/admin/ai-transactions", requireAuth, async (req: Request, res: Response) => {
   try {
+    const adminRole = await storage.getUserRole((req as any).userId);
+    if (adminRole !== "admin") { res.status(403).json({ error: "Доступ запрещён" }); return; }
     const typeFilter = req.query.type as string | undefined;
     const data = await storage.getAiRequestTransactions(typeFilter);
     res.json(toSnakeCase(data));

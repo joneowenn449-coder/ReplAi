@@ -17,23 +17,38 @@ export function useAdminRole() {
   });
 }
 
-interface UserWithBalance {
+export interface UserPayment {
+  id: string;
+  amount: string;
+  tokens: number;
+  status: string;
+  created_at: string;
+}
+
+export interface AdminUser {
   id: string;
   email: string;
   display_name: string | null;
   phone: string | null;
   created_at: string;
+  last_seen_at: string | null;
+  admin_notes: string | null;
   balance: number;
   aiBalance: number;
   role: string;
+  status: "active" | "trial" | "expired";
+  totalPaid: number;
+  paymentsCount: number;
+  cabinetsCount: number;
   telegram: { username: string | null; firstName: string | null; chatId: string | null } | null;
+  payments: UserPayment[];
 }
 
 export function useAdminUsers() {
   return useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => {
-      return apiRequest("/api/admin/users") as Promise<UserWithBalance[]>;
+      return apiRequest("/api/admin/users") as Promise<AdminUser[]>;
     },
   });
 }
@@ -145,6 +160,27 @@ export function useUpdateAiBalance() {
       queryClient.invalidateQueries({ queryKey: ["admin-ai-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
       toast({ title: "Баланс AI-запросов обновлён" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useUpdateAdminNotes() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ userId, notes }: { userId: string; notes: string }) => {
+      return apiRequest(`/api/admin/users/${userId}/notes`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: "Заметка сохранена" });
     },
     onError: (error: Error) => {
       toast({ title: "Ошибка", description: error.message, variant: "destructive" });

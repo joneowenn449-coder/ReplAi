@@ -270,6 +270,14 @@ export class DatabaseStorage {
     await db.update(profiles).set({ email }).where(eq(profiles.id, userId));
   }
 
+  async updateLastSeen(userId: string): Promise<void> {
+    await db.update(profiles).set({ lastSeenAt: new Date() }).where(eq(profiles.id, userId));
+  }
+
+  async updateAdminNotes(userId: string, notes: string): Promise<void> {
+    await db.update(profiles).set({ adminNotes: notes }).where(eq(profiles.id, userId));
+  }
+
   async getAllProfiles(): Promise<Profile[]> {
     return db.select().from(profiles);
   }
@@ -690,6 +698,16 @@ export class DatabaseStorage {
       .orderBy(desc(payments.createdAt))
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  async getAllPayments() {
+    return db.select().from(payments).orderBy(desc(payments.createdAt));
+  }
+
+  async getUserPayments(userId: string) {
+    return db.select().from(payments)
+      .where(eq(payments.userId, userId))
+      .orderBy(desc(payments.createdAt));
   }
 
   async getAuthUserByEmail(email: string): Promise<AuthUser | null> {

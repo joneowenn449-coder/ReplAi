@@ -547,7 +547,7 @@ router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response)
     const balanceMap = new Map(tokenBals.map((b) => [b.userId, b.balance]));
     const aiBalanceMap = new Map(aiBals.map((b) => [b.userId, b.balance]));
     const roleMap = new Map(roles.map((r) => [r.userId, r.role]));
-    const authEmailMap = new Map(allAuthUsers.map((u) => [u.id, u.email]));
+    const authUserMap = new Map(allAuthUsers.map((u) => [u.id, u]));
 
     const telegramMap = new Map<string, { username: string | null; firstName: string | null; chatId: string | null }>();
     for (const cab of allCabinets) {
@@ -560,17 +560,20 @@ router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response)
       }
     }
 
-    const users = allProfiles.map((p) => ({
+    const users = allProfiles.map((p) => {
+      const authUser = authUserMap.get(p.id);
+      return {
       id: p.id,
-      email: p.email || authEmailMap.get(p.id) || "",
+      email: (p.email && p.email.trim()) || authUser?.email || "",
       display_name: p.displayName,
       phone: p.phone,
-      created_at: p.createdAt,
+      created_at: p.createdAt || authUser?.createdAt,
       balance: balanceMap.get(p.id) ?? 0,
       aiBalance: aiBalanceMap.get(p.id) ?? 0,
       role: roleMap.get(p.id) ?? "user",
       telegram: telegramMap.get(p.id) || null,
-    }));
+    };
+    });
 
     res.json(users);
   } catch (e: any) {

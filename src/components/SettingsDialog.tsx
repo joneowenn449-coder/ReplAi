@@ -39,6 +39,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { RecommendationsSection } from "@/components/RecommendationsSection";
+import { useAuth } from "@/contexts/AuthContext";
+import { Badge } from "@/components/ui/badge";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -51,7 +53,11 @@ function maskKey(key: string): string {
   return key.slice(0, 4) + "****...****" + key.slice(-4);
 }
 
+const OWNER_USER_ID = "5339ed4d-37c9-4fc1-bed9-dc4604bdffe6";
+
 export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsDialogProps) => {
+  const { user } = useAuth();
+  const isTelegramAvailable = user?.id === OWNER_USER_ID;
   const { data: activeCabinet } = useActiveCabinet();
   const updateCabinet = useUpdateCabinet();
   const validateApiKey = useValidateApiKey();
@@ -99,12 +105,14 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
 
   useEffect(() => {
     if (open && initialSection === "telegram") {
-      setTelegramSectionOpen(true);
+      if (isTelegramAvailable) {
+        setTelegramSectionOpen(true);
+      }
       setTimeout(() => {
         document.getElementById("settings-telegram-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
     }
-  }, [open, initialSection]);
+  }, [open, initialSection, isTelegramAvailable]);
 
   const handleSaveSettings = () => {
     if (!cabinet) return;
@@ -374,26 +382,39 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
           <RecommendationsSection />
 
           {/* Telegram Bot Section */}
-          <Collapsible open={telegramSectionOpen} onOpenChange={setTelegramSectionOpen}>
+          <Collapsible open={isTelegramAvailable ? telegramSectionOpen : false} onOpenChange={isTelegramAvailable ? setTelegramSectionOpen : undefined}>
             <div id="settings-telegram-section" className="space-y-3">
-              <CollapsibleTrigger asChild>
-                <div className="flex items-center gap-2 cursor-pointer hover-elevate rounded-md py-1 px-1 -mx-1" data-testid="trigger-section-telegram">
-                  <ChevronRight
-                    className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
-                      telegramSectionOpen ? "rotate-90" : ""
-                    }`}
-                  />
-                  <MessageCircle className="w-4 h-4 text-muted-foreground" />
-                  <label className="text-sm font-medium text-foreground cursor-pointer">
+              <CollapsibleTrigger asChild disabled={!isTelegramAvailable}>
+                <div className={`flex items-center gap-2 rounded-md py-1 px-1 -mx-1 ${isTelegramAvailable ? "cursor-pointer hover-elevate" : ""}`} data-testid="trigger-section-telegram">
+                  {isTelegramAvailable && (
+                    <ChevronRight
+                      className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                        telegramSectionOpen ? "rotate-90" : ""
+                      }`}
+                    />
+                  )}
+                  <MessageCircle className={`w-4 h-4 ${isTelegramAvailable ? "text-muted-foreground" : "text-muted-foreground/50"}`} />
+                  <span className={`text-sm font-medium ${isTelegramAvailable ? "text-foreground" : "text-muted-foreground"}`}>
                     Telegram-бот
-                  </label>
-                  {cabinet?.telegram_chat_id && (
+                  </span>
+                  {!isTelegramAvailable ? (
+                    <Badge variant="secondary" className="ml-auto text-[10px] no-default-active-elevate">
+                      Скоро
+                    </Badge>
+                  ) : cabinet?.telegram_chat_id ? (
                     <span className="text-xs text-success font-medium ml-auto">
                       Подключен
                     </span>
-                  )}
+                  ) : null}
                 </div>
               </CollapsibleTrigger>
+              {!isTelegramAvailable && (
+                <div className="pt-1">
+                  <p className="text-xs text-muted-foreground pl-5">
+                    Уведомления об отзывах и управление ответами прямо в Telegram. Функция в разработке.
+                  </p>
+                </div>
+              )}
               <CollapsibleContent>
                 <div className="space-y-3 pt-1">
                   {cabinet?.telegram_chat_id ? (

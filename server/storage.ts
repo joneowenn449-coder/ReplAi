@@ -48,7 +48,7 @@ export class DatabaseStorage {
       .set({ status: "archived", updatedAt: new Date() })
       .where(
         and(
-          sql`(${reviews.status} = 'sent' OR ${reviews.status} = 'auto')`,
+          sql`(${reviews.status} = 'sent' OR ${reviews.status} = 'auto' OR ${reviews.status} = 'answered_externally')`,
           lte(reviews.updatedAt, cutoff)
         )
       )
@@ -88,6 +88,19 @@ export class DatabaseStorage {
           eq(reviews.cabinetId, cabinetId),
           eq(reviews.status, "pending"),
           not(isNull(reviews.aiDraft)),
+        ),
+      );
+  }
+
+  async getAllPendingReviewsForCabinet(userId: string, cabinetId: string): Promise<Review[]> {
+    return db
+      .select()
+      .from(reviews)
+      .where(
+        and(
+          eq(reviews.userId, userId),
+          eq(reviews.cabinetId, cabinetId),
+          eq(reviews.status, "pending"),
         ),
       );
   }

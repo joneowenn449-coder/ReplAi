@@ -68,7 +68,7 @@ export function useDashboardData(reviews: Review[], filters: DashboardFilters): 
       ? Math.round((filtered.reduce((sum, r) => sum + r.rating, 0) / totalReviews) * 10) / 10
       : 0;
     const pendingCount = filtered.filter((r) => r.status === "pending").length;
-    const answeredCount = filtered.filter((r) => r.status === "auto" || r.status === "sent").length;
+    const answeredCount = filtered.filter((r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally").length;
 
     // Reviews by day
     const dayMap = new Map<string, number>();

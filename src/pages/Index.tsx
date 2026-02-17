@@ -39,7 +39,7 @@ const Index = () => {
 
   const stats = {
     pending: reviews.filter((r) => r.status === "pending").length,
-    answered: reviews.filter((r) => r.status === "auto" || r.status === "sent").length,
+    answered: reviews.filter((r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally").length,
     archived: reviews.filter((r) => r.status === "archived").length,
   };
 
@@ -52,7 +52,7 @@ const Index = () => {
     activeFilter === "all"
       ? activeReviews
       : activeFilter === "answered"
-        ? reviews.filter((r) => r.status === "auto" || r.status === "sent")
+        ? reviews.filter((r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally")
         : reviews.filter((r) => r.status === activeFilter);
 
   const handleSync = () => {

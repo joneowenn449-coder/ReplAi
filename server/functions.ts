@@ -67,6 +67,16 @@ async function fetchWBArchiveReviews(apiKey: string, skip = 0, take = 50) {
   return resp.json();
 }
 
+async function fetchWBFeedbackById(apiKey: string, feedbackId: string) {
+  const url = `${WB_FEEDBACKS_URL}/api/v1/feedback?id=${feedbackId}`;
+  const resp = await fetch(url, { headers: { Authorization: apiKey } });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`WB API feedback error ${resp.status}: ${text}`);
+  }
+  return resp.json();
+}
+
 async function sendWBAnswer(apiKey: string, feedbackId: string, text: string) {
   const resp = await fetch(`${WB_FEEDBACKS_URL}/api/v1/feedbacks/answer`, {
     method: "POST",
@@ -346,6 +356,33 @@ async function processCabinetReviews(
     }
   }
 
+  let externallyAnswered = 0;
+  const allPending = await storage.getAllPendingReviewsForCabinet(userId, cabinetId);
+  if (allPending && allPending.length > 0) {
+    console.log(`[sync-reviews] cabinet=${cabinetId} Checking ${allPending.length} pending reviews for external answers`);
+    for (const pr of allPending) {
+      try {
+        const fbData = await fetchWBFeedbackById(WB_API_KEY, pr.wbId);
+        const feedback = fbData?.data;
+        if (feedback && feedback.answer && feedback.answer.text) {
+          await storage.updateReview(pr.id, {
+            status: "answered_externally",
+            sentAnswer: feedback.answer.text,
+            updatedAt: new Date(),
+          });
+          externallyAnswered++;
+          console.log(`[sync-reviews] Review ${pr.wbId} was answered externally`);
+        }
+        await delay(350);
+      } catch (e: any) {
+        console.error(`[sync-reviews] Error checking review ${pr.wbId}:`, e.message);
+      }
+    }
+    if (externallyAnswered > 0) {
+      console.log(`[sync-reviews] cabinet=${cabinetId} Found ${externallyAnswered} externally answered reviews`);
+    }
+  }
+
   await storage.updateCabinet(cabinetId, { lastSyncAt: new Date() });
 
   const userSettings = await storage.getSettings(userId);
@@ -358,6 +395,7 @@ async function processCabinetReviews(
     fetched: allFeedbacks.length,
     new: newCount,
     autoSent: autoSentCount,
+    externallyAnswered,
     errors: errors.length > 0 ? errors : undefined,
   };
 }

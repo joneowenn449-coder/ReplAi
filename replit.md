@@ -112,6 +112,8 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
 
 ## Recent Changes
+- 2026-02-17: External answer detection during sync: checks all pending reviews against WB API, marks as "answered_externally" if answered outside the service; frontend displays new status in Answered tab
+- 2026-02-17: Settings dialog: all sections (API key, rating modes, recommendations, vibe, Telegram) now collapsible and collapsed by default
 - 2026-02-15: Fixed race condition in ensureUserProvisioned (duplicate cabinet prevention via provisioningInProgress map)
 - 2026-02-15: Cleaned up duplicate empty cabinets from DB; fixed auth docs (email+password, not phone OTP)
 - 2026-02-15: AI assistant multimodal photo analysis: sends review photos to Gemini as image_url, detects photo-related queries, collectPhotoUrls helper, updated system prompt with photo analysis capabilities

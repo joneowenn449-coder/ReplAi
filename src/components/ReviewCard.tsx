@@ -13,7 +13,7 @@ interface ReviewCardProps {
 date: string;
   productName: string;
   productArticle: string;
-  status: "pending" | "auto" | "sent" | "archived";
+  status: "pending" | "auto" | "sent" | "archived" | "answered_externally";
   images?: string[];
   text?: string | null;
   pros?: string | null;
@@ -63,6 +63,7 @@ export const ReviewCard = ({
     auto: "Автоответ",
     sent: "Отправлено",
     archived: "Архив",
+    answered_externally: "Отвечено вне сервиса",
   };
 
   const statusClasses: Record<string, string> = {
@@ -70,6 +71,7 @@ export const ReviewCard = ({
     auto: "badge-auto",
     sent: "badge-sent",
     archived: "badge-sent",
+    answered_externally: "badge-sent",
   };
 
   const handleSend = (customText?: string) => {
@@ -102,7 +104,7 @@ export const ReviewCard = ({
 
   const isArchived = status === "archived";
   const hasDraft = aiDraft && status === "pending";
-  const hasAnswer = sentAnswer && (status === "sent" || status === "auto" || isArchived);
+  const hasAnswer = sentAnswer && (status === "sent" || status === "auto" || status === "answered_externally" || isArchived);
 
   return (
     <div className="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow">

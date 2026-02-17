@@ -112,6 +112,7 @@ All business logic is fully ported from Supabase Edge Functions to Express:
 - Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
 
 ## Recent Changes
+- 2026-02-17: Session & device tracking: user_sessions table (IP, user-agent parsed via ua-parser-js: browser, OS, device type), recorded on each auth with 30-min throttle per user+IP+UA combo; admin API endpoints GET /api/admin/sessions, GET /api/admin/users/:id/sessions; sessions section in UserDetailModal with device icons (desktop/mobile/tablet)
 - 2026-02-17: Admin panel redesign: new UsersTable with columns (ID, Name/Email, Status badges, Tariff, Registration, Last Activity, Actions); UserDetailModal with payment history, admin notes, balance management, delete; CSV export; search/filter; lastSeenAt tracking (throttled 5min) in profiles; adminNotes field; status computed from payment history (active/trial/expired); PATCH /api/admin/users/:id/notes endpoint
 - 2026-02-17: Account deletion: admin can delete users from UsersTable (with confirmation dialog, self-deletion blocked); users can self-delete from Profile page (password confirmation required, auto-logout); deleteUser storage method cleans all 15+ related tables in a transaction
 - 2026-02-17: Telegram bot section "Coming Soon" teaser for non-owner users (owner ID gated); full functionality only for owner account

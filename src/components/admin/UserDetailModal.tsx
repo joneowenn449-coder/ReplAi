@@ -4,6 +4,7 @@ import {
   useUpdateAiBalance,
   useUpdateAdminNotes,
   useDeleteUser,
+  useUserSessions,
   type AdminUser,
 } from "@/hooks/useAdmin";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,7 +18,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
   Coins, BrainCircuit, Plus, Minus, Loader2, MessageCircle,
-  Trash2, Save, Store, CreditCard, StickyNote, Clock,
+  Trash2, Save, Store, CreditCard, StickyNote, Clock, Monitor,
+  Smartphone, Tablet, Globe,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -51,6 +53,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
   const updateAiBalance = useUpdateAiBalance();
   const updateAdminNotes = useUpdateAdminNotes();
   const deleteUser = useDeleteUser();
+  const { data: sessions, isLoading: sessionsLoading } = useUserSessions(open ? user?.id ?? null : null);
 
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceDesc, setBalanceDesc] = useState("");
@@ -360,6 +363,58 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                           {format(new Date(pay.created_at), "dd.MM.yyyy HH:mm", { locale: ru })}
                         </span>
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Globe className="w-4 h-4" />
+              Сессии и устройства
+              {sessions && sessions.length > 0 && (
+                <span className="text-muted-foreground font-normal">
+                  ({sessions.length})
+                </span>
+              )}
+            </h3>
+            {sessionsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Загрузка...
+              </div>
+            ) : !sessions || sessions.length === 0 ? (
+              <p className="text-sm text-muted-foreground" data-testid="text-no-sessions">Сессий нет</p>
+            ) : (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {sessions.map((s) => {
+                  const DeviceIcon = s.device_type === "mobile" ? Smartphone
+                    : s.device_type === "tablet" ? Tablet
+                    : Monitor;
+                  const browserStr = [s.browser, s.browser_version].filter(Boolean).join(" ");
+                  const osStr = [s.os, s.os_version].filter(Boolean).join(" ");
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between gap-2 flex-wrap rounded-md border border-border px-3 py-2 text-sm"
+                      data-testid={`row-session-${s.id}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <DeviceIcon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium truncate">{s.ip_address || "?"}</span>
+                          <span className="text-xs text-muted-foreground truncate">
+                            {[browserStr, osStr, s.device].filter(Boolean).join(" / ")}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {format(new Date(s.created_at), "dd.MM.yyyy HH:mm", { locale: ru })}
+                      </span>
                     </div>
                   );
                 })}

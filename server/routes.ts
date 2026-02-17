@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { UAParser } from "ua-parser-js";
 import {
   syncReviews, syncChats, sendReply, generateReply,
   validateApiKey, sendChatMessage, aiAssistant,
@@ -112,6 +113,15 @@ async function ensureUserProvisioned(userId: string, email?: string | null): Pro
 
 const lastSeenCache = new Map<string, number>();
 const LAST_SEEN_THROTTLE = 5 * 60 * 1000;
+const sessionCache = new Map<string, number>();
+const SESSION_THROTTLE = 30 * 60 * 1000;
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") return forwarded.split(",")[0].trim();
+  if (Array.isArray(forwarded)) return forwarded[0].trim();
+  return req.socket.remoteAddress || "unknown";
+}
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const parsed = parseToken(req.headers.authorization);
@@ -129,6 +139,29 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (now - lastSeen > LAST_SEEN_THROTTLE) {
     lastSeenCache.set(userId, now);
     storage.updateLastSeen(userId).catch(() => {});
+  }
+
+  const ip = getClientIp(req);
+  const ua = req.headers["user-agent"] || "";
+  const sessionKey = `${userId}:${ip}:${ua}`;
+  const lastSession = sessionCache.get(sessionKey) || 0;
+  if (now - lastSession > SESSION_THROTTLE) {
+    sessionCache.set(sessionKey, now);
+    const parser = new UAParser(ua);
+    const browser = parser.getBrowser();
+    const os = parser.getOS();
+    const device = parser.getDevice();
+    storage.insertUserSession({
+      userId,
+      ipAddress: ip,
+      userAgent: ua,
+      browser: browser.name || null,
+      browserVersion: browser.version || null,
+      os: os.name || null,
+      osVersion: os.version || null,
+      device: device.model || null,
+      deviceType: device.type || "desktop",
+    }).catch((err) => console.error("[session-log]", err));
   }
 
   ensureUserProvisioned(userId, email).then(() => next()).catch((err) => {
@@ -731,6 +764,29 @@ router.get("/api/admin/ai-transactions", requireAuth, async (req: Request, res: 
     if (adminRole !== "admin") { res.status(403).json({ error: "Доступ запрещён" }); return; }
     const typeFilter = req.query.type as string | undefined;
     const data = await storage.getAiRequestTransactions(typeFilter);
+    res.json(toSnakeCase(data));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/api/admin/sessions", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const adminRole = await storage.getUserRole((req as any).userId);
+    if (adminRole !== "admin") { res.status(403).json({ error: "Доступ запрещён" }); return; }
+    const limit = parseInt(req.query.limit as string) || 100;
+    const data = await storage.getAllRecentSessions(limit);
+    res.json(toSnakeCase(data));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/api/admin/users/:id/sessions", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const adminRole = await storage.getUserRole((req as any).userId);
+    if (adminRole !== "admin") { res.status(403).json({ error: "Доступ запрещён" }); return; }
+    const data = await storage.getUserSessions(req.params.id);
     res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });

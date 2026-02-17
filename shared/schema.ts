@@ -198,6 +198,21 @@ export const telegramAuthTokens = replaiSchema.table("telegram_auth_tokens", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const userSessions = replaiSchema.table("user_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  browser: text("browser"),
+  browserVersion: text("browser_version"),
+  os: text("os"),
+  osVersion: text("os_version"),
+  device: text("device"),
+  deviceType: text("device_type"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({ id: true, createdAt: true });
 export const insertAuthUserSchema = createInsertSchema(authUsers).omit({ id: true, createdAt: true });
 export const insertAiConversationSchema = createInsertSchema(aiConversations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAiMessageSchema = createInsertSchema(aiMessages).omit({ id: true, createdAt: true });
@@ -253,3 +268,5 @@ export type TelegramAuthToken = typeof telegramAuthTokens.$inferSelect;
 export type InsertTelegramAuthToken = z.infer<typeof insertTelegramAuthTokenSchema>;
 export type AuthUser = typeof authUsers.$inferSelect;
 export type InsertAuthUser = z.infer<typeof insertAuthUserSchema>;
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;

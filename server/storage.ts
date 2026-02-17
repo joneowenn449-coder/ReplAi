@@ -4,7 +4,7 @@ import {
   reviews, chats, chatMessages, wbCabinets, settings, profiles,
   tokenBalances, aiRequestBalances, tokenTransactions, aiRequestTransactions,
   userRoles, aiConversations, aiMessages, productRecommendations, payments,
-  globalSettings, telegramAuthTokens, authUsers,
+  globalSettings, telegramAuthTokens, authUsers, userSessions,
   type Review, type InsertReview,
   type Chat, type InsertChat,
   type ChatMessage, type InsertChatMessage,
@@ -20,6 +20,7 @@ import {
   type Payment, type InsertPayment,
   type GlobalSetting,
   type AuthUser, type InsertAuthUser,
+  type UserSession, type InsertUserSession,
 } from "@shared/schema";
 
 export class DatabaseStorage {
@@ -772,9 +773,28 @@ export class DatabaseStorage {
       await tx.delete(payments).where(eq(payments.userId, userId));
       await tx.delete(settings).where(eq(settings.userId, userId));
       await tx.delete(userRoles).where(eq(userRoles.userId, userId));
+      await tx.delete(userSessions).where(eq(userSessions.userId, userId));
       await tx.delete(profiles).where(eq(profiles.id, userId));
       await tx.delete(authUsers).where(eq(authUsers.id, userId));
     });
+  }
+
+  async insertUserSession(data: InsertUserSession): Promise<UserSession> {
+    const rows = await db.insert(userSessions).values(data).returning();
+    return rows[0];
+  }
+
+  async getUserSessions(userId: string, limit = 50): Promise<UserSession[]> {
+    return db.select().from(userSessions)
+      .where(eq(userSessions.userId, userId))
+      .orderBy(desc(userSessions.createdAt))
+      .limit(limit);
+  }
+
+  async getAllRecentSessions(limit = 100): Promise<UserSession[]> {
+    return db.select().from(userSessions)
+      .orderBy(desc(userSessions.createdAt))
+      .limit(limit);
   }
 }
 

@@ -73,6 +73,30 @@ export function useAdminAiTransactions(typeFilter?: string) {
   });
 }
 
+export interface UserSessionEntry {
+  id: string;
+  user_id: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  browser: string | null;
+  browser_version: string | null;
+  os: string | null;
+  os_version: string | null;
+  device: string | null;
+  device_type: string | null;
+  created_at: string;
+}
+
+export function useUserSessions(userId: string | null) {
+  return useQuery({
+    queryKey: ["admin-user-sessions", userId],
+    queryFn: async () => {
+      return apiRequest(`/api/admin/users/${userId}/sessions`) as Promise<UserSessionEntry[]>;
+    },
+    enabled: !!userId,
+  });
+}
+
 export function useAdminOverview() {
   return useQuery({
     queryKey: ["admin-overview"],

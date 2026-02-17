@@ -265,6 +265,10 @@ export class DatabaseStorage {
       });
   }
 
+  async updateProfileEmail(userId: string, email: string): Promise<void> {
+    await db.update(profiles).set({ email }).where(eq(profiles.id, userId));
+  }
+
   async getAllProfiles(): Promise<Profile[]> {
     return db.select().from(profiles);
   }

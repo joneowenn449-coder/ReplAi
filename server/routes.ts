@@ -43,12 +43,13 @@ function toCamelCase(obj: any): any {
   return obj;
 }
 
-function getUserIdFromToken(authHeader: string | undefined): string | null {
+function parseToken(authHeader: string | undefined): { userId: string; email: string | null } | null {
   if (!authHeader?.startsWith("Bearer ")) return null;
   try {
     const token = authHeader.slice(7);
     const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
-    return payload.sub || null;
+    if (!payload.sub) return null;
+    return { userId: payload.sub, email: payload.email || null };
   } catch {
     return null;
   }
@@ -57,8 +58,13 @@ function getUserIdFromToken(authHeader: string | undefined): string | null {
 const provisionedUsers = new Set<string>();
 const provisioningInProgress = new Map<string, Promise<void>>();
 
-async function ensureUserProvisioned(userId: string): Promise<void> {
-  if (provisionedUsers.has(userId)) return;
+async function ensureUserProvisioned(userId: string, email?: string | null): Promise<void> {
+  if (provisionedUsers.has(userId)) {
+    if (email) {
+      storage.updateProfileEmail(userId, email).catch(() => {});
+    }
+    return;
+  }
 
   const existing = provisioningInProgress.get(userId);
   if (existing) return existing;
@@ -67,8 +73,10 @@ async function ensureUserProvisioned(userId: string): Promise<void> {
     try {
       const profile = await storage.getProfile(userId);
       if (!profile) {
-        await storage.upsertProfile({ id: userId });
+        await storage.upsertProfile({ id: userId, email: email || undefined });
         console.log(`[auto-provision] Created profile for user ${userId}`);
+      } else if (email && !profile.email) {
+        await storage.updateProfileEmail(userId, email);
       }
 
       const userSettings = await storage.getSettings(userId);
@@ -99,14 +107,16 @@ async function ensureUserProvisioned(userId: string): Promise<void> {
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const userId = getUserIdFromToken(req.headers.authorization);
-  if (!userId) {
+  const parsed = parseToken(req.headers.authorization);
+  if (!parsed) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+  const { userId, email } = parsed;
   console.log(`[auth] userId=${userId} path=${req.path}`);
   (req as any).userId = userId;
-  ensureUserProvisioned(userId).then(() => next()).catch((err) => {
+  (req as any).userEmail = email;
+  ensureUserProvisioned(userId, email).then(() => next()).catch((err) => {
     console.error("[auto-provision] Error:", err);
     next();
   });
@@ -375,7 +385,7 @@ router.get("/api/admin/users", requireAuth, async (_req: Request, res: Response)
 
     const users = allProfiles.map((p) => ({
       id: p.id,
-      email: "",
+      email: p.email || "",
       display_name: p.displayName,
       phone: p.phone,
       created_at: p.createdAt,

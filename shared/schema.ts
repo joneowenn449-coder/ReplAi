@@ -93,6 +93,7 @@ export const profiles = replaiSchema.table("profiles", {
   id: text("id").primaryKey(),
   displayName: text("display_name"),
   phone: text("phone"),
+  email: text("email"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -18,6 +18,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
 
   if (!authLoading && user) {
@@ -181,7 +182,7 @@ const Auth = () => {
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <span className="text-sm text-muted-foreground">
-              10 токенов в подарок при регистрации
+              50 токенов в подарок при регистрации
             </span>
           </div>
           <button
@@ -321,10 +322,28 @@ const Auth = () => {
                   />
                 </div>
 
+                {isSignUp && (
+                  <label className="flex items-start gap-2 text-sm text-muted-foreground" data-testid="label-terms-agreement">
+                    <input
+                      type="checkbox"
+                      checked={agreedToTerms}
+                      onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      className="mt-1 shrink-0"
+                      data-testid="checkbox-terms"
+                    />
+                    <span>
+                      Регистрируясь, вы соглашаетесь с{" "}
+                      <a href="/terms" target="_blank" className="text-primary underline underline-offset-4" data-testid="link-terms">условиями оферты</a>
+                      {" "}и{" "}
+                      <a href="/privacy" target="_blank" className="text-primary underline underline-offset-4" data-testid="link-privacy">политикой обработки данных</a>
+                    </span>
+                  </label>
+                )}
+
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={loading}
+                  disabled={loading || (isSignUp && !agreedToTerms)}
                   data-testid="button-submit"
                 >
                   {loading ? (
@@ -355,8 +374,7 @@ const Auth = () => {
 
               {isSignUp && (
                 <p className="mt-3 text-xs text-muted-foreground text-center">
-                  При регистрации вы получите 10 бесплатных токенов для ответов
-                  на отзывы
+                  При регистрации вы получите 50 бесплатных токенов
                 </p>
               )}
             </CardContent>
@@ -390,7 +408,11 @@ const Auth = () => {
               Repl<span className="text-primary">Ai</span>
             </span>
           </div>
-          <span data-testid="text-footer-tagline">ИИ-ответы на отзывы Wildberries</span>
+          <div className="flex items-center gap-4 flex-wrap">
+            <a href="/privacy" className="underline underline-offset-4" data-testid="link-footer-privacy">Политика конфиденциальности</a>
+            <a href="/terms" className="underline underline-offset-4" data-testid="link-footer-terms">Условия использования</a>
+          </div>
+          <span data-testid="text-footer-tagline">ИП Киянова К.Ю.</span>
         </div>
       </footer>
     </div>

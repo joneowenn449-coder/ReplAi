@@ -205,10 +205,23 @@ async function processCabinetReviews(
     await delay(350);
   }
 
-  console.log(`[sync-reviews] cabinet=${cabinetId} user=${userId} Fetched ${allFeedbacks.length} reviews`);
+  const answeredFeedbacks: any[] = [];
+  let skipAnswered = 0;
+  while (true) {
+    const wbData = await fetchWBArchiveReviews(WB_API_KEY, skipAnswered, take);
+    const feedbacks = wbData?.data?.feedbacks || [];
+    if (feedbacks.length === 0) break;
+    answeredFeedbacks.push(...feedbacks);
+    if (feedbacks.length < take) break;
+    skipAnswered += take;
+    await delay(350);
+  }
+
+  console.log(`[sync-reviews] cabinet=${cabinetId} user=${userId} Fetched ${allFeedbacks.length} unanswered + ${answeredFeedbacks.length} answered reviews`);
 
   let newCount = 0;
   let autoSentCount = 0;
+  let importedAnswered = 0;
   const errors: string[] = [];
 
   for (const fb of allFeedbacks) {
@@ -356,30 +369,70 @@ async function processCabinetReviews(
     }
   }
 
+  for (const fb of answeredFeedbacks) {
+    const wbId = fb.id;
+    const existing = await storage.getReviewByWbId(wbId, userId, cabinetId);
+    if (existing) {
+      if (existing.status === "pending" && fb.answer?.text) {
+        await storage.updateReview(existing.id, {
+          status: "answered_externally",
+          sentAnswer: fb.answer.text,
+          updatedAt: new Date(),
+        });
+      }
+      continue;
+    }
+
+    const photoLinks = fb.photoLinks || [];
+    const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
+    const reviewBrandName = fb.productDetails?.brandName || "";
+
+    await storage.insertReview({
+      wbId,
+      userId,
+      cabinetId,
+      rating: fb.productValuation || 5,
+      authorName: fb.userName || "Покупатель",
+      text: fb.text || null,
+      pros: fb.pros || null,
+      cons: fb.cons || null,
+      productName: fb.productDetails?.productName || fb.subjectName || "Товар",
+      productArticle: String(fb.productDetails?.nmId || fb.nmId || ""),
+      brandName: reviewBrandName,
+      photoLinks: photoLinks,
+      hasVideo: hasVideo,
+      status: "answered_externally",
+      aiDraft: null,
+      sentAnswer: fb.answer?.text || null,
+      createdDate: fb.createdDate ? new Date(fb.createdDate) : new Date(),
+    });
+    importedAnswered++;
+  }
+
+  if (importedAnswered > 0) {
+    console.log(`[sync-reviews] cabinet=${cabinetId} Imported ${importedAnswered} externally answered reviews`);
+  }
+
+  const answeredWbIds = new Set(answeredFeedbacks.map((fb: any) => fb.id));
+  const answeredMap = new Map(answeredFeedbacks.map((fb: any) => [fb.id, fb]));
   let externallyAnswered = 0;
   const allPending = await storage.getAllPendingReviewsForCabinet(userId, cabinetId);
   if (allPending && allPending.length > 0) {
-    console.log(`[sync-reviews] cabinet=${cabinetId} Checking ${allPending.length} pending reviews for external answers`);
     for (const pr of allPending) {
-      try {
-        const fbData = await fetchWBFeedbackById(WB_API_KEY, pr.wbId);
-        const feedback = fbData?.data;
-        if (feedback && feedback.answer && feedback.answer.text) {
+      if (answeredWbIds.has(pr.wbId)) {
+        const fb = answeredMap.get(pr.wbId);
+        if (fb?.answer?.text) {
           await storage.updateReview(pr.id, {
             status: "answered_externally",
-            sentAnswer: feedback.answer.text,
+            sentAnswer: fb.answer.text,
             updatedAt: new Date(),
           });
           externallyAnswered++;
-          console.log(`[sync-reviews] Review ${pr.wbId} was answered externally`);
         }
-        await delay(350);
-      } catch (e: any) {
-        console.error(`[sync-reviews] Error checking review ${pr.wbId}:`, e.message);
       }
     }
     if (externallyAnswered > 0) {
-      console.log(`[sync-reviews] cabinet=${cabinetId} Found ${externallyAnswered} externally answered reviews`);
+      console.log(`[sync-reviews] cabinet=${cabinetId} Found ${externallyAnswered} pending reviews answered externally`);
     }
   }
 
@@ -392,9 +445,10 @@ async function processCabinetReviews(
 
   return {
     cabinetId, userId,
-    fetched: allFeedbacks.length,
+    fetched: allFeedbacks.length + answeredFeedbacks.length,
     new: newCount,
     autoSent: autoSentCount,
+    importedAnswered,
     externallyAnswered,
     errors: errors.length > 0 ? errors : undefined,
   };
@@ -1691,7 +1745,7 @@ async function runAutoSyncInternal() {
     try {
       if (OPENROUTER_API_KEY) {
         const reviewResult = await processCabinetReviews(cabinet, OPENROUTER_API_KEY);
-        console.log(`[auto-sync] Reviews for cabinet=${cabinet.id}: new=${reviewResult.new}, auto=${reviewResult.autoSent}`);
+        console.log(`[auto-sync] Reviews for cabinet=${cabinet.id}: new=${reviewResult.new}, auto=${reviewResult.autoSent}, imported_answered=${reviewResult.importedAnswered}`);
       }
     } catch (e: any) {
       console.error(`[auto-sync] Review sync failed for cabinet=${cabinet.id}:`, e.message);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { ApiStatus } from "@/components/ApiStatus";
 import { useChats } from "@/hooks/useChats";
@@ -19,6 +19,10 @@ import { useActiveCabinet } from "@/hooks/useCabinets";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+const VISIBLE = "block";
+const HIDDEN = "hidden";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("reviews");
@@ -26,71 +30,109 @@ const Index = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<"telegram" | undefined>(undefined);
   const [syncingCabinetId, setSyncingCabinetId] = useState<string | null>(null);
+  const [mountedTabs, setMountedTabs] = useState<Set<string>>(new Set(["reviews"]));
+  const [visibleCount, setVisibleCount] = useState(30);
 
   const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
   const { data: chats = [] } = useChats();
   const { data: activeCabinet } = useActiveCabinet();
   const syncReviews = useSyncReviews();
 
-  const unreadChatsCount = chats.filter((c) => !c.is_read).length;
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+    setMountedTabs(prev => {
+      if (prev.has(tab)) return prev;
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+  }, []);
 
-  const replyModes = (activeCabinet?.reply_modes as Record<string, "auto" | "manual">) ?? DEFAULT_REPLY_MODES;
+  const unreadChatsCount = useMemo(
+    () => chats.filter((c) => !c.is_read).length,
+    [chats]
+  );
 
-  const activeReviews = reviews.filter((r) => r.status !== "archived");
+  const replyModes = useMemo(
+    () => (activeCabinet?.reply_modes as Record<string, "auto" | "manual">) ?? DEFAULT_REPLY_MODES,
+    [activeCabinet?.reply_modes]
+  );
 
-  const stats = {
-    pending: reviews.filter((r) => r.status === "pending").length,
-    answered: reviews.filter((r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally").length,
-    archived: reviews.filter((r) => r.status === "archived").length,
-  };
+  const { stats, counts, activeReviews } = useMemo(() => {
+    const pending = reviews.filter((r) => r.status === "pending").length;
+    const answered = reviews.filter(
+      (r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally"
+    ).length;
+    const archived = reviews.filter((r) => r.status === "archived").length;
+    const active = reviews.filter((r) => r.status !== "archived");
 
-  const counts = {
-    all: activeReviews.length,
-    ...stats,
-  };
+    return {
+      stats: { pending, answered, archived },
+      counts: { all: active.length, pending, answered, archived },
+      activeReviews: active,
+    };
+  }, [reviews]);
 
-  const filteredReviews =
-    activeFilter === "all"
-      ? activeReviews
-      : activeFilter === "answered"
-        ? reviews.filter((r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally")
-        : reviews.filter((r) => r.status === activeFilter);
+  const filteredReviews = useMemo(() => {
+    if (activeFilter === "all") return activeReviews;
+    if (activeFilter === "answered")
+      return reviews.filter(
+        (r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally"
+      );
+    return reviews.filter((r) => r.status === activeFilter);
+  }, [reviews, activeReviews, activeFilter]);
 
-  const handleSync = () => {
+  const visibleReviews = useMemo(
+    () => filteredReviews.slice(0, visibleCount),
+    [filteredReviews, visibleCount]
+  );
+
+  const hasMore = visibleCount < filteredReviews.length;
+
+  const handleSync = useCallback(() => {
     if (!activeCabinet?.id) return;
     setSyncingCabinetId(activeCabinet.id);
     syncReviews.mutate(undefined, {
       onSettled: () => setSyncingCabinetId(null),
     });
-  };
+  }, [activeCabinet?.id, syncReviews]);
 
-  const lastSyncFormatted = activeCabinet?.last_sync_at
-    ? format(new Date(activeCabinet.last_sync_at), "d MMM yyyy 'в' HH:mm", {
-        locale: ru,
-      })
-    : "Ещё не синхронизировано";
+  const lastSyncFormatted = useMemo(
+    () =>
+      activeCabinet?.last_sync_at
+        ? format(new Date(activeCabinet.last_sync_at), "d MMM yyyy 'в' HH:mm", { locale: ru })
+        : "Ещё не синхронизировано",
+    [activeCabinet?.last_sync_at]
+  );
+
+  const handleSettingsClick = useCallback(() => {
+    setSettingsInitialSection(undefined);
+    setSettingsOpen(true);
+  }, []);
+
+  const handleTelegramClick = useCallback(() => {
+    setSettingsInitialSection("telegram");
+    setSettingsOpen(true);
+  }, []);
+
+  const handleSettingsChange = useCallback((v: boolean) => {
+    setSettingsOpen(v);
+    if (!v) setSettingsInitialSection(undefined);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
       <Header
         activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onSettingsClick={() => { setSettingsInitialSection(undefined); setSettingsOpen(true); }}
-        onTelegramClick={() => { setSettingsInitialSection("telegram"); setSettingsOpen(true); }}
+        onTabChange={handleTabChange}
+        onSettingsClick={handleSettingsClick}
+        onTelegramClick={handleTelegramClick}
         unreadChatsCount={unreadChatsCount}
       />
 
       <main className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
-        {activeTab === "guide" ? (
-          <GuideSection />
-        ) : activeTab === "ai" ? (
-          <AiAssistant />
-        ) : activeTab === "chats" ? (
-          <ChatsSection />
-        ) : activeTab === "dashboard" ? (
-          <DashboardSection reviews={reviews} isLoading={reviewsLoading} />
-        ) : (
-          <>
+        <div className={activeTab === "reviews" ? VISIBLE : HIDDEN}>
+          <div className="space-y-4 sm:space-y-6">
             <ApiStatus
               isConnected={!!activeCabinet?.wb_api_key}
               lastSync={lastSyncFormatted}
@@ -106,7 +148,7 @@ const Index = () => {
 
             <FilterTabs
               activeFilter={activeFilter}
-              onFilterChange={setActiveFilter}
+              onFilterChange={(f) => { setActiveFilter(f); setVisibleCount(30); }}
               counts={counts}
             />
 
@@ -116,28 +158,17 @@ const Index = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredReviews.map((review) => (
+                {visibleReviews.map((review) => (
                   <ReviewCard
                     key={review.id}
                     id={review.id}
                     rating={review.rating}
                     authorName={review.author_name}
-                    date={format(new Date(review.created_date), "d MMM yyyy 'в' HH:mm", {
-                      locale: ru,
-                    })}
+                    date={review.created_date}
                     productName={review.product_name}
                     productArticle={review.product_article}
                     status={review.status}
-                    photoLinks={
-                      (Array.isArray(review.photo_links) ? review.photo_links : []).map((link: any) =>
-                        typeof link === "string"
-                          ? { mini: link, full: link }
-                          : {
-                              mini: link?.mini_size || link?.miniSize || link?.full_size || link?.fullSize || "",
-                              full: link?.full_size || link?.fullSize || link?.mini_size || link?.miniSize || "",
-                            }
-                      ).filter((l: any) => l.mini || l.full)
-                    }
+                    photoLinks={review.photo_links}
                     text={review.text}
                     pros={review.pros}
                     cons={review.cons}
@@ -146,6 +177,18 @@ const Index = () => {
                     isEdited={review.is_edited}
                   />
                 ))}
+
+                {hasMore && (
+                  <div className="flex justify-center pt-2 pb-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setVisibleCount(prev => prev + 30)}
+                      data-testid="button-show-more-reviews"
+                    >
+                      Показать ещё ({filteredReviews.length - visibleCount} осталось)
+                    </Button>
+                  </div>
+                )}
 
                 {filteredReviews.length === 0 && !reviewsLoading && (
                   <div className="text-center py-12 text-muted-foreground">
@@ -156,16 +199,37 @@ const Index = () => {
                 )}
               </div>
             )}
-          </>
+          </div>
+        </div>
+
+        {mountedTabs.has("chats") && (
+          <div className={activeTab === "chats" ? VISIBLE : HIDDEN}>
+            <ChatsSection />
+          </div>
+        )}
+
+        {mountedTabs.has("ai") && (
+          <div className={activeTab === "ai" ? VISIBLE : HIDDEN}>
+            <AiAssistant />
+          </div>
+        )}
+
+        {mountedTabs.has("dashboard") && (
+          <div className={activeTab === "dashboard" ? VISIBLE : HIDDEN}>
+            <DashboardSection reviews={reviews} isLoading={reviewsLoading} />
+          </div>
+        )}
+
+        {mountedTabs.has("guide") && (
+          <div className={activeTab === "guide" ? VISIBLE : HIDDEN}>
+            <GuideSection />
+          </div>
         )}
       </main>
 
       <SettingsDialog
         open={settingsOpen}
-        onOpenChange={(v) => {
-          setSettingsOpen(v);
-          if (!v) setSettingsInitialSection(undefined);
-        }}
+        onOpenChange={handleSettingsChange}
         initialSection={settingsInitialSection}
       />
     </div>

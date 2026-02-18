@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import { Star, ExternalLink, Send, RefreshCw, Pencil, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendReply, useGenerateReply } from "@/hooks/useReviews";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 
 interface PhotoLink {
   mini: string;
@@ -19,7 +21,7 @@ interface ReviewCardProps {
   productName: string;
   productArticle: string;
   status: "pending" | "auto" | "sent" | "archived" | "answered_externally";
-  photoLinks?: PhotoLink[];
+  photoLinks?: any[];
   text?: string | null;
   pros?: string | null;
   cons?: string | null;
@@ -28,7 +30,7 @@ interface ReviewCardProps {
   isEdited?: boolean;
 }
 
-export const ReviewCard = ({
+const ReviewCardInner = ({
   id,
   rating,
   authorName,
@@ -44,6 +46,31 @@ export const ReviewCard = ({
   sentAnswer,
   isEdited,
 }: ReviewCardProps) => {
+  const formattedDate = useMemo(
+    () => {
+      try {
+        return format(new Date(date), "d MMM yyyy 'в' HH:mm", { locale: ru });
+      } catch {
+        return date;
+      }
+    },
+    [date]
+  );
+
+  const normalizedPhotos: PhotoLink[] = useMemo(() => {
+    if (!photoLinks || !Array.isArray(photoLinks)) return [];
+    return photoLinks
+      .map((link: any) =>
+        typeof link === "string"
+          ? { mini: link, full: link }
+          : {
+              mini: link?.mini_size || link?.miniSize || link?.full_size || link?.fullSize || "",
+              full: link?.full_size || link?.fullSize || link?.mini_size || link?.miniSize || "",
+            }
+      )
+      .filter((l) => l.mini || l.full);
+  }, [photoLinks]);
+
   const [showDraft, setShowDraft] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedText, setEditedText] = useState(aiDraft || "");
@@ -66,12 +93,12 @@ export const ReviewCard = ({
     if (lightboxIndex === null) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") setLightboxIndex(null);
-      if (e.key === "ArrowLeft") setLightboxIndex((prev) => prev !== null ? (prev - 1 + photoLinks.length) % photoLinks.length : null);
-      if (e.key === "ArrowRight") setLightboxIndex((prev) => prev !== null ? (prev + 1) % photoLinks.length : null);
+      if (e.key === "ArrowLeft") setLightboxIndex((prev) => prev !== null ? (prev - 1 + normalizedPhotos.length) % normalizedPhotos.length : null);
+      if (e.key === "ArrowRight") setLightboxIndex((prev) => prev !== null ? (prev + 1) % normalizedPhotos.length : null);
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [lightboxIndex, photoLinks.length]);
+  }, [lightboxIndex, normalizedPhotos.length]);
 
   const statusLabels: Record<string, string> = {
     pending: "Ожидает",
@@ -140,7 +167,7 @@ export const ReviewCard = ({
           </div>
           <span className="font-medium text-foreground text-sm sm:text-base">{authorName}</span>
           <span className="text-muted-foreground hidden sm:inline">&bull;</span>
-          <span className="text-muted-foreground text-xs sm:text-sm">{date}</span>
+          <span className="text-muted-foreground text-xs sm:text-sm">{formattedDate}</span>
         </div>
         <span className={cn(statusClasses[status], "text-xs sm:text-sm self-start shrink-0")}>{statusLabels[status]}</span>
       </div>
@@ -177,9 +204,9 @@ export const ReviewCard = ({
         </div>
       )}
 
-      {photoLinks.length > 0 && (
+      {normalizedPhotos.length > 0 && (
         <div className="flex gap-2 flex-wrap mb-3">
-          {photoLinks.map((photo, i) => (
+          {normalizedPhotos.map((photo, i) => (
             <button
               key={i}
               type="button"
@@ -198,7 +225,7 @@ export const ReviewCard = ({
         </div>
       )}
 
-      {lightboxIndex !== null && photoLinks[lightboxIndex] && (
+      {lightboxIndex !== null && normalizedPhotos[lightboxIndex] && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
           onClick={() => setLightboxIndex(null)}
@@ -213,7 +240,7 @@ export const ReviewCard = ({
           >
             <X className="w-5 h-5" />
           </Button>
-          {photoLinks.length > 1 && (
+          {normalizedPhotos.length > 1 && (
             <>
               <Button
                 size="icon"
@@ -221,7 +248,7 @@ export const ReviewCard = ({
                 className="absolute left-4 text-white"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setLightboxIndex((lightboxIndex - 1 + photoLinks.length) % photoLinks.length);
+                  setLightboxIndex((lightboxIndex - 1 + normalizedPhotos.length) % normalizedPhotos.length);
                 }}
                 data-testid="button-lightbox-prev"
               >
@@ -232,7 +259,7 @@ export const ReviewCard = ({
                 onClick={(e) => e.stopPropagation()}
                 data-testid="text-lightbox-counter"
               >
-                {lightboxIndex + 1}/{photoLinks.length}
+                {lightboxIndex + 1}/{normalizedPhotos.length}
               </span>
               <Button
                 size="icon"
@@ -240,7 +267,7 @@ export const ReviewCard = ({
                 className="absolute right-4 text-white"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setLightboxIndex((lightboxIndex + 1) % photoLinks.length);
+                  setLightboxIndex((lightboxIndex + 1) % normalizedPhotos.length);
                 }}
                 data-testid="button-lightbox-next"
               >
@@ -249,7 +276,7 @@ export const ReviewCard = ({
             </>
           )}
           <img
-            src={photoLinks[lightboxIndex].full}
+            src={normalizedPhotos[lightboxIndex].full}
             alt={`Фото ${lightboxIndex + 1}`}
             className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
             onClick={(e) => e.stopPropagation()}
@@ -406,3 +433,5 @@ export const ReviewCard = ({
     </div>
   );
 };
+
+export const ReviewCard = memo(ReviewCardInner);

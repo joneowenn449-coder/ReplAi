@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, LayoutDashboard, Users, ArrowRightLeft, Bot } from "lucide-react";
+import { ArrowLeft, LayoutDashboard, Users, ArrowRightLeft, Bot, ClipboardList } from "lucide-react";
 import { AdminOverview } from "@/components/admin/AdminOverview";
 import { UsersTable } from "@/components/admin/UsersTable";
 import { TransactionsTable } from "@/components/admin/TransactionsTable";
 import { AISettings } from "@/components/admin/AISettings";
+import { SurveyResults } from "@/components/admin/SurveyResults";
 import { UserDetailModal } from "@/components/admin/UserDetailModal";
 import type { AdminUser } from "@/hooks/useAdmin";
 
@@ -55,6 +56,11 @@ const Admin = () => {
                 <span className="hidden sm:inline">Настройки ИИ</span>
                 <span className="sm:hidden">ИИ</span>
               </TabsTrigger>
+              <TabsTrigger value="survey" className="gap-1.5 sm:gap-2 text-xs sm:text-sm" data-testid="tab-survey">
+                <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Опросник</span>
+                <span className="sm:hidden">Опрос</span>
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -72,6 +78,10 @@ const Admin = () => {
 
           <TabsContent value="ai-settings">
             <AISettings />
+          </TabsContent>
+
+          <TabsContent value="survey">
+            <SurveyResults />
           </TabsContent>
         </Tabs>
       </div>

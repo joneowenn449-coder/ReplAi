@@ -21,6 +21,7 @@ import {
   type GlobalSetting,
   type AuthUser, type InsertAuthUser,
   type UserSession, type InsertUserSession,
+  surveyResponses, type SurveyResponse,
 } from "@shared/schema";
 
 export class DatabaseStorage {
@@ -795,6 +796,14 @@ export class DatabaseStorage {
     return db.select().from(userSessions)
       .orderBy(desc(userSessions.createdAt))
       .limit(limit);
+  }
+  async createSurveyResponse(respondentName: string, answers: any): Promise<SurveyResponse> {
+    const rows = await db.insert(surveyResponses).values({ respondentName, answers }).returning();
+    return rows[0];
+  }
+
+  async getAllSurveyResponses(): Promise<SurveyResponse[]> {
+    return db.select().from(surveyResponses).orderBy(desc(surveyResponses.createdAt));
   }
 }
 

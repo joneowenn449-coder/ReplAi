@@ -860,6 +860,35 @@ router.post("/api/admin/global-settings", requireAuth, async (req: Request, res:
   }
 });
 
+router.post("/api/survey", async (req: Request, res: Response) => {
+  try {
+    const { respondent_name, answers } = req.body;
+    if (!answers || typeof answers !== "object") {
+      res.status(400).json({ error: "Invalid survey data" });
+      return;
+    }
+    await storage.createSurveyResponse(respondent_name || "", answers);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/api/admin/survey-responses", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const role = await storage.getUserRole(userId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Admin access required" });
+      return;
+    }
+    const data = await storage.getAllSurveyResponses();
+    res.json(toSnakeCase(data));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get("/api/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;

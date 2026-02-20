@@ -214,6 +214,15 @@ export const userSessions = replaiSchema.table("user_sessions", {
 
 export const insertUserSessionSchema = createInsertSchema(userSessions).omit({ id: true, createdAt: true });
 export const insertAuthUserSchema = createInsertSchema(authUsers).omit({ id: true, createdAt: true });
+export const surveyResponses = replaiSchema.table("survey_responses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  respondentName: text("respondent_name").default(""),
+  answers: jsonb("answers").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSurveyResponseSchema = createInsertSchema(surveyResponses).omit({ id: true, createdAt: true });
+
 export const insertAiConversationSchema = createInsertSchema(aiConversations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAiMessageSchema = createInsertSchema(aiMessages).omit({ id: true, createdAt: true });
 export const insertAiRequestBalanceSchema = createInsertSchema(aiRequestBalances).omit({ id: true, updatedAt: true });
@@ -270,3 +279,5 @@ export type AuthUser = typeof authUsers.$inferSelect;
 export type InsertAuthUser = z.infer<typeof insertAuthUserSchema>;
 export type UserSession = typeof userSessions.$inferSelect;
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
+export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;

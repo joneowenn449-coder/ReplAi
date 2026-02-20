@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { storage } from "./storage";
 import crypto from "crypto";
-import { sendAutoReplyNotification, sendNewReviewNotification, shouldNotify } from "./telegram";
+import { sendAutoReplyNotification, sendNewReviewNotification, shouldNotify, sendAdminAIErrorNotification } from "./telegram";
 
 const WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru";
 const WB_CHAT_BASE = "https://buyer-chat-api.wildberries.ru";
@@ -200,13 +200,23 @@ async function generateAIReply(
 
   const userMessage = `ВАЖНО: следуй правилам промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating}/5) на "${productName}":\n\n${reviewText || "(Без текста)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
-  const model = photoCount > 0 && photoLinks.length > 0
+  const hasPhotos = photoCount > 0 && photoLinks.length > 0;
+
+  const primaryModel = hasPhotos
     ? "openai/gpt-4o"
     : rating >= 4
       ? "google/gemini-2.0-flash-001"
       : "openai/gpt-4o";
 
-  const userContent: any = photoCount > 0 && photoLinks.length > 0
+  const fallbackModels = hasPhotos
+    ? ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"]
+    : primaryModel === "google/gemini-2.0-flash-001"
+      ? ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
+      : ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"];
+
+  const modelsToTry = [primaryModel, ...fallbackModels];
+
+  const userContent: any = hasPhotos
     ? [
         { type: "text", text: userMessage },
         ...photoLinks.slice(0, 5).map((photo: any) => ({
@@ -216,27 +226,50 @@ async function generateAIReply(
       ]
     : userMessage;
 
-  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      max_tokens: isEmpty ? 300 : 1000,
-      temperature: 0.7,
-    }),
-  });
+  let lastError: Error | null = null;
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`AI gateway error ${resp.status}: ${text}`);
+  for (const model of modelsToTry) {
+    try {
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContent },
+          ],
+          max_tokens: isEmpty ? 300 : 1000,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.warn(`[ai-fallback] Model ${model} failed (${resp.status}): ${text.slice(0, 200)}`);
+        lastError = new Error(`AI gateway error ${resp.status}: ${text}`);
+        continue;
+      }
+
+      const data = await resp.json();
+      const result = data.choices?.[0]?.message?.content || "";
+      if (!result) {
+        console.warn(`[ai-fallback] Model ${model} returned empty response`);
+        lastError = new Error(`Model ${model} returned empty response`);
+        continue;
+      }
+      if (model !== primaryModel) {
+        console.log(`[ai-fallback] Used fallback model ${model} (primary ${primaryModel} was unavailable)`);
+      }
+      return result;
+    } catch (e: any) {
+      console.warn(`[ai-fallback] Model ${model} error: ${e.message}`);
+      lastError = e;
+      continue;
+    }
   }
 
-  const data = await resp.json();
-  return data.choices?.[0]?.message?.content || "";
+  throw lastError || new Error("All AI models failed");
 }
 
 async function processCabinetReviews(
@@ -1094,13 +1127,23 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
 
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.productName}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
-    const model = photoCount > 0
+    const hasPhotos = photoCount > 0;
+
+    const primaryModel = hasPhotos
       ? "openai/gpt-4o"
       : review.rating >= 4
         ? "google/gemini-2.0-flash-001"
         : "openai/gpt-4o";
 
-    const userContent: any = photoCount > 0
+    const fallbackModels = hasPhotos
+      ? ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"]
+      : primaryModel === "google/gemini-2.0-flash-001"
+        ? ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
+        : ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"];
+
+    const modelsToTry = [primaryModel, ...fallbackModels];
+
+    const userContent: any = hasPhotos
       ? [
           { type: "text", text: userMessage },
           ...photoLinks.slice(0, 5).map((photo: any) => ({
@@ -1110,31 +1153,45 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
         ]
       : userMessage;
 
-    const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: promptTemplate },
-          { role: "user", content: userContent },
-        ],
-        max_tokens: isEmptyReview ? 300 : 1000,
-        temperature: 0.7,
-      }),
-    });
+    for (const model of modelsToTry) {
+      try {
+        const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: promptTemplate },
+              { role: "user", content: userContent },
+            ],
+            max_tokens: isEmptyReview ? 300 : 1000,
+            temperature: 0.7,
+          }),
+        });
 
-    if (!aiResp.ok) {
-      const text = await aiResp.text();
-      console.error(`[generateReplyForReview] AI error ${aiResp.status}: ${text}`);
-      return null;
+        if (!aiResp.ok) {
+          const text = await aiResp.text();
+          console.warn(`[generateReplyForReview] Model ${model} failed (${aiResp.status}): ${text.slice(0, 200)}`);
+          continue;
+        }
+
+        const aiData = await aiResp.json();
+        const result = aiData.choices?.[0]?.message?.content || null;
+        if (result && model !== primaryModel) {
+          console.log(`[ai-fallback] generateReplyForReview used fallback ${model} (primary ${primaryModel} unavailable)`);
+        }
+        return result;
+      } catch (fetchErr: any) {
+        console.warn(`[generateReplyForReview] Model ${model} error: ${fetchErr.message}`);
+        continue;
+      }
     }
 
-    const aiData = await aiResp.json();
-    return aiData.choices?.[0]?.message?.content || null;
+    console.error(`[generateReplyForReview] All models failed for review ${review.id}`);
+    return null;
   } catch (e: any) {
     console.error("[generateReplyForReview] Error:", e);
     return null;
@@ -1856,6 +1913,7 @@ async function runAutoSyncInternal() {
     }
 
     if (OPENROUTER_API_KEY) {
+      const aiErrors: string[] = [];
       try {
         const noDraftReviews = await storage.getPendingReviewsWithoutDraft(cabinet.userId, cabinet.id);
         if (noDraftReviews.length > 0) {
@@ -1867,15 +1925,25 @@ async function runAutoSyncInternal() {
               if (draft) {
                 await storage.updateReview(review.id, { aiDraft: draft });
                 generated++;
+              } else {
+                aiErrors.push(`No draft returned for ${review.wbId}`);
               }
             } catch (e: any) {
               console.error(`[auto-sync] Draft generation failed for review ${review.wbId}:`, e.message);
+              aiErrors.push(`${review.wbId}: ${e.message}`);
             }
           }
           console.log(`[auto-sync] Generated ${generated}/${noDraftReviews.length} drafts for cabinet=${cabinet.id}`);
         }
       } catch (e: any) {
         console.error(`[auto-sync] Draft backfill failed for cabinet=${cabinet.id}:`, e.message);
+        aiErrors.push(`Backfill error: ${e.message}`);
+      }
+
+      if (aiErrors.length >= 3) {
+        const cabinetName = cabinet.brandName || cabinet.id;
+        sendAdminAIErrorNotification(aiErrors.length, cabinetName, aiErrors)
+          .catch(err => console.error("[auto-sync] Failed to send AI error notification:", err));
       }
     }
 

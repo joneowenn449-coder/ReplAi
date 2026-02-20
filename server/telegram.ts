@@ -229,6 +229,41 @@ export async function sendAutoReplyNotification(
   }
 }
 
+const adminErrorThrottle = new Map<string, number>();
+const ADMIN_ERROR_THROTTLE_MS = 30 * 60 * 1000;
+
+export async function sendAdminAIErrorNotification(errorCount: number, cabinetName: string, errors: string[]) {
+  if (!bot) return;
+
+  const now = Date.now();
+  const lastSent = adminErrorThrottle.get(cabinetName) || 0;
+  if (now - lastSent < ADMIN_ERROR_THROTTLE_MS) {
+    console.log(`[telegram] AI error notification throttled for cabinet=${cabinetName}`);
+    return;
+  }
+
+  try {
+    const adminRoles = await storage.getAllUserRoles();
+    const adminUserIds = new Set(adminRoles.filter(r => r.role === "admin").map(r => r.userId));
+    if (adminUserIds.size === 0) return;
+
+    const allCabinets = await storage.getAllCabinetsWithApiKey();
+    const notifiedChats = new Set<string>();
+    for (const cab of allCabinets) {
+      if (cab.telegramChatId && adminUserIds.has(cab.userId) && !notifiedChats.has(cab.telegramChatId)) {
+        notifiedChats.add(cab.telegramChatId);
+        const errorSample = errors.slice(0, 3).map(e => `• ${escapeMarkdown(truncate(e, 100))}`).join("\n");
+        const msg = `⚠️ *Ошибки AI\\-генерации*\n\nКабинет: ${escapeMarkdown(cabinetName)}\nОшибок: ${errorCount}\n\n${errorSample}${errors.length > 3 ? `\n\\.\\.\\.и ещё ${errors.length - 3}` : ""}`;
+        await bot.sendMessage(cab.telegramChatId, msg, { parse_mode: "MarkdownV2" });
+      }
+    }
+
+    adminErrorThrottle.set(cabinetName, now);
+  } catch (err) {
+    console.error("[telegram] Error sending admin AI error notification:", err);
+  }
+}
+
 function buildDraftMessage(review: any, draft: string): string {
   const emoji = ratingEmoji(review.rating || 0);
   let msg = `${emoji} *\u041E\u0442\u0437\u044B\u0432* (${review.rating || 0}/5) | \u0410\u0440\u0442: ${escapeMarkdown(review.productArticle || "")}\n`;

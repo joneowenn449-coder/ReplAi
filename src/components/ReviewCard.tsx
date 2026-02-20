@@ -146,6 +146,7 @@ const ReviewCardInner = ({
 
   const isArchived = status === "archived";
   const hasDraft = aiDraft && status === "pending";
+  const noDraft = !aiDraft && status === "pending";
   const hasAnswer = sentAnswer && (status === "sent" || status === "auto" || status === "answered_externally" || isArchived);
 
   return (
@@ -345,6 +346,23 @@ const ReviewCardInner = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {noDraft && (
+        <div className="mt-3 border-t border-border pt-3">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={() => generateReply.mutate(id)}
+              disabled={generateReply.isPending}
+              className="gap-1"
+              data-testid={`button-generate-${id}`}
+            >
+              <RefreshCw className={cn("w-3 h-3", generateReply.isPending && "animate-spin")} />
+              {generateReply.isPending ? "Генерация..." : "Сгенерировать ответ"}
+            </Button>
+          </div>
         </div>
       )}
 

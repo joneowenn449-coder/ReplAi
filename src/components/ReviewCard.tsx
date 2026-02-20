@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, memo } from "react";
-import { Star, ExternalLink, Send, RefreshCw, Pencil, ThumbsUp, ThumbsDown, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Star, ExternalLink, Send, RefreshCw, Pencil, ThumbsUp, ThumbsDown, X, ChevronLeft, ChevronRight, Camera } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -286,6 +286,12 @@ const ReviewCardInner = ({
 
       {hasDraft && (
         <div className="mt-3 border-t border-border pt-3 space-y-3">
+          {normalizedPhotos.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`badge-photo-analysis-${id}`}>
+              <Camera className="w-3.5 h-3.5" />
+              <span>С анализом фото ({normalizedPhotos.length})</span>
+            </div>
+          )}
           {editMode ? (
             <Textarea
               value={editedText}

@@ -185,7 +185,7 @@ async function generateAIReply(
     }
     if (hasVideo) parts.push("видео");
     attachmentInfo = photoCount > 0 && photoLinks.length > 0
-      ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже — проанализируй их и учти в ответе, если это уместно.]`
+      ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже.\nПРАВИЛА АНАЛИЗА ФОТО:\n- Кратко упомяни что видно на фото (например: "Спасибо за фото, видим что товар выглядит отлично!" или "Благодарим за фото")\n- НЕ делай выводов о браке, дефектах или проблемах по фото — качество снимков может быть низким\n- Если на фото товар выглядит хорошо — отметь это положительно\n- Если покупатель в тексте жалуется на проблему — отвечай на текст, а не интерпретируй фото\n- Будь осторожен: блики, тени, сжатие фото могут искажать реальный вид товара]`
       : `\n\n[Покупатель приложил ${parts.join(" и ")}.]`;
   }
 
@@ -225,6 +225,9 @@ async function generateAIReply(
         })).filter((p: any) => p.image_url.url),
       ]
     : userMessage;
+
+  const validPhotoCount = hasPhotos ? (userContent as any[]).filter((c: any) => c.type === "image_url").length : 0;
+  console.log(`[ai-generate] model=${primaryModel} photos=${photoCount} photosSent=${validPhotoCount} product="${productName}" rating=${rating}`);
 
   let lastError: Error | null = null;
 
@@ -969,7 +972,7 @@ export async function generateReply(req: Request, res: Response) {
       }
       if (hasVideo) parts.push("видео");
       attachmentInfo = photoCount > 0
-        ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже — проанализируй их и учти в ответе, если это уместно.]`
+        ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже.\nПРАВИЛА АНАЛИЗА ФОТО:\n- Кратко упомяни что видно на фото (например: "Спасибо за фото, видим что товар выглядит отлично!" или "Благодарим за фото")\n- НЕ делай выводов о браке, дефектах или проблемах по фото — качество снимков может быть низким\n- Если на фото товар выглядит хорошо — отметь это положительно\n- Если покупатель в тексте жалуется на проблему — отвечай на текст, а не интерпретируй фото\n- Будь осторожен: блики, тени, сжатие фото могут искажать реальный вид товара]`
         : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
     }
 
@@ -1012,6 +1015,9 @@ export async function generateReply(req: Request, res: Response) {
           })).filter((p: any) => p.image_url.url),
         ]
       : userMessage;
+
+    const validPhotos = photoCount > 0 ? (Array.isArray(userContent) ? userContent.filter((c: any) => c.type === "image_url").length : 0) : 0;
+    console.log(`[ai-generate-review] wbId=${review.wbId} model=${model} photos=${photoCount} photosSent=${validPhotos} rating=${review.rating}`);
 
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -1099,7 +1105,7 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
       }
       if (hasVideo) parts.push("видео");
       attachmentInfo = photoCount > 0
-        ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже — проанализируй их и учти в ответе, если это уместно.]`
+        ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже.\nПРАВИЛА АНАЛИЗА ФОТО:\n- Кратко упомяни что видно на фото (например: "Спасибо за фото, видим что товар выглядит отлично!" или "Благодарим за фото")\n- НЕ делай выводов о браке, дефектах или проблемах по фото — качество снимков может быть низким\n- Если на фото товар выглядит хорошо — отметь это положительно\n- Если покупатель в тексте жалуется на проблему — отвечай на текст, а не интерпретируй фото\n- Будь осторожен: блики, тени, сжатие фото могут искажать реальный вид товара]`
         : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
     }
 
@@ -1152,6 +1158,9 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
           })).filter((p: any) => p.image_url.url),
         ]
       : userMessage;
+
+    const validPhotosGen = hasPhotos ? (Array.isArray(userContent) ? userContent.filter((c: any) => c.type === "image_url").length : 0) : 0;
+    console.log(`[ai-generate-reply] reviewId=${review.id} model=${primaryModel} photos=${photoCount} photosSent=${validPhotosGen} rating=${review.rating}`);
 
     for (const model of modelsToTry) {
       try {

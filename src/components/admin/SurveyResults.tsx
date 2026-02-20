@@ -2,6 +2,7 @@ import { useState, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, ClipboardList, User, Calendar, TrendingUp, AlertTriangle, BarChart3, MessageSquare, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown, Minus, Target, Star } from "lucide-react";
+import { formatMsk } from "@/lib/dates";
 import { apiRequest } from "@/lib/api";
 
 const QUESTION_LABELS: Record<string, string> = {
@@ -564,7 +565,7 @@ export function SurveyResults() {
                 </span>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <Calendar className="w-3 h-3" />
-                  {resp.created_at ? new Date(resp.created_at).toLocaleString("ru-RU") : "\u2014"}
+                  {resp.created_at ? formatMsk(resp.created_at, "dd.MM.yyyy HH:mm") : "\u2014"}
                 </span>
               </div>
               <div className="space-y-1.5">

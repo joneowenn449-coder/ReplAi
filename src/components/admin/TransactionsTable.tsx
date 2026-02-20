@@ -9,8 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format } from "date-fns";
-import { ru } from "date-fns/locale";
+import { formatMsk } from "@/lib/dates";
 
 const baseTypeLabels: Record<string, string> = {
   bonus: "Бонус",
@@ -132,7 +131,7 @@ export const TransactionsTable = () => {
                     {tx.description || "\u2014"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
-                    {format(new Date(tx.created_at), "dd MMM yyyy, HH:mm", { locale: ru })}
+                    {formatMsk(tx.created_at, "dd MMM yyyy, HH:mm")}
                   </TableCell>
                 </TableRow>
               ))}

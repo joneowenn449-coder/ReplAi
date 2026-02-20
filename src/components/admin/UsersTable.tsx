@@ -13,8 +13,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Search, Download, Trash2, Loader2, Eye } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { ru } from "date-fns/locale";
+import { formatMsk, distanceToNowMsk } from "@/lib/dates";
 
 interface UsersTableProps {
   onSelectUser: (user: AdminUser) => void;
@@ -60,9 +61,9 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
       String(u.balance),
       String(u.aiBalance),
       String(u.totalPaid),
-      format(new Date(u.created_at), "dd.MM.yyyy", { locale: ru }),
+      formatMsk(u.created_at, "dd.MM.yyyy"),
       u.last_seen_at
-        ? formatDistanceToNow(new Date(u.last_seen_at), { addSuffix: true, locale: ru })
+        ? distanceToNowMsk(u.last_seen_at)
         : "",
     ]);
     const csvContent = [headers, ...rows]
@@ -213,16 +214,13 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground" data-testid={`text-registration-${user.id}`}>
-                      {format(new Date(user.created_at), "dd MMM yyyy", { locale: ru })}
+                      {formatMsk(user.created_at, "dd MMM yyyy")}
                     </span>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground" data-testid={`text-last-activity-${user.id}`}>
                       {user.last_seen_at
-                        ? formatDistanceToNow(new Date(user.last_seen_at), {
-                            addSuffix: true,
-                            locale: ru,
-                          })
+                        ? distanceToNowMsk(user.last_seen_at)
                         : "\u2014"}
                     </span>
                   </TableCell>

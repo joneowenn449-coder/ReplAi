@@ -21,8 +21,7 @@ import {
   Trash2, Save, Store, CreditCard, StickyNote, Clock, Monitor,
   Smartphone, Tablet, Globe,
 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
-import { ru } from "date-fns/locale";
+import { formatMsk, distanceToNowMsk } from "@/lib/dates";
 
 interface UserDetailModalProps {
   user: AdminUser | null;
@@ -159,7 +158,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
             <div>
               <span className="text-muted-foreground">Регистрация</span>
               <p className="font-medium text-foreground" data-testid="text-detail-registration">
-                {format(new Date(user.created_at), "dd MMM yyyy, HH:mm", { locale: ru })}
+                {formatMsk(user.created_at, "dd MMM yyyy, HH:mm")}
               </p>
             </div>
             <div className="flex items-start gap-1.5">
@@ -170,7 +169,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                 </span>
                 <p className="font-medium text-foreground" data-testid="text-detail-last-seen">
                   {user.last_seen_at
-                    ? formatDistanceToNow(new Date(user.last_seen_at), { addSuffix: true, locale: ru })
+                    ? distanceToNowMsk(user.last_seen_at)
                     : "\u2014"}
                 </p>
               </div>
@@ -360,7 +359,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                           {payStatus}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {format(new Date(pay.created_at), "dd.MM.yyyy HH:mm", { locale: ru })}
+                          {formatMsk(pay.created_at, "dd.MM.yyyy HH:mm")}
                         </span>
                       </div>
                     </div>
@@ -413,7 +412,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                         </div>
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {format(new Date(s.created_at), "dd.MM.yyyy HH:mm", { locale: ru })}
+                        {formatMsk(s.created_at, "dd.MM.yyyy HH:mm")}
                       </span>
                     </div>
                   );

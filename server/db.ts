@@ -14,7 +14,7 @@ export const pool = new Pool({
 });
 
 pool.on("connect", (client) => {
-  client.query("SET search_path TO replai");
+  client.query("SET search_path TO replai; SET timezone TO 'UTC'");
 });
 
 export const db = drizzle(pool, { schema });

@@ -51,6 +51,14 @@ async function runPeriodicSync() {
     });
   }
 
+  try {
+    const { pool } = await import("./db");
+    await pool.query(`ALTER TABLE replai.wb_cabinets ADD COLUMN IF NOT EXISTS photo_analysis BOOLEAN DEFAULT false`);
+    console.log("[migration] photo_analysis column ensured");
+  } catch (migErr: any) {
+    console.warn("[migration] photo_analysis:", migErr.message);
+  }
+
   app.listen(5000, "0.0.0.0", () => {
     console.log("Server running on port 5000");
     (async () => {

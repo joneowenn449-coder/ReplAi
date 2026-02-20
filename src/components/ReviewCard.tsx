@@ -28,6 +28,7 @@ interface ReviewCardProps {
   aiDraft?: string | null;
   sentAnswer?: string | null;
   isEdited?: boolean;
+  photoAnalysis?: boolean;
 }
 
 const ReviewCardInner = ({
@@ -45,6 +46,7 @@ const ReviewCardInner = ({
   aiDraft,
   sentAnswer,
   isEdited,
+  photoAnalysis,
 }: ReviewCardProps) => {
   const formattedDate = useMemo(
     () => {
@@ -286,7 +288,7 @@ const ReviewCardInner = ({
 
       {hasDraft && (
         <div className="mt-3 border-t border-border pt-3 space-y-3">
-          {normalizedPhotos.length > 0 && (
+          {normalizedPhotos.length > 0 && photoAnalysis && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`badge-photo-analysis-${id}`}>
               <Camera className="w-3.5 h-3.5" />
               <span>С анализом фото ({normalizedPhotos.length})</span>

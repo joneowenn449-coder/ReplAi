@@ -925,11 +925,13 @@ export async function generateReply(req: Request, res: Response) {
     let basePrompt = globalPrompt || "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
     let cabinetBrand = "";
 
+    let photoAnalysisEnabled = false;
     if (review.cabinetId) {
       const cabinet = await storage.getCabinetById(review.cabinetId);
       if (cabinet) {
         basePrompt = cabinet.aiPromptTemplate || basePrompt;
         cabinetBrand = cabinet.brandName || "";
+        photoAnalysisEnabled = cabinet.photoAnalysis === true;
       }
     } else {
       const userSettings = await storage.getSettings(userId);
@@ -971,9 +973,9 @@ export async function generateReply(req: Request, res: Response) {
         parts.push(`${photoCount} ${photoWord}`);
       }
       if (hasVideo) parts.push("видео");
-      attachmentInfo = photoCount > 0
+      attachmentInfo = photoCount > 0 && photoAnalysisEnabled
         ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже.\nПРАВИЛА АНАЛИЗА ФОТО:\n- Кратко упомяни что видно на фото (например: "Спасибо за фото, видим что товар выглядит отлично!" или "Благодарим за фото")\n- НЕ делай выводов о браке, дефектах или проблемах по фото — качество снимков может быть низким\n- Если на фото товар выглядит хорошо — отметь это положительно\n- Если покупатель в тексте жалуется на проблему — отвечай на текст, а не интерпретируй фото\n- Будь осторожен: блики, тени, сжатие фото могут искажать реальный вид товара]`
-        : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
+        : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Можешь кратко поблагодарить за фото.]`;
     }
 
     let reviewContent = "";
@@ -1000,13 +1002,14 @@ export async function generateReply(req: Request, res: Response) {
 
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.productName}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
-    const model = photoCount > 0
+    const sendPhotosToAi = photoCount > 0 && photoAnalysisEnabled;
+    const model = sendPhotosToAi
       ? "openai/gpt-4o"
       : review.rating >= 4
         ? "google/gemini-2.0-flash-001"
         : "openai/gpt-4o";
 
-    const userContent: any = photoCount > 0
+    const userContent: any = sendPhotosToAi
       ? [
           { type: "text", text: userMessage },
           ...photoLinks.slice(0, 5).map((photo: any) => ({
@@ -1016,8 +1019,8 @@ export async function generateReply(req: Request, res: Response) {
         ]
       : userMessage;
 
-    const validPhotos = photoCount > 0 ? (Array.isArray(userContent) ? userContent.filter((c: any) => c.type === "image_url").length : 0) : 0;
-    console.log(`[ai-generate-review] wbId=${review.wbId} model=${model} photos=${photoCount} photosSent=${validPhotos} rating=${review.rating}`);
+    const validPhotos = sendPhotosToAi ? (Array.isArray(userContent) ? userContent.filter((c: any) => c.type === "image_url").length : 0) : 0;
+    console.log(`[ai-generate-review] wbId=${review.wbId} model=${model} photos=${photoCount} photosSent=${validPhotos} photoAnalysis=${photoAnalysisEnabled} rating=${review.rating}`);
 
     const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -1096,6 +1099,7 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
     const photoLinks = Array.isArray(review.photoLinks) ? review.photoLinks : [];
     const photoCount = photoLinks.length;
     const hasVideo = review.hasVideo === true;
+    const photoAnalysisEnabled = cabinet?.photoAnalysis === true;
     let attachmentInfo = "";
     if (photoCount > 0 || hasVideo) {
       const parts: string[] = [];
@@ -1104,9 +1108,9 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
         parts.push(`${photoCount} ${photoWord}`);
       }
       if (hasVideo) parts.push("видео");
-      attachmentInfo = photoCount > 0
+      attachmentInfo = photoCount > 0 && photoAnalysisEnabled
         ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже.\nПРАВИЛА АНАЛИЗА ФОТО:\n- Кратко упомяни что видно на фото (например: "Спасибо за фото, видим что товар выглядит отлично!" или "Благодарим за фото")\n- НЕ делай выводов о браке, дефектах или проблемах по фото — качество снимков может быть низким\n- Если на фото товар выглядит хорошо — отметь это положительно\n- Если покупатель в тексте жалуется на проблему — отвечай на текст, а не интерпретируй фото\n- Будь осторожен: блики, тени, сжатие фото могут искажать реальный вид товара]`
-        : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву.]`;
+        : `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Можешь кратко поблагодарить за фото.]`;
     }
 
     let reviewContent = "";
@@ -1133,15 +1137,15 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
 
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.productName}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
-    const hasPhotos = photoCount > 0;
+    const sendPhotosToAi = photoCount > 0 && photoAnalysisEnabled;
 
-    const primaryModel = hasPhotos
+    const primaryModel = sendPhotosToAi
       ? "openai/gpt-4o"
       : review.rating >= 4
         ? "google/gemini-2.0-flash-001"
         : "openai/gpt-4o";
 
-    const fallbackModels = hasPhotos
+    const fallbackModels = sendPhotosToAi
       ? ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"]
       : primaryModel === "google/gemini-2.0-flash-001"
         ? ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
@@ -1149,7 +1153,7 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
 
     const modelsToTry = [primaryModel, ...fallbackModels];
 
-    const userContent: any = hasPhotos
+    const userContent: any = sendPhotosToAi
       ? [
           { type: "text", text: userMessage },
           ...photoLinks.slice(0, 5).map((photo: any) => ({
@@ -1159,8 +1163,8 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
         ]
       : userMessage;
 
-    const validPhotosGen = hasPhotos ? (Array.isArray(userContent) ? userContent.filter((c: any) => c.type === "image_url").length : 0) : 0;
-    console.log(`[ai-generate-reply] reviewId=${review.id} model=${primaryModel} photos=${photoCount} photosSent=${validPhotosGen} rating=${review.rating}`);
+    const validPhotosGen = sendPhotosToAi ? (Array.isArray(userContent) ? userContent.filter((c: any) => c.type === "image_url").length : 0) : 0;
+    console.log(`[ai-generate-reply] reviewId=${review.id} model=${primaryModel} photos=${photoCount} photosSent=${validPhotosGen} photoAnalysis=${photoAnalysisEnabled} rating=${review.rating}`);
 
     for (const model of modelsToTry) {
       try {

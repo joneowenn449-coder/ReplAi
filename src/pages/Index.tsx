@@ -175,6 +175,7 @@ const Index = () => {
                     aiDraft={review.ai_draft}
                     sentAnswer={review.sent_answer}
                     isEdited={review.is_edited}
+                    photoAnalysis={activeCabinet?.photo_analysis === true}
                   />
                 ))}
 

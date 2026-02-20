@@ -381,6 +381,37 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
           {/* Recommendations Section */}
           <RecommendationsSection />
 
+          {/* Photo Analysis Toggle */}
+          <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground">Анализ фото AI</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Отправлять фото покупателей в AI для анализа содержимого. Использует более дорогую модель (GPT-4o Vision).
+              </p>
+            </div>
+            <Switch
+              checked={cabinet?.photo_analysis === true}
+              onCheckedChange={(checked) => {
+                if (!cabinet) return;
+                updateCabinet.mutate(
+                  {
+                    id: cabinet.id,
+                    updates: { photo_analysis: checked } as Partial<WbCabinet>,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success(checked ? "Анализ фото включён" : "Анализ фото выключен");
+                    },
+                  }
+                );
+              }}
+              data-testid="toggle-photo-analysis"
+            />
+          </div>
+
           {/* Telegram Bot Section */}
           <Collapsible open={isTelegramAvailable ? telegramSectionOpen : false} onOpenChange={isTelegramAvailable ? setTelegramSectionOpen : undefined}>
             <div id="settings-telegram-section" className="space-y-3">

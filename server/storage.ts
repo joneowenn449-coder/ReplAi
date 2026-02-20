@@ -108,6 +108,20 @@ export class DatabaseStorage {
       );
   }
 
+  async getPendingReviewsWithoutDraft(userId: string, cabinetId: string): Promise<Review[]> {
+    return db
+      .select()
+      .from(reviews)
+      .where(
+        and(
+          eq(reviews.userId, userId),
+          eq(reviews.cabinetId, cabinetId),
+          eq(reviews.status, "pending"),
+          isNull(reviews.aiDraft),
+        ),
+      );
+  }
+
   async getChats(cabinetId: string): Promise<Chat[]> {
     return db.select().from(chats).where(eq(chats.cabinetId, cabinetId)).orderBy(desc(chats.lastMessageAt));
   }

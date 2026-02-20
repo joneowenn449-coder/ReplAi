@@ -1855,6 +1855,30 @@ async function runAutoSyncInternal() {
       console.error(`[auto-sync] Review sync failed for cabinet=${cabinet.id}:`, e.message);
     }
 
+    if (OPENROUTER_API_KEY) {
+      try {
+        const noDraftReviews = await storage.getPendingReviewsWithoutDraft(cabinet.userId, cabinet.id);
+        if (noDraftReviews.length > 0) {
+          console.log(`[auto-sync] Generating drafts for ${noDraftReviews.length} pending reviews without draft, cabinet=${cabinet.id}`);
+          let generated = 0;
+          for (const review of noDraftReviews) {
+            try {
+              const draft = await generateReplyForReview(review, cabinet);
+              if (draft) {
+                await storage.updateReview(review.id, { aiDraft: draft });
+                generated++;
+              }
+            } catch (e: any) {
+              console.error(`[auto-sync] Draft generation failed for review ${review.wbId}:`, e.message);
+            }
+          }
+          console.log(`[auto-sync] Generated ${generated}/${noDraftReviews.length} drafts for cabinet=${cabinet.id}`);
+        }
+      } catch (e: any) {
+        console.error(`[auto-sync] Draft backfill failed for cabinet=${cabinet.id}:`, e.message);
+      }
+    }
+
     try {
       const chatResult = await processCabinetChats(cabinet);
       console.log(`[auto-sync] Chats for cabinet=${cabinet.id}: chats=${chatResult.chats}, messages=${chatResult.messages}`);

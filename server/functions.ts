@@ -93,45 +93,74 @@ function buildReviewText(text?: string | null, pros?: string | null, cons?: stri
 
 async function fetchWBReviews(apiKey: string, skip = 0, take = 50) {
   const url = `${WB_FEEDBACKS_URL}/api/v1/feedbacks?isAnswered=false&take=${take}&skip=${skip}`;
-  const resp = await fetch(url, { headers: { Authorization: apiKey } });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`WB API error ${resp.status}: ${text}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const resp = await fetch(url, { headers: { Authorization: apiKey }, signal: controller.signal });
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error(`[wb-api] fetchWBReviews error: status=${resp.status} url=${url} body=${text.slice(0, 500)}`);
+      throw new Error(`WB API error ${resp.status}: ${text}`);
+    }
+    return resp.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  return resp.json();
 }
 
 async function fetchWBArchiveReviews(apiKey: string, skip = 0, take = 50) {
   const url = `${WB_FEEDBACKS_URL}/api/v1/feedbacks?isAnswered=true&take=${take}&skip=${skip}`;
-  const resp = await fetch(url, { headers: { Authorization: apiKey } });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`WB Archive API error ${resp.status}: ${text}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const resp = await fetch(url, { headers: { Authorization: apiKey }, signal: controller.signal });
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error(`[wb-api] fetchWBArchiveReviews error: status=${resp.status} url=${url} body=${text.slice(0, 500)}`);
+      throw new Error(`WB Archive API error ${resp.status}: ${text}`);
+    }
+    return resp.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  return resp.json();
 }
 
 async function fetchWBFeedbackById(apiKey: string, feedbackId: string) {
   const url = `${WB_FEEDBACKS_URL}/api/v1/feedback?id=${feedbackId}`;
-  const resp = await fetch(url, { headers: { Authorization: apiKey } });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`WB API feedback error ${resp.status}: ${text}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const resp = await fetch(url, { headers: { Authorization: apiKey }, signal: controller.signal });
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error(`[wb-api] fetchWBFeedbackById error: status=${resp.status} id=${feedbackId} body=${text.slice(0, 500)}`);
+      throw new Error(`WB API feedback error ${resp.status}: ${text}`);
+    }
+    return resp.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  return resp.json();
 }
 
 async function sendWBAnswer(apiKey: string, feedbackId: string, text: string) {
-  const resp = await fetch(`${WB_FEEDBACKS_URL}/api/v1/feedbacks/answer`, {
-    method: "POST",
-    headers: { Authorization: apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ id: feedbackId, text }),
-  });
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`WB answer error ${resp.status}: ${body}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const resp = await fetch(`${WB_FEEDBACKS_URL}/api/v1/feedbacks/answer`, {
+      method: "POST",
+      headers: { Authorization: apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ id: feedbackId, text }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.error(`[wb-api] sendWBAnswer error: status=${resp.status} feedbackId=${feedbackId} body=${body.slice(0, 500)}`);
+      throw new Error(`WB answer error ${resp.status}: ${body}`);
+    }
+    return resp;
+  } finally {
+    clearTimeout(timeout);
   }
-  return resp;
 }
 
 async function generateAIReply(
@@ -172,7 +201,7 @@ async function generateAIReply(
   const userMessage = `ВАЖНО: следуй правилам промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating}/5) на "${productName}":\n\n${reviewText || "(Без текста)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
   const model = photoCount > 0 && photoLinks.length > 0
-    ? "openai/gpt-4-vision-preview"
+    ? "openai/gpt-4o"
     : rating >= 4
       ? "google/gemini-2.0-flash-001"
       : "openai/gpt-4o";
@@ -243,26 +272,42 @@ async function processCabinetReviews(
   const allFeedbacks: any[] = [];
   let skip = 0;
   const take = 50;
-  while (true) {
-    const wbData = await fetchWBReviews(WB_API_KEY, skip, take);
-    const feedbacks = wbData?.data?.feedbacks || [];
-    if (feedbacks.length === 0) break;
-    allFeedbacks.push(...feedbacks);
-    if (feedbacks.length < take) break;
-    skip += take;
-    await delay(350);
+  const MAX_UNANSWERED_PAGES = 20;
+  const MAX_ANSWERED_PAGES = 5;
+  try {
+    let page = 0;
+    while (page < MAX_UNANSWERED_PAGES) {
+      console.log(`[sync-reviews] cabinet=${cabinetId} fetching unanswered page=${page} skip=${skip}`);
+      const wbData = await fetchWBReviews(WB_API_KEY, skip, take);
+      const feedbacks = wbData?.data?.feedbacks || [];
+      if (feedbacks.length === 0) break;
+      allFeedbacks.push(...feedbacks);
+      if (feedbacks.length < take) break;
+      skip += take;
+      page++;
+      await delay(350);
+    }
+  } catch (e: any) {
+    console.error(`[sync-reviews] cabinet=${cabinetId} Failed to fetch unanswered reviews: ${e.message}`);
   }
 
   const answeredFeedbacks: any[] = [];
   let skipAnswered = 0;
-  while (true) {
-    const wbData = await fetchWBArchiveReviews(WB_API_KEY, skipAnswered, take);
-    const feedbacks = wbData?.data?.feedbacks || [];
-    if (feedbacks.length === 0) break;
-    answeredFeedbacks.push(...feedbacks);
-    if (feedbacks.length < take) break;
-    skipAnswered += take;
-    await delay(350);
+  try {
+    let page = 0;
+    while (page < MAX_ANSWERED_PAGES) {
+      console.log(`[sync-reviews] cabinet=${cabinetId} fetching answered page=${page} skip=${skipAnswered}`);
+      const wbData = await fetchWBArchiveReviews(WB_API_KEY, skipAnswered, take);
+      const feedbacks = wbData?.data?.feedbacks || [];
+      if (feedbacks.length === 0) break;
+      answeredFeedbacks.push(...feedbacks);
+      if (feedbacks.length < take) break;
+      skipAnswered += take;
+      page++;
+      await delay(350);
+    }
+  } catch (e: any) {
+    console.error(`[sync-reviews] cabinet=${cabinetId} Failed to fetch answered reviews: ${e.message}`);
   }
 
   console.log(`[sync-reviews] cabinet=${cabinetId} user=${userId} Fetched ${allFeedbacks.length} unanswered + ${answeredFeedbacks.length} answered reviews`);
@@ -920,7 +965,7 @@ export async function generateReply(req: Request, res: Response) {
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.productName}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
     const model = photoCount > 0
-      ? "openai/gpt-4-vision-preview"
+      ? "openai/gpt-4o"
       : review.rating >= 4
         ? "google/gemini-2.0-flash-001"
         : "openai/gpt-4o";
@@ -1050,7 +1095,7 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.productName}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
     const model = photoCount > 0
-      ? "openai/gpt-4-vision-preview"
+      ? "openai/gpt-4o"
       : review.rating >= 4
         ? "google/gemini-2.0-flash-001"
         : "openai/gpt-4o";

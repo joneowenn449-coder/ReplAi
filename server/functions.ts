@@ -15,15 +15,59 @@ const REFUSAL_KEYWORDS = [
   "выбрал другой", "выбрала другую", "выбрала другой",
 ];
 
-function buildFullPrompt(basePrompt: string, examples: string | null, rules: string | null): string {
+function buildFullPrompt(
+  basePrompt: string,
+  examples: string | null,
+  rules: string | null,
+  rulesDo: string | null = null,
+  rulesDont: string | null = null,
+  examplesV2: string | null = null,
+  reviewRating: number = 0,
+): string {
   let prompt = basePrompt;
-  if (rules && rules.trim()) {
+
+  if (rulesDo && rulesDo.trim()) {
+    prompt += `\n\nОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:\n${rulesDo.trim()}`;
+  }
+  if (rulesDont && rulesDont.trim()) {
+    prompt += `\n\nЗАПРЕЩЕНО:\n${rulesDont.trim()}`;
+  }
+  if (!rulesDo && !rulesDont && rules && rules.trim()) {
     prompt += `\n\nПРАВИЛА:\n${rules.trim()}`;
   }
-  if (examples && examples.trim()) {
+
+  const ratingExamples = selectExamplesByRating(examplesV2, reviewRating);
+  if (ratingExamples) {
+    prompt += `\n\nПРИМЕРЫ ИДЕАЛЬНЫХ ОТВЕТОВ:\n${ratingExamples}`;
+  } else if (examples && examples.trim()) {
     prompt += `\n\nПРИМЕРЫ ХОРОШИХ ОТВЕТОВ:\n${examples.trim()}`;
   }
+
   return prompt;
+}
+
+function selectExamplesByRating(examplesV2Json: string | null, rating: number): string | null {
+  if (!examplesV2Json) return null;
+  try {
+    const parsed = JSON.parse(examplesV2Json);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+    const matched = parsed.filter((ex: any) => {
+      if (!ex.text) return false;
+      if (!ex.rating) return true;
+      return ex.rating === rating;
+    });
+
+    if (matched.length === 0) {
+      const fallback = parsed.filter((ex: any) => ex.text).slice(0, 3);
+      if (fallback.length === 0) return null;
+      return fallback.map((ex: any, i: number) => `${i + 1}. ${ex.text}`).join("\n\n");
+    }
+
+    return matched.slice(0, 3).map((ex: any, i: number) => `${i + 1}. ${ex.text}`).join("\n\n");
+  } catch {
+    return null;
+  }
 }
 
 function detectRefusal(text?: string | null, pros?: string | null, cons?: string | null): boolean {
@@ -183,12 +227,16 @@ async function processCabinetReviews(
   const replyModes = (cabinetModes && Object.keys(cabinetModes).length > 0) ? cabinetModes : defaultModes;
 
   let currentBalance = await storage.getTokenBalance(userId);
-  const globalPrompt = await storage.getGlobalSetting("default_prompt");
-  const globalExamples = await storage.getGlobalSetting("response_examples");
-  const globalRules = await storage.getGlobalSetting("rules");
+  const [globalPrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2] = await Promise.all([
+    storage.getGlobalSetting("default_prompt"),
+    storage.getGlobalSetting("response_examples"),
+    storage.getGlobalSetting("rules"),
+    storage.getGlobalSetting("rules_do"),
+    storage.getGlobalSetting("rules_dont"),
+    storage.getGlobalSetting("response_examples_v2"),
+  ]);
   const basePrompt = cabinet.aiPromptTemplate || globalPrompt ||
     "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
-  const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules);
 
   console.log(`[sync-reviews] cabinet=${cabinetId} replyModes=${JSON.stringify(replyModes)} balance=${currentBalance}`);
 
@@ -253,6 +301,7 @@ async function processCabinetReviews(
 
     let aiDraft = "";
     try {
+      const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2, fb.productValuation || 5);
       aiDraft = await generateAIReply(
         openrouterKey, promptTemplate,
         buildReviewText(fb.text, fb.pros, fb.cons),
@@ -784,9 +833,14 @@ export async function generateReply(req: Request, res: Response) {
       return;
     }
 
-    const globalPrompt = await storage.getGlobalSetting("default_prompt");
-    const globalExamples = await storage.getGlobalSetting("response_examples");
-    const globalRules = await storage.getGlobalSetting("rules");
+    const [globalPrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2] = await Promise.all([
+      storage.getGlobalSetting("default_prompt"),
+      storage.getGlobalSetting("response_examples"),
+      storage.getGlobalSetting("rules"),
+      storage.getGlobalSetting("rules_do"),
+      storage.getGlobalSetting("rules_dont"),
+      storage.getGlobalSetting("response_examples_v2"),
+    ]);
     let basePrompt = globalPrompt || "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
     let cabinetBrand = "";
 
@@ -804,7 +858,7 @@ export async function generateReply(req: Request, res: Response) {
       }
     }
 
-    const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules);
+    const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2, review.rating);
 
     let recommendationInstruction = "";
     if (review.productArticle && review.cabinetId) {
@@ -922,14 +976,19 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) return null;
 
-    const globalPrompt = await storage.getGlobalSetting("default_prompt");
-    const globalExamples = await storage.getGlobalSetting("response_examples");
-    const globalRules = await storage.getGlobalSetting("rules");
+    const [globalPrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2] = await Promise.all([
+      storage.getGlobalSetting("default_prompt"),
+      storage.getGlobalSetting("response_examples"),
+      storage.getGlobalSetting("rules"),
+      storage.getGlobalSetting("rules_do"),
+      storage.getGlobalSetting("rules_dont"),
+      storage.getGlobalSetting("response_examples_v2"),
+    ]);
     let basePrompt = cabinet?.aiPromptTemplate || globalPrompt ||
       "Ты — менеджер бренда на Wildberries. Напиши вежливый ответ на отзыв покупателя. 2-4 предложения.";
     const cabinetBrand = cabinet?.brandName || "";
 
-    const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules);
+    const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2, review.rating);
 
     let recommendationInstruction = "";
     if (review.productArticle && review.cabinetId) {

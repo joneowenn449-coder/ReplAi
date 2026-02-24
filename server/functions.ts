@@ -240,7 +240,7 @@ async function generateAIReply(
           model,
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: userContent },
+            { role: "user", content: hasPhotos && model !== "openai/gpt-4o" ? userMessage : userContent },
           ],
           max_tokens: isEmpty ? 300 : 1000,
           temperature: 0.7,
@@ -1003,11 +1003,20 @@ export async function generateReply(req: Request, res: Response) {
     const userMessage = `ВАЖНО: строго следуй всем правилам из системного промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${review.rating} из 5 звёзд) на товар "${review.productName}":\n\n${reviewContent}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
     const sendPhotosToAi = photoCount > 0 && photoAnalysisEnabled;
-    const model = sendPhotosToAi
+
+    const primaryModel = sendPhotosToAi
       ? "openai/gpt-4o"
-      : review.rating >= 4
-        ? "google/gemini-2.0-flash-001"
-        : "openai/gpt-4o";
+      : review.rating <= 3
+        ? "openai/gpt-4o"
+        : "google/gemini-2.0-flash-001";
+
+    const fallbackModels = sendPhotosToAi
+      ? ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"]
+      : primaryModel === "google/gemini-2.0-flash-001"
+        ? ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
+        : ["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"];
+
+    const modelsToTry = [primaryModel, ...fallbackModels];
 
     const userContent: any = sendPhotosToAi
       ? [
@@ -1020,34 +1029,47 @@ export async function generateReply(req: Request, res: Response) {
       : userMessage;
 
     const validPhotos = sendPhotosToAi ? (Array.isArray(userContent) ? userContent.filter((c: any) => c.type === "image_url").length : 0) : 0;
-    console.log(`[ai-generate-review] wbId=${review.wbId} model=${model} photos=${photoCount} photosSent=${validPhotos} photoAnalysis=${photoAnalysisEnabled} rating=${review.rating}`);
+    console.log(`[ai-generate-review] wbId=${review.wbId} model=${primaryModel} photos=${photoCount} photosSent=${validPhotos} photoAnalysis=${photoAnalysisEnabled} rating=${review.rating}`);
 
-    const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: promptTemplate },
-          { role: "user", content: userContent },
-        ],
-        max_tokens: isEmptyReview ? 300 : 1000,
-        temperature: 0.7,
-      }),
-    });
+    let newDraft = "";
+    for (const model of modelsToTry) {
+      try {
+        const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: promptTemplate },
+              { role: "user", content: sendPhotosToAi && model !== "openai/gpt-4o" ? userMessage : userContent },
+            ],
+            max_tokens: isEmptyReview ? 300 : 1000,
+            temperature: 0.7,
+          }),
+        });
 
-    if (!aiResp.ok) {
-      const text = await aiResp.text();
-      throw new Error(`AI gateway error ${aiResp.status}: ${text}`);
+        if (!aiResp.ok) {
+          const text = await aiResp.text();
+          console.warn(`[ai-generate-review] Model ${model} failed (${aiResp.status}): ${text.slice(0, 200)}`);
+          continue;
+        }
+
+        const aiData = await aiResp.json();
+        newDraft = aiData.choices?.[0]?.message?.content || "";
+        if (newDraft) {
+          if (model !== primaryModel) console.log(`[ai-generate-review] Used fallback model ${model}`);
+          break;
+        }
+      } catch (fetchErr: any) {
+        console.warn(`[ai-generate-review] Model ${model} error: ${fetchErr.message}`);
+        continue;
+      }
     }
 
-    const aiData = await aiResp.json();
-    const newDraft = aiData.choices?.[0]?.message?.content || "";
-
-    if (!newDraft) throw new Error("AI returned empty response");
+    if (!newDraft) throw new Error("All AI models failed to generate response");
 
     await storage.updateReview(review_id, { aiDraft: newDraft, status: "pending" });
 
@@ -1178,7 +1200,7 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
             model,
             messages: [
               { role: "system", content: promptTemplate },
-              { role: "user", content: userContent },
+              { role: "user", content: sendPhotosToAi && model !== "openai/gpt-4o" ? userMessage : userContent },
             ],
             max_tokens: isEmptyReview ? 300 : 1000,
             temperature: 0.7,

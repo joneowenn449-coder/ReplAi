@@ -102,7 +102,7 @@ export function useAiAssistant(conversationId: string | null) {
           return;
         }
         if (resp.status === 402) {
-          toast.error("У вас закончились запросы AI аналитика. Приобретите пакет запросов.");
+          toast.error("Нет доступа к AI аналитику. Подключите модуль «AI Аналитик» в разделе Тарифы.");
           setIsLoading(false);
           return;
         }

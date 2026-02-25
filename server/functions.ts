@@ -202,7 +202,7 @@ async function generateAIReply(
   apiKey: string, systemPrompt: string, reviewText: string, rating: number,
   productName: string, photoCount = 0, hasVideo = false, authorName = "",
   isEmpty = false, recommendationInstruction = "", isRefusal = false, brandName = "",
-  photoLinks: any[] = []
+  photoLinks: any[] = [], photoAnalysisEnabled = false
 ) {
   let emptyInstruction = "";
   if (isEmpty) {
@@ -219,7 +219,7 @@ async function generateAIReply(
       parts.push(`${photoCount} ${photoWord}`);
     }
     if (hasVideo) parts.push("видео");
-    attachmentInfo = photoCount > 0 && photoLinks.length > 0
+    attachmentInfo = photoCount > 0 && photoAnalysisEnabled && photoLinks.length > 0
       ? `\n\n[Покупатель приложил ${parts.join(" и ")} к отзыву. Фотографии прикреплены ниже.\nПРАВИЛА АНАЛИЗА ФОТО:\n- Кратко упомяни что видно на фото (например: "Спасибо за фото, видим что товар выглядит отлично!" или "Благодарим за фото")\n- НЕ делай выводов о браке, дефектах или проблемах по фото — качество снимков может быть низким\n- Если на фото товар выглядит хорошо — отметь это положительно\n- Если покупатель в тексте жалуется на проблему — отвечай на текст, а не интерпретируй фото\n- Будь осторожен: блики, тени, сжатие фото могут искажать реальный вид товара]`
       : `\n\n[Покупатель приложил ${parts.join(" и ")}.]`;
   }
@@ -235,7 +235,7 @@ async function generateAIReply(
 
   const userMessage = `ВАЖНО: следуй правилам промпта.${refusalWarning}${brandInstruction}\n\nОтзыв (${rating}/5) на "${productName}":\n\n${reviewText || "(Без текста)"}${attachmentInfo}${nameInstruction}${recommendationInstruction}${emptyInstruction}`;
 
-  const hasPhotos = photoCount > 0 && photoLinks.length > 0;
+  const hasPhotos = photoCount > 0 && photoAnalysisEnabled && photoLinks.length > 0;
 
   const primaryModel = hasPhotos
     ? "openai/gpt-4o"
@@ -423,6 +423,8 @@ async function processCabinetReviews(
     let aiDraft = "";
     try {
       const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2, fb.productValuation || 5);
+      const hasSubPhotoAccess = await hasPhotoAnalysisAccess(cabinet.userId);
+      const cabinetPhotoEnabled = hasSubPhotoAccess || cabinet.photoAnalysis === true;
       aiDraft = await generateAIReply(
         openrouterKey, promptTemplate,
         buildReviewText(fb.text, fb.pros, fb.cons),
@@ -430,7 +432,7 @@ async function processCabinetReviews(
         fb.productDetails?.productName || fb.subjectName || "Товар",
         photoLinks.length, hasVideo, fb.userName || "",
         isEmptyReview, recommendationInstruction, isRefusal, effectiveBrand,
-        photoLinks
+        photoLinks, cabinetPhotoEnabled
       );
     } catch (e: any) {
       console.error(`AI generation failed for ${wbId}:`, e);
@@ -985,7 +987,8 @@ export async function generateReply(req: Request, res: Response) {
       if (cabinet) {
         basePrompt = cabinet.aiPromptTemplate || basePrompt;
         cabinetBrand = cabinet.brandName || "";
-        photoAnalysisEnabled = cabinet.photoAnalysis === true;
+        const hasSubPhotoAccess = await hasPhotoAnalysisAccess(userId);
+        photoAnalysisEnabled = hasSubPhotoAccess || cabinet.photoAnalysis === true;
       }
     } else {
       const userSettings = await storage.getSettings(userId);
@@ -1175,7 +1178,9 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
     const photoLinks = Array.isArray(review.photoLinks) ? review.photoLinks : [];
     const photoCount = photoLinks.length;
     const hasVideo = review.hasVideo === true;
-    const photoAnalysisEnabled = cabinet?.photoAnalysis === true;
+    const userId = cabinet?.userId || "";
+    const hasSubPhotoAccess = userId ? await hasPhotoAnalysisAccess(userId) : false;
+    const photoAnalysisEnabled = hasSubPhotoAccess || (cabinet?.photoAnalysis === true);
     let attachmentInfo = "";
     if (photoCount > 0 || hasVideo) {
       const parts: string[] = [];
@@ -1560,7 +1565,7 @@ export async function aiAssistant(req: Request, res: Response) {
     if (!hasSubAccess) {
       const aiBalance = await storage.getAiRequestBalance(userId);
       if (aiBalance < 1) {
-        res.status(402).json({ error: "У вас нет доступа к AI аналитику. Подключите модуль в тарифе или приобретите пакет запросов." });
+        res.status(402).json({ error: "У вас нет доступа к AI аналитику. Подключите модуль «AI Аналитик» в разделе Тарифы." });
         return;
       }
       await storage.updateAiRequestBalance(userId, aiBalance - 1);
@@ -2047,7 +2052,8 @@ async function runAutoSyncInternal() {
               const draft = await generateReplyForReview(review, cabinet);
               if (draft) {
                 const photoLinks = Array.isArray(review.photoLinks) ? review.photoLinks : [];
-                const usedVision = photoLinks.length > 0 && cabinet?.photoAnalysis === true;
+                const hasSubPhoto = await hasPhotoAnalysisAccess(cabinet.userId);
+                const usedVision = photoLinks.length > 0 && (hasSubPhoto || cabinet?.photoAnalysis === true);
                 await storage.updateReview(review.id, { aiDraft: draft, usedPhotoAnalysis: usedVision });
                 generated++;
               } else {

@@ -41,6 +41,7 @@ import {
 import { RecommendationsSection } from "@/components/RecommendationsSection";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -58,6 +59,8 @@ const OWNER_USER_ID = "5339ed4d-37c9-4fc1-bed9-dc4604bdffe6";
 export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsDialogProps) => {
   const { user } = useAuth();
   const isTelegramAvailable = user?.id === OWNER_USER_ID;
+  const { data: subData } = useSubscription();
+  const hasSubscription = !!(subData?.subscription && (subData.subscription.status === "active" || subData.subscription.status === "cancelled"));
   const { data: activeCabinet } = useActiveCabinet();
   const updateCabinet = useUpdateCabinet();
   const validateApiKey = useValidateApiKey();
@@ -388,28 +391,43 @@ export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsD
                 <Sparkles className="w-4 h-4 text-muted-foreground shrink-0" />
                 <span className="text-sm font-medium text-foreground">Анализ фото AI</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Отправлять фото покупателей в AI для анализа содержимого. Использует более дорогую модель (GPT-4o Vision).
-              </p>
-            </div>
-            <Switch
-              checked={cabinet?.photo_analysis === true}
-              onCheckedChange={(checked) => {
-                if (!cabinet) return;
-                updateCabinet.mutate(
-                  {
-                    id: cabinet.id,
-                    updates: { photo_analysis: checked } as Partial<WbCabinet>,
-                  },
-                  {
-                    onSuccess: () => {
-                      toast.success(checked ? "Анализ фото включён" : "Анализ фото выключен");
-                    },
+              {hasSubscription ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {subData?.subscription?.photo_analysis_enabled
+                    ? "Модуль «Анализ фото» активен в вашей подписке."
+                    : <>Управление модулем — в разделе{" "}<a href="/pricing" className="text-primary underline" data-testid="link-pricing-photo">Тарифы</a></>
                   }
-                );
-              }}
-              data-testid="toggle-photo-analysis"
-            />
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Отправлять фото покупателей в AI для анализа содержимого. Использует более дорогую модель (GPT-4o Vision).
+                </p>
+              )}
+            </div>
+            {hasSubscription ? (
+              <Badge variant={subData?.subscription?.photo_analysis_enabled ? "default" : "secondary"} data-testid="badge-photo-analysis">
+                {subData?.subscription?.photo_analysis_enabled ? "Вкл" : "Выкл"}
+              </Badge>
+            ) : (
+              <Switch
+                checked={cabinet?.photo_analysis === true}
+                onCheckedChange={(checked) => {
+                  if (!cabinet) return;
+                  updateCabinet.mutate(
+                    {
+                      id: cabinet.id,
+                      updates: { photo_analysis: checked } as Partial<WbCabinet>,
+                    },
+                    {
+                      onSuccess: () => {
+                        toast.success(checked ? "Анализ фото включён" : "Анализ фото выключен");
+                      },
+                    }
+                  );
+                }}
+                data-testid="toggle-photo-analysis"
+              />
+            )}
           </div>
 
           {/* Telegram Bot Section */}

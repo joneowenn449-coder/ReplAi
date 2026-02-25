@@ -31,8 +31,7 @@ export function AISettings() {
   async function loadSettings() {
     try {
       setLoading(true);
-      const resp = await apiRequest("GET", "/api/admin/global-settings");
-      const data = await resp.json();
+      const data = await apiRequest("/api/admin/global-settings");
       setDefaultPrompt(data.default_prompt || "");
       setResponseExamples(data.response_examples || "");
       setRules(data.rules || "");
@@ -54,15 +53,18 @@ export function AISettings() {
   async function handleSave() {
     try {
       setSaving(true);
-      await apiRequest("POST", "/api/admin/global-settings", {
-        settings: {
-          default_prompt: defaultPrompt,
-          response_examples: responseExamples,
-          rules: rules,
-          rules_do: rulesDo,
-          rules_dont: rulesDont,
-          response_examples_v2: JSON.stringify(examplesV2.filter(e => e.text.trim())),
-        },
+      await apiRequest("/api/admin/global-settings", {
+        method: "POST",
+        body: JSON.stringify({
+          settings: {
+            default_prompt: defaultPrompt,
+            response_examples: responseExamples,
+            rules: rules,
+            rules_do: rulesDo,
+            rules_dont: rulesDont,
+            response_examples_v2: JSON.stringify(examplesV2.filter(e => e.text.trim())),
+          },
+        }),
       });
       toast({ title: "Сохранено", description: "Настройки ИИ обновлены" });
     } catch (e: any) {

@@ -183,8 +183,7 @@ export function SurveyResults() {
   const { data: responses, isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/survey-responses"],
     queryFn: async () => {
-      const resp = await apiRequest("GET", "/api/admin/survey-responses");
-      return resp.json();
+      return await apiRequest("/api/admin/survey-responses");
     },
   });
 

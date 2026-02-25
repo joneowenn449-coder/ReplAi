@@ -1,9 +1,11 @@
-import { Settings, LogOut, Coins, Shield, Plus, Store, MessageCircle, User } from "lucide-react";
+import { Settings, LogOut, Coins, Shield, Plus, Store, MessageCircle, User, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavTabs } from "./NavTabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useAdminRole } from "@/hooks/useAdmin";
+import { useSubscription } from "@/hooks/useSubscription";
+import { getPlanById } from "@shared/subscriptionPlans";
 import { useNavigate } from "react-router-dom";
 import { useActiveCabinet, useSwitchCabinet, useCreateCabinet } from "@/hooks/useCabinets";
 import {
@@ -38,6 +40,9 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
   const { data: isAdmin } = useAdminRole();
   const { data: activeCabinet, cabinets } = useActiveCabinet();
   const switchCabinet = useSwitchCabinet();
+  const { data: subData } = useSubscription();
+  const subscription = subData?.subscription;
+  const activePlan = subscription ? getPlanById(subscription.plan_id) : null;
   const createCabinet = useCreateCabinet();
 
   const [newCabinetOpen, setNewCabinetOpen] = useState(false);
@@ -114,17 +119,28 @@ export const Header = ({ activeTab, onTabChange, onSettingsClick, onTelegramClic
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {user && (
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm">
-                  <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
-                  <span className="font-semibold">{tokenBalance}</span>
-                  <span className="text-muted-foreground hidden sm:inline">токенов</span>
-                </div>
+                {activePlan && subscription ? (
+                  <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm cursor-pointer" onClick={() => navigate("/pricing")} data-testid="header-subscription-info">
+                    <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
+                    <span className="font-semibold hidden sm:inline">{activePlan.name}</span>
+                    <span className="text-muted-foreground">
+                      {activePlan.replyLimit === -1 ? `${subscription.replies_used_this_period} / ∞` : `${subscription.replies_used_this_period}/${activePlan.replyLimit}`}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm">
+                    <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
+                    <span className="font-semibold">{tokenBalance}</span>
+                    <span className="text-muted-foreground hidden sm:inline">токенов</span>
+                  </div>
+                )}
                 <Button
                   size="sm"
                   className="text-xs h-7 sm:h-8 px-2 sm:px-3"
                   onClick={() => navigate("/pricing")}
+                  data-testid="button-header-pricing"
                 >
-                  <span className="hidden sm:inline">Пополнить</span>
+                  <span className="hidden sm:inline">{activePlan ? "Тариф" : "Пополнить"}</span>
                   <Plus className="w-3.5 h-3.5 sm:hidden" />
                 </Button>
               </div>

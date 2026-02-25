@@ -7,9 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
   Loader2, Mail, Lock, User, Camera, ShoppingBag,
-  Coins, BarChart3, ArrowRight, Plug, Bot, Eye,
-  ChevronDown
+  BarChart3, ArrowRight, Plug, Bot, Eye,
+  ChevronDown, Check, Sparkles
 } from "lucide-react";
+import { SUBSCRIPTION_PLANS, SUBSCRIPTION_MODULES } from "@shared/subscriptionPlans";
 
 const Auth = () => {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
@@ -63,10 +64,10 @@ const Auth = () => {
       accent: "bg-secondary text-green-600 dark:text-green-400",
     },
     {
-      icon: Coins,
-      title: "Честная оплата без сгорания",
+      icon: Sparkles,
+      title: "Гибкие тарифы без переплат",
       description:
-        "Купили токены — они ваши навсегда. Нет подписки, нет скрытых платежей.",
+        "Платите только за то, что используете. Модули фото-анализа и аналитики подключаются отдельно.",
       accent: "bg-secondary text-amber-600 dark:text-amber-400",
     },
     {
@@ -182,7 +183,7 @@ const Auth = () => {
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <span className="text-sm text-muted-foreground">
-              50 токенов в подарок при регистрации
+              Тарифы от 490 ₽/мес
             </span>
           </div>
           <button
@@ -259,9 +260,87 @@ const Auth = () => {
         </div>
       </section>
 
+      <section className="py-16 md:py-24 px-4 bg-card/50">
+        <div className="max-w-6xl mx-auto space-y-12">
+          <div className="text-center space-y-3">
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight" data-testid="text-pricing-title">
+              Тарифы
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Выберите подходящий тариф и подключайте модули по необходимости
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+            {SUBSCRIPTION_PLANS.map((plan) => (
+              <Card
+                key={plan.id}
+                className={`relative flex flex-col ${plan.popular ? "border-primary ring-2 ring-primary/20" : ""}`}
+                data-testid={`card-landing-plan-${plan.id}`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap">
+                    Популярный
+                  </div>
+                )}
+                <CardContent className="p-4 md:p-5 flex flex-col items-center gap-2 pt-6">
+                  <h3 className="font-semibold text-sm md:text-base">{plan.name}</h3>
+                  <div className="text-2xl md:text-3xl font-bold text-foreground">{plan.price.toLocaleString("ru-RU")} ₽</div>
+                  <p className="text-xs text-muted-foreground">/ месяц</p>
+                  <div className="text-xs md:text-sm font-medium text-foreground mt-1">
+                    {plan.replyLimit === -1 ? "Безлимит" : `${plan.replyLimit.toLocaleString("ru-RU")} ответов`}
+                  </div>
+                  <ul className="text-xs text-muted-foreground space-y-1 mt-2 w-full">
+                    <li className="flex items-center gap-1"><Check className="w-3 h-3 text-primary shrink-0" /> AI-ответы на отзывы</li>
+                    <li className="flex items-center gap-1"><Check className="w-3 h-3 text-primary shrink-0" /> Безлимит кабинетов</li>
+                    <li className="flex items-center gap-1"><Check className="w-3 h-3 text-primary shrink-0" /> Telegram-бот</li>
+                  </ul>
+                  <Button
+                    size="sm"
+                    variant={plan.popular ? "default" : "outline"}
+                    className="w-full mt-3"
+                    onClick={() => {
+                      setIsSignUp(true);
+                      scrollToForm();
+                    }}
+                    data-testid={`button-plan-cta-${plan.id}`}
+                  >
+                    Начать
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="max-w-2xl mx-auto">
+            <h3 className="text-lg font-semibold mb-4 text-center" data-testid="text-modules-section">
+              Дополнительные модули
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {SUBSCRIPTION_MODULES.map((mod) => (
+                <Card key={mod.id} data-testid={`card-landing-module-${mod.id}`}>
+                  <CardContent className="p-4 md:p-5 flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      {mod.id === "photo_analysis" ? <Camera className="w-4 h-4 text-primary" /> : <BarChart3 className="w-4 h-4 text-primary" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{mod.name}</span>
+                        <span className="text-sm font-bold text-primary">+{mod.price} ₽/мес</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{mod.description}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section
         ref={formRef}
-        className="py-16 md:py-24 px-4 bg-card/50"
+        className="py-16 md:py-24 px-4"
         id="auth-form"
       >
         <div className="max-w-sm mx-auto space-y-6">
@@ -374,7 +453,7 @@ const Auth = () => {
 
               {isSignUp && (
                 <p className="mt-3 text-xs text-muted-foreground text-center">
-                  При регистрации вы получите 50 бесплатных токенов
+                  После регистрации выберите подходящий тариф
                 </p>
               )}
             </CardContent>

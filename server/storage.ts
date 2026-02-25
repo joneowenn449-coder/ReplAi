@@ -5,6 +5,7 @@ import {
   tokenBalances, aiRequestBalances, tokenTransactions, aiRequestTransactions,
   userRoles, aiConversations, aiMessages, productRecommendations, payments,
   globalSettings, telegramAuthTokens, authUsers, userSessions,
+  userSubscriptions,
   type Review, type InsertReview,
   type Chat, type InsertChat,
   type ChatMessage, type InsertChatMessage,
@@ -21,6 +22,7 @@ import {
   type GlobalSetting,
   type AuthUser, type InsertAuthUser,
   type UserSession, type InsertUserSession,
+  type UserSubscription, type InsertUserSubscription,
   surveyResponses, type SurveyResponse,
 } from "@shared/schema";
 
@@ -905,6 +907,46 @@ export class DatabaseStorage {
     }
 
     return result;
+  }
+
+  async getUserSubscription(userId: string): Promise<UserSubscription | null> {
+    const rows = await db.select().from(userSubscriptions)
+      .where(and(
+        eq(userSubscriptions.userId, userId),
+        sql`${userSubscriptions.status} IN ('active', 'cancelled')`
+      ))
+      .orderBy(desc(userSubscriptions.createdAt))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async createSubscription(data: InsertUserSubscription): Promise<UserSubscription> {
+    await db.update(userSubscriptions)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(and(
+        eq(userSubscriptions.userId, data.userId),
+        sql`${userSubscriptions.status} IN ('active', 'cancelled')`
+      ));
+    const rows = await db.insert(userSubscriptions).values(data).returning();
+    return rows[0];
+  }
+
+  async updateSubscription(id: string, data: Partial<UserSubscription>): Promise<void> {
+    await db.update(userSubscriptions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(userSubscriptions.id, id));
+  }
+
+  async incrementRepliesUsed(subscriptionId: string): Promise<void> {
+    await db.execute(
+      sql`UPDATE replai.user_subscriptions SET replies_used_this_period = replies_used_this_period + 1, updated_at = now() WHERE id = ${subscriptionId}`
+    );
+  }
+
+  async resetSubscriptionPeriod(subscriptionId: string): Promise<void> {
+    await db.execute(
+      sql`UPDATE replai.user_subscriptions SET replies_used_this_period = 0, current_period_start = current_period_end, current_period_end = current_period_end + interval '30 days', updated_at = now() WHERE id = ${subscriptionId}`
+    );
   }
 }
 

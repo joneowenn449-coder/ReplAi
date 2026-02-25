@@ -2,9 +2,44 @@ import { Request, Response } from "express";
 import { storage } from "./storage";
 import crypto from "crypto";
 import { sendAutoReplyNotification, sendNewReviewNotification, shouldNotify, sendAdminAIErrorNotification } from "./telegram";
+import { getPlanById } from "@shared/subscriptionPlans";
 
 const WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru";
 const WB_CHAT_BASE = "https://buyer-chat-api.wildberries.ru";
+
+async function checkAndResetSubscriptionPeriod(userId: string) {
+  const sub = await storage.getUserSubscription(userId);
+  if (!sub) return null;
+  if (sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) < new Date()) {
+    await storage.updateSubscription(sub.id, { status: "expired" });
+    return null;
+  }
+  return sub;
+}
+
+async function canSendReply(userId: string): Promise<{ allowed: boolean; subscriptionId?: string; useLegacy: boolean; error?: string }> {
+  const sub = await checkAndResetSubscriptionPeriod(userId);
+  if (sub) {
+    const plan = getPlanById(sub.planId);
+    if (!plan) return { allowed: false, useLegacy: true };
+    if (plan.replyLimit === -1) return { allowed: true, subscriptionId: sub.id, useLegacy: false };
+    if ((sub.repliesUsedThisPeriod || 0) < plan.replyLimit) return { allowed: true, subscriptionId: sub.id, useLegacy: false };
+    return { allowed: false, useLegacy: false, error: `Лимит ответов исчерпан (${sub.repliesUsedThisPeriod}/${plan.replyLimit}). Обновите тариф или дождитесь нового периода.` };
+  }
+  const balance = await storage.getTokenBalance(userId);
+  if (balance < 1) return { allowed: false, useLegacy: true, error: "Недостаточно токенов. Пополните баланс." };
+  return { allowed: true, useLegacy: true };
+}
+
+async function hasPhotoAnalysisAccess(userId: string): Promise<boolean> {
+  const sub = await storage.getUserSubscription(userId);
+  return !!(sub && sub.photoAnalysisEnabled);
+}
+
+async function hasAiAnalystAccess(userId: string): Promise<boolean> {
+  const sub = await storage.getUserSubscription(userId);
+  return !!(sub && sub.aiAnalystEnabled);
+}
 
 const REFUSAL_KEYWORDS = [
   "отказ", "вернул", "вернула", "возврат",
@@ -292,6 +327,7 @@ async function processCabinetReviews(
   const replyModes = (cabinetModes && Object.keys(cabinetModes).length > 0) ? cabinetModes : defaultModes;
 
   let currentBalance = await storage.getTokenBalance(userId);
+  const replyAccess = await canSendReply(userId);
   const [globalPrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2] = await Promise.all([
     storage.getGlobalSetting("default_prompt"),
     storage.getGlobalSetting("response_examples"),
@@ -406,15 +442,21 @@ async function processCabinetReviews(
     const modeForRating = replyModes[ratingKey] || "manual";
 
     if (modeForRating === "auto" && aiDraft) {
-      if (currentBalance < 1) {
+      const autoCheck = await canSendReply(userId);
+      if (!autoCheck.allowed) {
         status = "pending";
       } else {
         try {
           await sendWBAnswer(WB_API_KEY, wbId, aiDraft);
           status = "auto";
           autoSentCount++;
-          currentBalance -= 1;
-          await storage.updateTokenBalance(userId, currentBalance);
+          if (autoCheck.subscriptionId) {
+            await storage.incrementRepliesUsed(autoCheck.subscriptionId);
+          }
+          if (autoCheck.useLegacy) {
+            currentBalance -= 1;
+            await storage.updateTokenBalance(userId, currentBalance);
+          }
           await delay(350);
         } catch (e: any) {
           console.error(`Auto-reply failed for ${wbId}:`, e);
@@ -824,10 +866,10 @@ export async function syncChats(req: Request, res: Response) {
 export async function sendReply(req: Request, res: Response) {
   try {
     const userId = (req as any).userId;
-    const currentBalance = await storage.getTokenBalance(userId);
+    const replyCheck = await canSendReply(userId);
 
-    if (currentBalance < 1) {
-      res.status(402).json({ error: "Недостаточно токенов. Пополните баланс." });
+    if (!replyCheck.allowed) {
+      res.status(402).json({ error: replyCheck.error || "Недостаточно токенов." });
       return;
     }
 
@@ -882,7 +924,13 @@ export async function sendReply(req: Request, res: Response) {
       updatedAt: new Date(),
     });
 
-    await storage.updateTokenBalance(userId, currentBalance - 1);
+    if (replyCheck.subscriptionId) {
+      await storage.incrementRepliesUsed(replyCheck.subscriptionId);
+    }
+    if (replyCheck.useLegacy) {
+      const currentBalance = await storage.getTokenBalance(userId);
+      await storage.updateTokenBalance(userId, currentBalance - 1);
+    }
 
     await storage.insertTokenTransaction({
       userId,
@@ -1508,17 +1556,19 @@ export async function aiAssistant(req: Request, res: Response) {
       return;
     }
 
-    const aiBalance = await storage.getAiRequestBalance(userId);
-    if (aiBalance < 1) {
-      res.status(402).json({ error: "У вас закончились запросы AI аналитика. Приобретите пакет запросов." });
-      return;
+    const hasSubAccess = await hasAiAnalystAccess(userId);
+    if (!hasSubAccess) {
+      const aiBalance = await storage.getAiRequestBalance(userId);
+      if (aiBalance < 1) {
+        res.status(402).json({ error: "У вас нет доступа к AI аналитику. Подключите модуль в тарифе или приобретите пакет запросов." });
+        return;
+      }
+      await storage.updateAiRequestBalance(userId, aiBalance - 1);
+      await storage.insertAiRequestTransaction({
+        userId, amount: -1, type: "usage",
+        description: "Запрос к AI аналитику",
+      });
     }
-
-    await storage.updateAiRequestBalance(userId, aiBalance - 1);
-    await storage.insertAiRequestTransaction({
-      userId, amount: -1, type: "usage",
-      description: "Запрос к AI аналитику",
-    });
 
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user");
     const userText = lastUserMessage?.content || "";
@@ -1722,21 +1772,33 @@ export async function createPayment(req: Request, res: Response) {
     }
 
     const userId = (req as any).userId;
-    const { amount, tokens } = req.body;
+    const { amount, tokens, planId, photoAnalysis, aiAnalyst } = req.body;
 
-    if (!amount || !tokens) {
+    let totalAmount = amount;
+    let totalTokens = tokens || 0;
+
+    if (planId) {
+      const { calculateTotalPrice } = await import("@shared/subscriptionPlans");
+      totalAmount = calculateTotalPrice(planId, !!photoAnalysis, !!aiAnalyst);
+      if (!totalAmount) {
+        res.status(400).json({ error: "Неизвестный тариф" });
+        return;
+      }
+    } else if (!amount || !tokens) {
       res.status(400).json({ error: "amount and tokens are required" });
       return;
     }
 
     const payment = await storage.createPayment({
       userId,
-      amount: String(amount),
-      tokens,
+      amount: String(totalAmount),
+      tokens: totalTokens,
       status: "pending",
+      planId: planId || null,
+      modules: planId ? { photoAnalysis: !!photoAnalysis, aiAnalyst: !!aiAnalyst } : null,
     });
 
-    const outSum = Number(amount).toFixed(2);
+    const outSum = Number(totalAmount).toFixed(2);
     const invId = payment.invId;
 
     const signatureString = `${ROBOKASSA_LOGIN}:${outSum}:${invId}:${ROBOKASSA_PASSWORD1}`;
@@ -1744,7 +1806,7 @@ export async function createPayment(req: Request, res: Response) {
 
     const robokassaUrl = `https://auth.robokassa.ru/Merchant/Index.aspx?MerchantLogin=${ROBOKASSA_LOGIN}&OutSum=${outSum}&InvId=${invId}&SignatureValue=${signature}&IsTest=1`;
 
-    console.log(`[create-payment] Created payment inv_id=${invId} for user=${userId}, amount=${outSum}, tokens=${tokens}`);
+    console.log(`[create-payment] Created payment inv_id=${invId} for user=${userId}, amount=${outSum}, planId=${planId || 'legacy'}`);
 
     res.json({ url: robokassaUrl, inv_id: invId });
   } catch (e: any) {
@@ -1805,17 +1867,33 @@ export async function robokassaWebhook(req: Request, res: Response) {
 
     await storage.updatePaymentStatus(payment.id, "completed");
 
-    const existingBalance = await storage.getTokenBalance(payment.userId);
-    await storage.upsertTokenBalance(payment.userId, existingBalance + payment.tokens);
+    if (payment.planId) {
+      const modules = (payment.modules || {}) as { photoAnalysis?: boolean; aiAnalyst?: boolean };
+      const now = new Date();
+      const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      await storage.createSubscription({
+        userId: payment.userId,
+        planId: payment.planId,
+        status: "active",
+        photoAnalysisEnabled: !!modules.photoAnalysis,
+        aiAnalystEnabled: !!modules.aiAnalyst,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        repliesUsedThisPeriod: 0,
+      });
+      console.log(`[robokassa-webhook] Payment InvId=${invId} completed. Created subscription plan=${payment.planId} for user ${payment.userId}`);
+    } else {
+      const existingBalance = await storage.getTokenBalance(payment.userId);
+      await storage.upsertTokenBalance(payment.userId, existingBalance + payment.tokens);
 
-    await storage.insertTokenTransaction({
-      userId: payment.userId,
-      amount: payment.tokens,
-      type: "purchase",
-      description: `Покупка ${payment.tokens} токенов (${outSum} руб)`,
-    });
-
-    console.log(`[robokassa-webhook] Payment InvId=${invId} completed. Added ${payment.tokens} tokens to user ${payment.userId}`);
+      await storage.insertTokenTransaction({
+        userId: payment.userId,
+        amount: payment.tokens,
+        type: "purchase",
+        description: `Покупка ${payment.tokens} токенов (${outSum} руб)`,
+      });
+      console.log(`[robokassa-webhook] Payment InvId=${invId} completed. Added ${payment.tokens} tokens to user ${payment.userId}`);
+    }
 
     res.status(200).send(`OK${invId}`);
 
@@ -2017,8 +2095,9 @@ export async function processPendingReviews(userId: string) {
   }
 
   let currentBalance = await storage.getTokenBalance(userId);
-  if (currentBalance < 1) {
-    console.log(`[process-pending] No tokens for user=${userId}`);
+  const pendingCheck = await canSendReply(userId);
+  if (!pendingCheck.allowed) {
+    console.log(`[process-pending] No reply access for user=${userId}`);
     return { processed: 0, errors: [] };
   }
 
@@ -2042,7 +2121,8 @@ export async function processPendingReviews(userId: string) {
     console.log(`[process-pending] cabinet=${cabinet.id} found ${pendingReviews.length} pending reviews, balance=${currentBalance}`);
 
     for (const pr of pendingReviews) {
-      if (currentBalance < 1) break;
+      const iterCheck = await canSendReply(userId);
+      if (!iterCheck.allowed) break;
 
       const ratingKey = String(pr.rating);
       const modeForRating = replyModes[ratingKey] || "manual";
@@ -2055,8 +2135,13 @@ export async function processPendingReviews(userId: string) {
           sentAnswer: pr.aiDraft,
           updatedAt: new Date(),
         });
-        currentBalance -= 1;
-        await storage.updateTokenBalance(userId, currentBalance);
+        if (iterCheck.subscriptionId) {
+          await storage.incrementRepliesUsed(iterCheck.subscriptionId);
+        }
+        if (iterCheck.useLegacy) {
+          currentBalance -= 1;
+          await storage.updateTokenBalance(userId, currentBalance);
+        }
         await storage.insertTokenTransaction({
           userId, amount: -1, type: "usage",
           description: "Автоответ на отзыв (после пополнения)", reviewId: pr.id,

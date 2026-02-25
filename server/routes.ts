@@ -1159,3 +1159,90 @@ router.get("/api/export/:table", requireAuth, async (req: Request, res: Response
     res.status(500).json({ error: e.message });
   }
 });
+
+router.get("/api/subscription", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const sub = await storage.getUserSubscription(userId);
+    if (!sub) {
+      res.json({ subscription: null });
+      return;
+    }
+    if (sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) < new Date()) {
+      await storage.updateSubscription(sub.id, { status: "expired" });
+      res.json({ subscription: null });
+      return;
+    }
+    res.json({ subscription: toSnakeCase(sub) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/api/subscription/create", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { planId, photoAnalysis, aiAnalyst } = req.body;
+    const { getPlanById } = await import("@shared/subscriptionPlans");
+    const plan = getPlanById(planId);
+    if (!plan) {
+      res.status(400).json({ error: "Неизвестный тариф" });
+      return;
+    }
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const sub = await storage.createSubscription({
+      userId,
+      planId,
+      status: "active",
+      photoAnalysisEnabled: !!photoAnalysis,
+      aiAnalystEnabled: !!aiAnalyst,
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+      repliesUsedThisPeriod: 0,
+    });
+    res.json({ subscription: toSnakeCase(sub) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/api/subscription/toggle-module", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { moduleId, enabled } = req.body;
+    const sub = await storage.getUserSubscription(userId);
+    if (!sub || (sub.status !== "active" && sub.status !== "cancelled")) {
+      res.status(400).json({ error: "Нет активной подписки" });
+      return;
+    }
+    if (moduleId === "photo_analysis") {
+      await storage.updateSubscription(sub.id, { photoAnalysisEnabled: !!enabled });
+    } else if (moduleId === "ai_analyst") {
+      await storage.updateSubscription(sub.id, { aiAnalystEnabled: !!enabled });
+    } else {
+      res.status(400).json({ error: "Неизвестный модуль" });
+      return;
+    }
+    const updated = await storage.getUserSubscription(userId);
+    res.json({ subscription: updated ? toSnakeCase(updated) : null });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/api/subscription/cancel", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const sub = await storage.getUserSubscription(userId);
+    if (!sub || sub.status !== "active") {
+      res.status(400).json({ error: "Нет активной подписки для отмены" });
+      return;
+    }
+    await storage.updateSubscription(sub.id, { status: "cancelled" });
+    const updated = await storage.getUserSubscription(userId);
+    res.json({ subscription: updated ? toSnakeCase(updated) : null });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});

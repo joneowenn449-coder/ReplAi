@@ -75,6 +75,8 @@ export const payments = replaiSchema.table("payments", {
   tokens: integer("tokens").notNull(),
   invId: serial("inv_id"),
   status: text("status").default("pending"),
+  planId: text("plan_id"),
+  modules: jsonb("modules"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -216,6 +218,22 @@ export const userSessions = replaiSchema.table("user_sessions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const userSubscriptions = replaiSchema.table("user_subscriptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(),
+  planId: text("plan_id").notNull(),
+  status: text("status").default("active"),
+  photoAnalysisEnabled: boolean("photo_analysis_enabled").default(false),
+  aiAnalystEnabled: boolean("ai_analyst_enabled").default(false),
+  currentPeriodStart: timestamp("current_period_start").notNull(),
+  currentPeriodEnd: timestamp("current_period_end").notNull(),
+  repliesUsedThisPeriod: integer("replies_used_this_period").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertUserSubscriptionSchema = createInsertSchema(userSubscriptions).omit({ id: true, createdAt: true, updatedAt: true });
+
 export const insertUserSessionSchema = createInsertSchema(userSessions).omit({ id: true, createdAt: true });
 export const insertAuthUserSchema = createInsertSchema(authUsers).omit({ id: true, createdAt: true });
 export const surveyResponses = replaiSchema.table("survey_responses", {
@@ -285,3 +303,5 @@ export type UserSession = typeof userSessions.$inferSelect;
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
 export type SurveyResponse = typeof surveyResponses.$inferSelect;
 export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
+export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema>;

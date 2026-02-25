@@ -445,7 +445,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                   </div>
                   <div>
                     <span className="text-muted-foreground">До: </span>
-                    <span className="font-medium">{user.subscription.current_period_end ? formatMsk(user.subscription.current_period_end) : "—"}</span>
+                    <span className="font-medium">{user.subscription.current_period_end ? formatMsk(user.subscription.current_period_end, "dd.MM.yyyy") : "—"}</span>
                   </div>
                   <div className="col-span-2 flex gap-2">
                     {user.subscription.photo_analysis_enabled && <Badge variant="outline" data-testid="badge-sub-photo">Анализ фото</Badge>}

@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import {
-  useUpdateBalance,
-  useUpdateAiBalance,
   useUpdateAdminNotes,
   useDeleteUser,
   useUserSessions,
@@ -23,7 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Coins, BrainCircuit, Plus, Minus, Loader2, MessageCircle,
+  Loader2, MessageCircle,
   Trash2, Save, Store, CreditCard, StickyNote, Clock, Monitor,
   Smartphone, Tablet, Globe, BarChart3, Crown,
 } from "lucide-react";
@@ -35,8 +33,6 @@ interface UserDetailModalProps {
   open: boolean;
   onClose: () => void;
 }
-
-type BalanceTarget = "token" | "ai";
 
 const statusConfig: Record<AdminUser["status"], { label: string; className: string }> = {
   active: {
@@ -55,19 +51,11 @@ const statusConfig: Record<AdminUser["status"], { label: string; className: stri
 
 export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) => {
   const { user: currentUser } = useAuth();
-  const updateBalance = useUpdateBalance();
-  const updateAiBalance = useUpdateAiBalance();
   const updateAdminNotes = useUpdateAdminNotes();
   const deleteUser = useDeleteUser();
   const setSubscription = useAdminSetSubscription();
   const cancelSubscription = useAdminCancelSubscription();
   const { data: sessions, isLoading: sessionsLoading } = useUserSessions(open ? user?.id ?? null : null);
-
-  const [balanceAmount, setBalanceAmount] = useState("");
-  const [balanceDesc, setBalanceDesc] = useState("");
-  const [balanceTarget, setBalanceTarget] = useState<BalanceTarget>("token");
-  const [balanceAction, setBalanceAction] = useState<"admin_topup" | "admin_deduct">("admin_topup");
-  const [showBalanceForm, setShowBalanceForm] = useState(false);
 
   const [notes, setNotes] = useState(user?.admin_notes || "");
   const [notesChanged, setNotesChanged] = useState(false);
@@ -96,33 +84,10 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
-      setShowBalanceForm(false);
       setShowDeleteConfirm(false);
-      setBalanceAmount("");
-      setBalanceDesc("");
       setNotesChanged(false);
       onClose();
     }
-  };
-
-  const handleBalanceSubmit = () => {
-    if (!user || !balanceAmount || Number(balanceAmount) <= 0) return;
-    const mutation = balanceTarget === "ai" ? updateAiBalance : updateBalance;
-    mutation.mutate(
-      {
-        userId: user.id,
-        amount: Number(balanceAmount),
-        type: balanceAction,
-        description: balanceDesc || undefined,
-      },
-      {
-        onSuccess: () => {
-          setShowBalanceForm(false);
-          setBalanceAmount("");
-          setBalanceDesc("");
-        },
-      }
-    );
   };
 
   const handleNoteSave = () => {
@@ -147,7 +112,6 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
 
   const sc = statusConfig[user.status];
   const userName = user.display_name || user.email || user.id.slice(0, 8);
-  const balanceMutation = balanceTarget === "ai" ? updateAiBalance : updateBalance;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -297,123 +261,6 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                 </p>
               </div>
             </div>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-              <Coins className="w-4 h-4" />
-              Балансы
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-lg border border-border p-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Токены</p>
-                    <p className="text-xl font-bold text-foreground" data-testid="text-detail-tokens">{user.balance}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setBalanceTarget("token");
-                        setBalanceAction("admin_topup");
-                        setShowBalanceForm(true);
-                      }}
-                      data-testid="button-detail-topup-tokens"
-                    >
-                      <Plus className="w-4 h-4 text-emerald-500" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setBalanceTarget("token");
-                        setBalanceAction("admin_deduct");
-                        setShowBalanceForm(true);
-                      }}
-                      data-testid="button-detail-deduct-tokens"
-                    >
-                      <Minus className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div>
-                    <p className="text-xs text-muted-foreground">AI запросы</p>
-                    <p className="text-xl font-bold text-foreground" data-testid="text-detail-ai">{user.aiBalance}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setBalanceTarget("ai");
-                        setBalanceAction("admin_topup");
-                        setShowBalanceForm(true);
-                      }}
-                      data-testid="button-detail-topup-ai"
-                    >
-                      <Plus className="w-4 h-4 text-emerald-500" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setBalanceTarget("ai");
-                        setBalanceAction("admin_deduct");
-                        setShowBalanceForm(true);
-                      }}
-                      data-testid="button-detail-deduct-ai"
-                    >
-                      <Minus className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {showBalanceForm && (
-              <div className="mt-3 rounded-lg border border-border p-3 space-y-3">
-                <p className="text-sm font-medium flex items-center gap-1.5">
-                  {balanceTarget === "ai" ? <BrainCircuit className="w-4 h-4" /> : <Coins className="w-4 h-4" />}
-                  {balanceAction === "admin_topup" ? "Пополнить" : "Списать"}{" "}
-                  {balanceTarget === "ai" ? "AI запросы" : "токены"}
-                </p>
-                <Input
-                  type="number"
-                  min={1}
-                  value={balanceAmount}
-                  onChange={(e) => setBalanceAmount(e.target.value)}
-                  placeholder="Количество"
-                  data-testid="input-balance-amount"
-                />
-                <Input
-                  value={balanceDesc}
-                  onChange={(e) => setBalanceDesc(e.target.value)}
-                  placeholder="Описание (необязательно)"
-                  data-testid="input-balance-desc"
-                />
-                <div className="flex items-center justify-end gap-2 flex-wrap">
-                  <Button variant="outline" size="sm" onClick={() => setShowBalanceForm(false)} data-testid="button-balance-cancel">
-                    Отмена
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleBalanceSubmit}
-                    disabled={!balanceAmount || Number(balanceAmount) <= 0 || balanceMutation.isPending}
-                    data-testid="button-balance-submit"
-                  >
-                    {balanceMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
-                    {balanceAction === "admin_topup" ? "Пополнить" : "Списать"}
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
 
           <Separator />

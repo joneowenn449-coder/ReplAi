@@ -16,6 +16,7 @@ import { Search, Download, Trash2, Loader2, Eye, AlertTriangle } from "lucide-re
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { formatMsk, distanceToNowMsk } from "@/lib/dates";
+import { SUBSCRIPTION_PLANS } from "@shared/subscriptionPlans";
 
 interface UsersTableProps {
   onSelectUser: (user: AdminUser) => void;
@@ -52,14 +53,14 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
 
   const handleExportCsv = () => {
     if (!filteredUsers.length) return;
-    const headers = ["ID", "Email", "Имя", "Статус", "Токены", "AI запросы", "Оплачено", "Статус API WB", "Расход/день", "% Vision", "Ср. отзывов/день", "AI Аналитик", "Регистрация", "Последняя активность"];
+    const headers = ["ID", "Email", "Имя", "Статус", "Тариф", "Статус подписки", "Оплачено", "Статус API WB", "Расход/день", "% Vision", "Ср. отзывов/день", "AI Аналитик", "Регистрация", "Последняя активность"];
     const rows = filteredUsers.map((u) => [
       u.id,
       u.email,
       u.display_name || "",
       u.status,
-      String(u.balance),
-      String(u.aiBalance),
+      u.subscription ? (SUBSCRIPTION_PLANS.find(p => p.id === u.subscription!.plan_id)?.name || u.subscription.plan_id) : "Нет",
+      u.subscription?.status || "",
       String(u.totalPaid),
       u.apiStatus,
       String(u.tokensSpentPerDay),
@@ -228,8 +229,8 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
                       className="text-sm"
                       data-testid={`text-tariff-${user.id}`}
                     >
-                      {user.totalPaid > 0
-                        ? `${user.totalPaid.toLocaleString("ru-RU")} \u20BD`
+                      {user.subscription
+                        ? SUBSCRIPTION_PLANS.find(p => p.id === user.subscription!.plan_id)?.name || user.subscription.plan_id
                         : "Бесплатный"}
                     </span>
                   </TableCell>

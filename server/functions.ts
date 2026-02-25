@@ -7,6 +7,20 @@ import { getPlanById } from "@shared/subscriptionPlans";
 const WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru";
 const WB_CHAT_BASE = "https://buyer-chat-api.wildberries.ru";
 
+const cabinetSyncLocks = new Map<string, Promise<any>>();
+
+async function withConcurrencyLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  const executing = new Set<Promise<void>>();
+  for (const item of items) {
+    const p = fn(item).then(() => { executing.delete(p); });
+    executing.add(p);
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  }
+  await Promise.all(executing);
+}
+
 async function checkAndResetSubscriptionPeriod(userId: string) {
   const sub = await storage.getUserSubscription(userId);
   if (!sub) return null;
@@ -393,50 +407,70 @@ async function processCabinetReviews(
   let importedAnswered = 0;
   const errors: string[] = [];
 
-  for (const fb of allFeedbacks) {
-    const wbId = fb.id;
+  const allUnansweredWbIds = allFeedbacks.map((fb: any) => fb.id).filter(Boolean);
+  const existingUnansweredIds = await storage.getExistingReviewWbIds(allUnansweredWbIds, userId, cabinetId);
 
-    const existing = await storage.getReviewByWbId(wbId, userId, cabinetId);
-    if (existing) continue;
+  const newFeedbacks = allFeedbacks.filter((fb: any) => !existingUnansweredIds.has(fb.id));
 
-    const photoLinks = fb.photoLinks || [];
-    const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
-    const isEmptyReview = !fb.text && !fb.pros && !fb.cons;
+  const photoAnalysisEnabled = newFeedbacks.length > 0 ? await hasPhotoAnalysisAccess(cabinet.userId) : false;
 
-    const productArticle = String(fb.productDetails?.nmId || fb.nmId || "");
-    const rating = fb.productValuation || 5;
-    let recommendationInstruction = "";
-    if (productArticle && rating >= 4) {
-      const recommendations = await storage.getRecommendationsByArticle(productArticle, cabinetId);
-      if (recommendations && recommendations.length > 0) {
-        const recList = recommendations
-          .map((r) => `- Артикул ${r.targetArticle}${r.targetName ? `: "${r.targetName}"` : ""}`)
-          .join("\n");
-        recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
+  const AI_BATCH = 5;
+  const aiDrafts = new Map<string, string>();
+  for (let i = 0; i < newFeedbacks.length; i += AI_BATCH) {
+    const batch = newFeedbacks.slice(i, i + AI_BATCH);
+    const results = await Promise.allSettled(
+      batch.map(async (fb: any) => {
+        const photoLinks = fb.photoLinks || [];
+        const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
+        const isEmptyReview = !fb.text && !fb.pros && !fb.cons;
+        const productArticle = String(fb.productDetails?.nmId || fb.nmId || "");
+        const rating = fb.productValuation || 5;
+        let recommendationInstruction = "";
+        if (productArticle && rating >= 4) {
+          const recommendations = await storage.getRecommendationsByArticle(productArticle, cabinetId);
+          if (recommendations && recommendations.length > 0) {
+            const recList = recommendations
+              .map((r: any) => `- Артикул ${r.targetArticle}${r.targetName ? `: "${r.targetName}"` : ""}`)
+              .join("\n");
+            recommendationInstruction = `\n\nРЕКОМЕНДАЦИИ: В конце ответа ненавязчиво предложи покупателю обратить внимание на другие наши товары:\n${recList}\nУпомяни артикулы, чтобы покупатель мог их найти на WB.`;
+          }
+        }
+        const reviewBrandName = fb.productDetails?.brandName || "";
+        const effectiveBrand = reviewBrandName || cabinet.brandName || "";
+        const isRefusal = detectRefusal(fb.text, fb.pros, fb.cons);
+        const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2, rating);
+        const draft = await generateAIReply(
+          openrouterKey, promptTemplate,
+          buildReviewText(fb.text, fb.pros, fb.cons),
+          rating,
+          fb.productDetails?.productName || fb.subjectName || "Товар",
+          photoLinks.length, hasVideo, fb.userName || "",
+          isEmptyReview, recommendationInstruction, isRefusal, effectiveBrand,
+          photoLinks, photoAnalysisEnabled
+        );
+        return { wbId: fb.id, draft };
+      })
+    );
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j];
+      if (r.status === "fulfilled" && r.value.draft) {
+        aiDrafts.set(r.value.wbId, r.value.draft);
+      } else if (r.status === "rejected") {
+        const fb = batch[j];
+        console.error(`AI generation failed for ${fb.id}:`, r.reason?.message);
+        errors.push(`AI error for ${fb.id}: ${r.reason?.message}`);
       }
     }
+    if (i + AI_BATCH < newFeedbacks.length) await delay(200);
+  }
 
+  for (const fb of newFeedbacks) {
+    const wbId = fb.id;
+    const photoLinks = fb.photoLinks || [];
+    const hasVideo = !!(fb.video && (fb.video.link || fb.video.previewImage));
+    const rating = fb.productValuation || 5;
     const reviewBrandName = fb.productDetails?.brandName || "";
-    const effectiveBrand = reviewBrandName || cabinet.brandName || "";
-    const isRefusal = detectRefusal(fb.text, fb.pros, fb.cons);
-
-    let aiDraft = "";
-    try {
-      const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2, fb.productValuation || 5);
-      const photoAnalysisEnabled = await hasPhotoAnalysisAccess(cabinet.userId);
-      aiDraft = await generateAIReply(
-        openrouterKey, promptTemplate,
-        buildReviewText(fb.text, fb.pros, fb.cons),
-        fb.productValuation || 5,
-        fb.productDetails?.productName || fb.subjectName || "Товар",
-        photoLinks.length, hasVideo, fb.userName || "",
-        isEmptyReview, recommendationInstruction, isRefusal, effectiveBrand,
-        photoLinks, photoAnalysisEnabled
-      );
-    } catch (e: any) {
-      console.error(`AI generation failed for ${wbId}:`, e);
-      errors.push(`AI error for ${wbId}: ${e.message}`);
-    }
+    const aiDraft = aiDrafts.get(wbId) || "";
 
     let status = "pending";
     const ratingKey = String(rating);
@@ -472,7 +506,7 @@ async function processCabinetReviews(
       wbId,
       userId,
       cabinetId,
-      rating: fb.productValuation || 5,
+      rating,
       authorName: fb.userName || "Покупатель",
       text: fb.text || null,
       pros: fb.pros || null,
@@ -497,7 +531,7 @@ async function processCabinetReviews(
       });
       sendAutoReplyNotification(cabinetId, {
         userName: fb.userName || "Покупатель",
-        rating: fb.productValuation || 5,
+        rating,
         text: fb.text || "",
         productName: fb.productDetails?.productName || fb.subjectName || "Товар",
         productArticle: String(fb.productDetails?.nmId || fb.nmId || ""),
@@ -507,7 +541,7 @@ async function processCabinetReviews(
     if (insertedReview && status !== "auto") {
       sendNewReviewNotification(cabinetId, insertedReview.id, {
         userName: fb.userName || "Покупатель",
-        rating: fb.productValuation || 5,
+        rating,
         text: fb.text || "",
         pros: fb.pros || null,
         cons: fb.cons || null,
@@ -548,16 +582,21 @@ async function processCabinetReviews(
     }
   }
 
+  const answeredWbIdsToCheck = answeredFeedbacks.map((fb: any) => fb.id).filter(Boolean);
+  const existingAnsweredIds = await storage.getExistingReviewWbIds(answeredWbIdsToCheck, userId, cabinetId);
+
   for (const fb of answeredFeedbacks) {
     const wbId = fb.id;
-    const existing = await storage.getReviewByWbId(wbId, userId, cabinetId);
-    if (existing) {
-      if (existing.status === "pending" && fb.answer?.text) {
-        await storage.updateReview(existing.id, {
-          status: "answered_externally",
-          sentAnswer: fb.answer.text,
-          updatedAt: new Date(),
-        });
+    if (existingAnsweredIds.has(wbId)) {
+      if (fb.answer?.text) {
+        const existing = await storage.getReviewByWbId(wbId, userId, cabinetId);
+        if (existing && existing.status === "pending") {
+          await storage.updateReview(existing.id, {
+            status: "answered_externally",
+            sentAnswer: fb.answer.text,
+            updatedAt: new Date(),
+          });
+        }
       }
       continue;
     }
@@ -633,6 +672,21 @@ async function processCabinetReviews(
   };
 }
 
+function acquireCabinetLock(cabinetId: string): boolean {
+  if (cabinetSyncLocks.has(cabinetId)) return false;
+  return true;
+}
+
+async function withCabinetLock<T>(cabinetId: string, fn: () => Promise<T>): Promise<T> {
+  const promise = fn();
+  cabinetSyncLocks.set(cabinetId, promise);
+  try {
+    return await promise;
+  } finally {
+    cabinetSyncLocks.delete(cabinetId);
+  }
+}
+
 export async function syncReviews(req: Request, res: Response) {
   try {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -650,7 +704,14 @@ export async function syncReviews(req: Request, res: Response) {
         return;
       }
 
-      const result = await processCabinetReviews(activeCabinet, OPENROUTER_API_KEY);
+      if (!acquireCabinetLock(activeCabinet.id)) {
+        res.status(409).json({ error: "Синхронизация уже выполняется для этого кабинета. Подождите завершения." });
+        return;
+      }
+
+      const result = await withCabinetLock(activeCabinet.id, () =>
+        processCabinetReviews(activeCabinet, OPENROUTER_API_KEY)
+      );
       res.json({ success: true, ...result });
     } else {
       console.log("[sync-reviews] Cron mode — processing all cabinets");
@@ -660,15 +721,21 @@ export async function syncReviews(req: Request, res: Response) {
         return;
       }
 
-      const results = [];
-      for (const cabinet of allCabinets) {
+      const results: any[] = [];
+      await withConcurrencyLimit(allCabinets, 2, async (cabinet) => {
+        if (!acquireCabinetLock(cabinet.id)) {
+          results.push({ cabinetId: cabinet.id, skipped: true, reason: "sync already in progress" });
+          return;
+        }
         try {
-          const result = await processCabinetReviews(cabinet, OPENROUTER_API_KEY);
+          const result = await withCabinetLock(cabinet.id, () =>
+            processCabinetReviews(cabinet, OPENROUTER_API_KEY)
+          );
           results.push(result);
         } catch (e: any) {
           results.push({ cabinetId: cabinet.id, userId: cabinet.userId, error: e.message });
         }
-      }
+      });
       res.json({ success: true, results });
     }
   } catch (e: any) {
@@ -2027,62 +2094,78 @@ async function runAutoSyncInternal() {
 
   console.log(`[auto-sync] Processing ${allCabinets.length} cabinets`);
 
-  for (const cabinet of allCabinets) {
-    try {
-      if (OPENROUTER_API_KEY) {
-        const reviewResult = await processCabinetReviews(cabinet, OPENROUTER_API_KEY);
-        console.log(`[auto-sync] Reviews for cabinet=${cabinet.id}: new=${reviewResult.new}, auto=${reviewResult.autoSent}, imported_answered=${reviewResult.importedAnswered}`);
-      }
-    } catch (e: any) {
-      console.error(`[auto-sync] Review sync failed for cabinet=${cabinet.id}:`, e.message);
+  await withConcurrencyLimit(allCabinets, 2, async (cabinet) => {
+    if (!acquireCabinetLock(cabinet.id)) {
+      console.log(`[auto-sync] Skipping cabinet=${cabinet.id} — sync already in progress`);
+      return;
     }
 
-    if (OPENROUTER_API_KEY) {
-      const aiErrors: string[] = [];
+    await withCabinetLock(cabinet.id, async () => {
       try {
-        const noDraftReviews = await storage.getPendingReviewsWithoutDraft(cabinet.userId, cabinet.id);
-        if (noDraftReviews.length > 0) {
-          console.log(`[auto-sync] Generating drafts for ${noDraftReviews.length} pending reviews without draft, cabinet=${cabinet.id}`);
-          let generated = 0;
-          for (const review of noDraftReviews) {
-            try {
-              const draft = await generateReplyForReview(review, cabinet);
-              if (draft) {
-                const photoLinks = Array.isArray(review.photoLinks) ? review.photoLinks : [];
-                const usedVision = photoLinks.length > 0 && await hasPhotoAnalysisAccess(cabinet.userId);
-                await storage.updateReview(review.id, { aiDraft: draft, usedPhotoAnalysis: usedVision });
-                generated++;
-              } else {
-                aiErrors.push(`No draft returned for ${review.wbId}`);
-              }
-            } catch (e: any) {
-              console.error(`[auto-sync] Draft generation failed for review ${review.wbId}:`, e.message);
-              aiErrors.push(`${review.wbId}: ${e.message}`);
-            }
-          }
-          console.log(`[auto-sync] Generated ${generated}/${noDraftReviews.length} drafts for cabinet=${cabinet.id}`);
+        if (OPENROUTER_API_KEY) {
+          const reviewResult = await processCabinetReviews(cabinet, OPENROUTER_API_KEY);
+          console.log(`[auto-sync] Reviews for cabinet=${cabinet.id}: new=${reviewResult.new}, auto=${reviewResult.autoSent}, imported_answered=${reviewResult.importedAnswered}`);
         }
       } catch (e: any) {
-        console.error(`[auto-sync] Draft backfill failed for cabinet=${cabinet.id}:`, e.message);
-        aiErrors.push(`Backfill error: ${e.message}`);
+        console.error(`[auto-sync] Review sync failed for cabinet=${cabinet.id}:`, e.message);
       }
 
-      if (aiErrors.length >= 3) {
-        const cabinetName = cabinet.brandName || cabinet.id;
-        sendAdminAIErrorNotification(aiErrors.length, cabinetName, aiErrors)
-          .catch(err => console.error("[auto-sync] Failed to send AI error notification:", err));
+      if (OPENROUTER_API_KEY) {
+        const aiErrors: string[] = [];
+        try {
+          const noDraftReviews = await storage.getPendingReviewsWithoutDraft(cabinet.userId, cabinet.id);
+          if (noDraftReviews.length > 0) {
+            console.log(`[auto-sync] Generating drafts for ${noDraftReviews.length} pending reviews without draft, cabinet=${cabinet.id}`);
+            let generated = 0;
+            const AI_BATCH_SIZE = 5;
+            for (let i = 0; i < noDraftReviews.length; i += AI_BATCH_SIZE) {
+              const batch = noDraftReviews.slice(i, i + AI_BATCH_SIZE);
+              const results = await Promise.allSettled(
+                batch.map(async (review) => {
+                  const draft = await generateReplyForReview(review, cabinet);
+                  if (draft) {
+                    const photoLinks = Array.isArray(review.photoLinks) ? review.photoLinks : [];
+                    const usedVision = photoLinks.length > 0 && await hasPhotoAnalysisAccess(cabinet.userId);
+                    await storage.updateReview(review.id, { aiDraft: draft, usedPhotoAnalysis: usedVision });
+                    return true;
+                  }
+                  return false;
+                })
+              );
+              for (let j = 0; j < results.length; j++) {
+                const r = results[j];
+                if (r.status === "fulfilled" && r.value) {
+                  generated++;
+                } else if (r.status === "rejected") {
+                  const review = batch[j];
+                  console.error(`[auto-sync] Draft generation failed for review ${review.wbId}:`, r.reason?.message);
+                  aiErrors.push(`${review.wbId}: ${r.reason?.message}`);
+                }
+              }
+              await delay(200);
+            }
+            console.log(`[auto-sync] Generated ${generated}/${noDraftReviews.length} drafts for cabinet=${cabinet.id}`);
+          }
+        } catch (e: any) {
+          console.error(`[auto-sync] Draft backfill failed for cabinet=${cabinet.id}:`, e.message);
+          aiErrors.push(`Backfill error: ${e.message}`);
+        }
+
+        if (aiErrors.length >= 3) {
+          const cabinetName = cabinet.brandName || cabinet.id;
+          sendAdminAIErrorNotification(aiErrors.length, cabinetName, aiErrors)
+            .catch(err => console.error("[auto-sync] Failed to send AI error notification:", err));
+        }
       }
-    }
 
-    try {
-      const chatResult = await processCabinetChats(cabinet);
-      console.log(`[auto-sync] Chats for cabinet=${cabinet.id}: chats=${chatResult.chats}, messages=${chatResult.messages}`);
-    } catch (e: any) {
-      console.error(`[auto-sync] Chat sync failed for cabinet=${cabinet.id}:`, e.message);
-    }
-
-    await delay(2000);
-  }
+      try {
+        const chatResult = await processCabinetChats(cabinet);
+        console.log(`[auto-sync] Chats for cabinet=${cabinet.id}: chats=${chatResult.chats}, messages=${chatResult.messages}`);
+      } catch (e: any) {
+        console.error(`[auto-sync] Chat sync failed for cabinet=${cabinet.id}:`, e.message);
+      }
+    });
+  });
 
   console.log(`[auto-sync] Completed`);
 }

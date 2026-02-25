@@ -88,17 +88,26 @@ export class DatabaseStorage {
 
   async archiveOldAnsweredReviews(daysOld: number = 7): Promise<number> {
     const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
-    const result = await db
-      .update(reviews)
-      .set({ status: "archived", updatedAt: new Date() })
-      .where(
-        and(
-          sql`(${reviews.status} = 'sent' OR ${reviews.status} = 'auto' OR ${reviews.status} = 'answered_externally')`,
-          lte(reviews.updatedAt, cutoff)
+    const BATCH_SIZE = 1000;
+    let totalArchived = 0;
+
+    while (true) {
+      const batch = await db.execute(sql`
+        UPDATE replai.reviews SET status = 'archived', updated_at = NOW()
+        WHERE id IN (
+          SELECT id FROM replai.reviews
+          WHERE status IN ('sent', 'auto', 'answered_externally')
+            AND updated_at <= ${cutoff}
+          LIMIT ${BATCH_SIZE}
         )
-      )
-      .returning({ id: reviews.id });
-    return result.length;
+        RETURNING id
+      `);
+      const count = batch.rows?.length || 0;
+      totalArchived += count;
+      if (count < BATCH_SIZE) break;
+    }
+
+    return totalArchived;
   }
 
   async archiveImportedReviews(): Promise<number> {
@@ -534,6 +543,19 @@ export class DatabaseStorage {
       .where(and(eq(reviews.wbId, wbId), eq(reviews.userId, userId), eq(reviews.cabinetId, cabinetId)))
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  async getExistingReviewWbIds(wbIds: string[], userId: string, cabinetId: string): Promise<Set<string>> {
+    if (wbIds.length === 0) return new Set();
+    const rows = await db
+      .select({ wbId: reviews.wbId })
+      .from(reviews)
+      .where(and(
+        sql`${reviews.wbId} IN (${sql.join(wbIds.map(id => sql`${id}`), sql`, `)})`,
+        eq(reviews.userId, userId),
+        eq(reviews.cabinetId, cabinetId)
+      ));
+    return new Set(rows.map(r => r.wbId));
   }
 
   async getReviewsByUserId(userId: string, columns?: string[]): Promise<any[]> {

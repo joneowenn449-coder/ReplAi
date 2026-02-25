@@ -11,10 +11,13 @@ export const pool = new Pool({
   password: process.env.POSTGRESQL_PASSWORD,
   database: process.env.POSTGRESQL_DBNAME,
   ssl: { rejectUnauthorized: false },
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 pool.on("connect", (client) => {
-  client.query("SET search_path TO replai; SET timezone TO 'UTC'");
+  client.query("SET search_path TO replai; SET timezone TO 'UTC'; SET statement_timeout TO '30000'");
 });
 
 export const db = drizzle(pool, { schema });

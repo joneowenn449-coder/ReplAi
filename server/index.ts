@@ -55,8 +55,22 @@ async function runPeriodicSync() {
     const { pool } = await import("./db");
     await pool.query(`ALTER TABLE replai.wb_cabinets ADD COLUMN IF NOT EXISTS photo_analysis BOOLEAN DEFAULT false`);
     console.log("[migration] photo_analysis column ensured");
+
+    const indexQueries = [
+      `CREATE INDEX IF NOT EXISTS idx_reviews_cabinet_status ON replai.reviews (cabinet_id, status)`,
+      `CREATE INDEX IF NOT EXISTS idx_reviews_cabinet_created ON replai.reviews (cabinet_id, created_date DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON replai.reviews (user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_reviews_wb_user_cabinet ON replai.reviews (wb_id, user_id, cabinet_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_reviews_status_updated ON replai.reviews (status, updated_at) WHERE status IN ('sent', 'auto', 'answered_externally')`,
+      `CREATE INDEX IF NOT EXISTS idx_token_transactions_user ON replai.token_transactions (user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_wb_cabinets_user ON replai.wb_cabinets (user_id)`,
+    ];
+    for (const q of indexQueries) {
+      await pool.query(q);
+    }
+    console.log("[migration] Database indexes ensured");
   } catch (migErr: any) {
-    console.warn("[migration] photo_analysis:", migErr.message);
+    console.warn("[migration]:", migErr.message);
   }
 
   app.listen(5000, "0.0.0.0", () => {

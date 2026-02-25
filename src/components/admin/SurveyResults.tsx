@@ -1,7 +1,7 @@
 import { useState, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ClipboardList, User, Calendar, TrendingUp, AlertTriangle, BarChart3, MessageSquare, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown, Minus, Target, Star } from "lucide-react";
+import { Loader2, ClipboardList, User, Calendar, TrendingUp, AlertTriangle, BarChart3, MessageSquare, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown, Minus, Target, Star, Copy, Check, Link } from "lucide-react";
 import { formatMsk } from "@/lib/dates";
 import { apiRequest } from "@/lib/api";
 
@@ -173,6 +173,34 @@ function CollapsibleSection({ title, icon, children, defaultOpen = false }: {
   );
 }
 
+function SurveyLinkBlock() {
+  const [copied, setCopied] = useState(false);
+  const surveyUrl = `${window.location.origin}/survey`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(surveyUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg" data-testid="survey-link-block">
+      <Link className="w-4 h-4 text-muted-foreground shrink-0" />
+      <span className="text-sm text-muted-foreground shrink-0">Ссылка на опрос:</span>
+      <code className="text-sm bg-background px-2 py-0.5 rounded border truncate flex-1" data-testid="survey-link-url">{surveyUrl}</code>
+      <button
+        onClick={handleCopy}
+        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        data-testid="button-copy-survey-link"
+      >
+        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        {copied ? "Скопировано" : "Копировать"}
+      </button>
+    </div>
+  );
+}
+
 function formatValue(key: string, value: any): string {
   if (value === null || value === undefined || value === "") return "\u2014";
   if (Array.isArray(value)) return value.join(", ");
@@ -273,20 +301,21 @@ export function SurveyResults() {
 
   if (!responses || responses.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <ClipboardList className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">Ответов пока нет</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Отправьте ссылку на опрос: <code className="bg-muted px-1.5 py-0.5 rounded">/survey</code>
-          </p>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <SurveyLinkBlock />
+        <Card>
+          <CardContent className="py-12 text-center">
+            <ClipboardList className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground">Ответов пока нет</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      <SurveyLinkBlock />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="summary-cards">
         <Card>
           <CardContent className="p-4 text-center">

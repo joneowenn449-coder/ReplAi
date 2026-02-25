@@ -145,12 +145,21 @@ export async function sendNewReviewNotification(
     aiInsight: string | null;
   }
 ) {
-  if (!bot) return;
+  if (!bot) {
+    console.log(`[telegram] sendNewReview: bot is null, skipping cabinet=${cabinetId} rating=${reviewData.rating}`);
+    return;
+  }
   try {
     const cabinet = await storage.getCabinetById(cabinetId);
-    if (!cabinet?.telegramChatId) return;
+    if (!cabinet?.telegramChatId) {
+      console.log(`[telegram] sendNewReview: no telegramChatId for cabinet=${cabinetId}`);
+      return;
+    }
 
-    if (!shouldNotify(cabinet, reviewData.rating, reviewData.text)) return;
+    if (!shouldNotify(cabinet, reviewData.rating, reviewData.text)) {
+      console.log(`[telegram] sendNewReview: shouldNotify=false cabinet=${cabinetId} rating=${reviewData.rating} notifyType=${cabinet.tgNotifyType || "all"}`);
+      return;
+    }
 
     const emoji = ratingEmoji(reviewData.rating);
     const stars = ratingStars(reviewData.rating);
@@ -200,6 +209,7 @@ export async function sendNewReviewNotification(
         reply_markup: { inline_keyboard: keyboard },
       });
     }
+    console.log(`[telegram] sendNewReview: sent to chatId=${cabinet.telegramChatId} cabinet=${cabinetId} rating=${reviewData.rating}`);
   } catch (err) {
     console.error("[telegram] Error sending new review notification:", err);
   }
@@ -210,12 +220,21 @@ export async function sendAutoReplyNotification(
   review: { userName: string; rating: number; text: string; productName: string; productArticle?: string },
   answer: string
 ) {
-  if (!bot) return;
+  if (!bot) {
+    console.log(`[telegram] sendAutoReply: bot is null, skipping cabinet=${cabinetId} rating=${review.rating}`);
+    return;
+  }
   try {
     const cabinet = await storage.getCabinetById(cabinetId);
-    if (!cabinet?.telegramChatId) return;
+    if (!cabinet?.telegramChatId) {
+      console.log(`[telegram] sendAutoReply: no telegramChatId for cabinet=${cabinetId}`);
+      return;
+    }
 
-    if (!shouldNotify(cabinet, review.rating, review.text)) return;
+    if (!shouldNotify(cabinet, review.rating, review.text)) {
+      console.log(`[telegram] sendAutoReply: shouldNotify=false cabinet=${cabinetId} rating=${review.rating} notifyType=${cabinet.tgNotifyType || "all"}`);
+      return;
+    }
 
     const emoji = ratingEmoji(review.rating);
     const msg = `\u2705 *\u0410\u0432\u0442\u043E\\-\u043E\u0442\u0432\u0435\u0442 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D*\n\n` +
@@ -224,6 +243,7 @@ export async function sendAutoReplyNotification(
       `\uD83D\uDCAC \u00AB${escapeMarkdown(truncate(review.text || "", 200))}\u00BB\n\n` +
       `\uD83D\uDCDD *\u041E\u0442\u0432\u0435\u0442:* ${escapeMarkdown(truncate(answer, 500))}`;
     await bot.sendMessage(cabinet.telegramChatId, msg, { parse_mode: "Markdown" });
+    console.log(`[telegram] sendAutoReply: sent to chatId=${cabinet.telegramChatId} cabinet=${cabinetId} rating=${review.rating}`);
   } catch (err) {
     console.error("[telegram] Error sending auto-reply notification:", err);
   }
@@ -288,6 +308,17 @@ function draftKeyboard(reviewId: string): TelegramBot.InlineKeyboardButton[][] {
   ];
 }
 
+export async function stopTelegramBot() {
+  if (bot) {
+    try {
+      await bot.stopPolling();
+      console.log("[telegram] Stopped bot polling");
+    } catch (e) {
+    }
+    bot = null;
+  }
+}
+
 export async function startTelegramBot() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -295,14 +326,19 @@ export async function startTelegramBot() {
     return;
   }
 
-  if (bot) {
-    try {
-      await bot.stopPolling();
-      console.log("[telegram] Stopped previous bot polling");
-    } catch (e) {
-    }
-    bot = null;
+  await stopTelegramBot();
+
+  const tempBot = new TelegramBot(token, { polling: false });
+  try {
+    await tempBot.deleteWebHook({ drop_pending_updates: true });
+    console.log("[telegram] Cleared webhook/pending getUpdates sessions");
+  } catch (e) {
+    console.warn("[telegram] deleteWebHook failed (non-critical):", (e as any)?.message);
   }
+  try { await tempBot.stopPolling(); } catch (_) {}
+  try { (tempBot as any).close?.(); } catch (_) {}
+
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
   bot = new TelegramBot(token, {
     polling: {

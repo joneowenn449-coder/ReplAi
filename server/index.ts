@@ -7,7 +7,7 @@ import { runAutoSync } from "./functions";
 import { db } from "./db";
 import { userRoles } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { startTelegramBot } from "./telegram";
+import { startTelegramBot, stopTelegramBot } from "./telegram";
 
 const app = express();
 
@@ -83,4 +83,13 @@ async function runPeriodicSync() {
     setTimeout(() => runPeriodicSync(), 10000);
     setInterval(runPeriodicSync, SYNC_INTERVAL_MS);
   });
+
+  const gracefulShutdown = async (signal: string) => {
+    console.log(`[shutdown] Received ${signal}, stopping Telegram bot...`);
+    await stopTelegramBot();
+    console.log(`[shutdown] Bot stopped, exiting`);
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 })();

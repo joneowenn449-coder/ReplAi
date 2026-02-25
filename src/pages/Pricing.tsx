@@ -5,14 +5,12 @@ import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
-import { useSubscription, useCreateSubscription, useToggleModule, useCancelSubscription } from "@/hooks/useSubscription";
+import { useSubscription, useCancelSubscription } from "@/hooks/useSubscription";
 import { SUBSCRIPTION_PLANS, SUBSCRIPTION_MODULES, calculateTotalPrice } from "@shared/subscriptionPlans";
 
 export default function Pricing() {
   const navigate = useNavigate();
   const { data, isLoading } = useSubscription();
-  const createSub = useCreateSubscription();
-  const toggleModule = useToggleModule();
   const cancelSub = useCancelSubscription();
 
   const subscription = data?.subscription;
@@ -36,28 +34,8 @@ export default function Pricing() {
     return SUBSCRIPTION_PLANS.find(p => p.id === activePlanId);
   }, [activePlanId]);
 
-  const handleSubscribe = async () => {
-    if (!effectivePlan) return;
-    try {
-      await createSub.mutateAsync({
-        planId: effectivePlan,
-        photoAnalysis: effectivePhoto,
-        aiAnalyst: effectiveAiAnalyst,
-      });
-      toast.success("Подписка оформлена!");
-      setSelectedPlan(null);
-    } catch (err: any) {
-      toast.error(err.message || "Ошибка оформления подписки");
-    }
-  };
-
-  const handleToggleModule = async (moduleId: string, enabled: boolean) => {
-    try {
-      await toggleModule.mutateAsync({ moduleId, enabled });
-      toast.success(enabled ? "Модуль подключён" : "Модуль отключён");
-    } catch (err: any) {
-      toast.error(err.message || "Ошибка");
-    }
+  const handleSubscribe = () => {
+    toast.error("Оплата временно недоступна. Для подключения тарифа обратитесь к администратору.");
   };
 
   const handleCancel = async () => {
@@ -252,12 +230,9 @@ export default function Pricing() {
                           <p className="text-xs text-muted-foreground mt-1">{mod.description}</p>
                           <div className="mt-3">
                             {canToggle ? (
-                              <Switch
-                                checked={!!isEnabled}
-                                onCheckedChange={(checked) => handleToggleModule(mod.id, checked)}
-                                disabled={toggleModule.isPending}
-                                data-testid={`switch-module-${mod.id}`}
-                              />
+                              <Badge variant={isEnabled ? "default" : "secondary"} data-testid={`badge-module-${mod.id}`}>
+                                {isEnabled ? "Активен" : "Выкл"}
+                              </Badge>
                             ) : selectedPlan ? (
                               <Switch
                                 checked={!!isEnabled}
@@ -277,6 +252,11 @@ export default function Pricing() {
                   );
                 })}
               </div>
+              {subscription && subscription.status === "active" && !selectedPlan && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  Для подключения или отключения модулей обратитесь к администратору.
+                </p>
+              )}
             </div>
 
             {(selectedPlan || (!subscription && effectivePlan)) && (
@@ -302,12 +282,9 @@ export default function Pricing() {
                       size="lg"
                       className="min-w-[180px]"
                       onClick={handleSubscribe}
-                      disabled={createSub.isPending}
                       data-testid="button-subscribe"
                     >
-                      {createSub.isPending ? (
-                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Оформляем...</>
-                      ) : activePlanId ? "Сменить тариф" : "Подписаться"}
+                      {activePlanId ? "Сменить тариф" : "Оплатить"}
                     </Button>
                   </div>
                 </CardContent>

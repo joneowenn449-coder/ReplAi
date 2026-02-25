@@ -50,6 +50,14 @@ export interface AdminUser {
   avgDailyReviews: number;
   hasAiAnalyticsSub: boolean;
   lastGenerationDate: string | null;
+  subscription: {
+    plan_id: string;
+    status: string;
+    photo_analysis_enabled: boolean;
+    ai_analyst_enabled: boolean;
+    current_period_end: string | null;
+    replies_used_this_period: number;
+  } | null;
 }
 
 export function useAdminUsers() {
@@ -213,6 +221,51 @@ export function useUpdateAdminNotes() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "Заметка сохранена" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useAdminSetSubscription() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: {
+      userId: string;
+      planId: string;
+      photoAnalysis: boolean;
+      aiAnalyst: boolean;
+      periodDays?: number;
+    }) => {
+      return apiRequest("/api/admin/subscription", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: "Подписка обновлена" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useAdminCancelSubscription() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      return apiRequest(`/api/admin/subscription/${userId}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: "Подписка отменена" });
     },
     onError: (error: Error) => {
       toast({ title: "Ошибка", description: error.message, variant: "destructive" });

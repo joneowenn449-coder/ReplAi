@@ -909,6 +909,12 @@ export class DatabaseStorage {
     return result;
   }
 
+  async getAllActiveSubscriptions(): Promise<UserSubscription[]> {
+    return db.select().from(userSubscriptions)
+      .where(sql`${userSubscriptions.status} IN ('active', 'cancelled')`)
+      .orderBy(desc(userSubscriptions.createdAt));
+  }
+
   async getUserSubscription(userId: string): Promise<UserSubscription | null> {
     const rows = await db.select().from(userSubscriptions)
       .where(and(

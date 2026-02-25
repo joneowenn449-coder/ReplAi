@@ -5,6 +5,8 @@ import {
   useUpdateAdminNotes,
   useDeleteUser,
   useUserSessions,
+  useAdminSetSubscription,
+  useAdminCancelSubscription,
   type AdminUser,
 } from "@/hooks/useAdmin";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,12 +18,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Coins, BrainCircuit, Plus, Minus, Loader2, MessageCircle,
   Trash2, Save, Store, CreditCard, StickyNote, Clock, Monitor,
-  Smartphone, Tablet, Globe, BarChart3,
+  Smartphone, Tablet, Globe, BarChart3, Crown,
 } from "lucide-react";
 import { formatMsk, distanceToNowMsk } from "@/lib/dates";
+import { SUBSCRIPTION_PLANS } from "@shared/subscriptionPlans";
 
 interface UserDetailModalProps {
   user: AdminUser | null;
@@ -52,6 +59,8 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
   const updateAiBalance = useUpdateAiBalance();
   const updateAdminNotes = useUpdateAdminNotes();
   const deleteUser = useDeleteUser();
+  const setSubscription = useAdminSetSubscription();
+  const cancelSubscription = useAdminCancelSubscription();
   const { data: sessions, isLoading: sessionsLoading } = useUserSessions(open ? user?.id ?? null : null);
 
   const [balanceAmount, setBalanceAmount] = useState("");
@@ -63,10 +72,23 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
   const [notes, setNotes] = useState(user?.admin_notes || "");
   const [notesChanged, setNotesChanged] = useState(false);
 
+  const [subPlanId, setSubPlanId] = useState(user?.subscription?.plan_id || "");
+  const [subPhoto, setSubPhoto] = useState(user?.subscription?.photo_analysis_enabled || false);
+  const [subAiAnalyst, setSubAiAnalyst] = useState(user?.subscription?.ai_analyst_enabled || false);
+  const [subPeriodDays, setSubPeriodDays] = useState("30");
+  const [subResetPeriod, setSubResetPeriod] = useState(false);
+  const [showSubForm, setShowSubForm] = useState(false);
+  const [showSubCancelConfirm, setShowSubCancelConfirm] = useState(false);
+
   useEffect(() => {
     if (user) {
       setNotes(user.admin_notes || "");
       setNotesChanged(false);
+      setSubPlanId(user.subscription?.plan_id || "");
+      setSubPhoto(user.subscription?.photo_analysis_enabled || false);
+      setSubAiAnalyst(user.subscription?.ai_analyst_enabled || false);
+      setShowSubForm(false);
+      setShowSubCancelConfirm(false);
     }
   }, [user?.id, user?.admin_notes]);
 
@@ -390,6 +412,167 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                     {balanceAction === "admin_topup" ? "Пополнить" : "Списать"}
                   </Button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Crown className="w-4 h-4" />
+              Подписка
+            </h3>
+            {user.subscription ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Тариф: </span>
+                    <span className="font-medium">{SUBSCRIPTION_PLANS.find(p => p.id === user.subscription!.plan_id)?.name || user.subscription.plan_id}</span>
+                  </div>
+                  <div>
+                    <Badge variant={user.subscription.status === "active" ? "default" : "secondary"} data-testid="badge-sub-status">
+                      {user.subscription.status === "active" ? "Активна" : user.subscription.status === "cancelled" ? "Отменена" : user.subscription.status}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ответов: </span>
+                    <span className="font-medium">{user.subscription.replies_used_this_period}</span>
+                    {(() => {
+                      const plan = SUBSCRIPTION_PLANS.find(p => p.id === user.subscription!.plan_id);
+                      return plan ? <span className="text-muted-foreground"> / {plan.replyLimit === -1 ? "∞" : plan.replyLimit}</span> : null;
+                    })()}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">До: </span>
+                    <span className="font-medium">{user.subscription.current_period_end ? formatMsk(user.subscription.current_period_end) : "—"}</span>
+                  </div>
+                  <div className="col-span-2 flex gap-2">
+                    {user.subscription.photo_analysis_enabled && <Badge variant="outline" data-testid="badge-sub-photo">Анализ фото</Badge>}
+                    {user.subscription.ai_analyst_enabled && <Badge variant="outline" data-testid="badge-sub-ai">AI Аналитик</Badge>}
+                    {!user.subscription.photo_analysis_enabled && !user.subscription.ai_analyst_enabled && (
+                      <span className="text-xs text-muted-foreground">Модули не подключены</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowSubForm(!showSubForm)}
+                    data-testid="button-edit-subscription"
+                  >
+                    Изменить
+                  </Button>
+                  {!showSubCancelConfirm ? (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowSubCancelConfirm(true)}
+                      data-testid="button-cancel-subscription"
+                    >
+                      Отменить подписку
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2 items-center">
+                      <span className="text-xs text-destructive">Подтвердить?</span>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          cancelSubscription.mutate(user.id);
+                          setShowSubCancelConfirm(false);
+                        }}
+                        disabled={cancelSubscription.isPending}
+                        data-testid="button-confirm-cancel-subscription"
+                      >
+                        {cancelSubscription.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Да, отменить"}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setShowSubCancelConfirm(false)}>Нет</Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground" data-testid="text-no-subscription">Подписка не активна</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSubForm(true)}
+                  data-testid="button-assign-subscription"
+                >
+                  Назначить подписку
+                </Button>
+              </div>
+            )}
+            {showSubForm && (
+              <div className="mt-3 p-3 rounded-md border border-border space-y-3" data-testid="form-subscription">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Тариф</label>
+                  <Select value={subPlanId} onValueChange={setSubPlanId}>
+                    <SelectTrigger data-testid="select-sub-plan">
+                      <SelectValue placeholder="Выберите тариф" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUBSCRIPTION_PLANS.map(plan => (
+                        <SelectItem key={plan.id} value={plan.id}>
+                          {plan.name} — {plan.price} ₽/мес ({plan.replyLimit === -1 ? "∞" : plan.replyLimit} ответов)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm">Анализ фото (+199 ₽)</label>
+                  <Switch checked={subPhoto} onCheckedChange={setSubPhoto} data-testid="switch-sub-photo" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm">AI Аналитик (+299 ₽)</label>
+                  <Switch checked={subAiAnalyst} onCheckedChange={setSubAiAnalyst} data-testid="switch-sub-ai-analyst" />
+                </div>
+                {user.subscription ? (
+                  <div className="flex items-center gap-2">
+                    <Switch checked={subResetPeriod} onCheckedChange={setSubResetPeriod} data-testid="switch-sub-reset-period" />
+                    <label className="text-sm">Сбросить период</label>
+                  </div>
+                ) : null}
+                {(!user.subscription || subResetPeriod) && (
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Период (дней)</label>
+                    <Input
+                      type="number"
+                      value={subPeriodDays}
+                      onChange={(e) => setSubPeriodDays(e.target.value)}
+                      min={1}
+                      max={365}
+                      className="w-32"
+                      data-testid="input-sub-period"
+                    />
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  disabled={!subPlanId || setSubscription.isPending}
+                  onClick={() => {
+                    const payload: any = {
+                      userId: user.id,
+                      planId: subPlanId,
+                      photoAnalysis: subPhoto,
+                      aiAnalyst: subAiAnalyst,
+                    };
+                    if (!user.subscription || subResetPeriod) {
+                      payload.periodDays = parseInt(subPeriodDays) || 30;
+                    }
+                    setSubscription.mutate(payload, {
+                      onSuccess: () => setShowSubForm(false),
+                    });
+                  }}
+                  data-testid="button-submit-subscription"
+                >
+                  {setSubscription.isPending && <Loader2 className="w-3 h-3 animate-spin mr-1.5" />}
+                  {user.subscription ? "Обновить подписку" : "Назначить подписку"}
+                </Button>
               </div>
             )}
           </div>

@@ -602,7 +602,7 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
       return;
     }
 
-    const [allProfiles, tokenBals, aiBals, roles, allCabinets, allAuthUsers, allPayments, userMetrics] = await Promise.all([
+    const [allProfiles, tokenBals, aiBals, roles, allCabinets, allAuthUsers, allPayments, userMetrics, allSubscriptions] = await Promise.all([
       storage.getAllProfiles(),
       storage.getAllTokenBalances(),
       storage.getAllAiRequestBalances(),
@@ -611,12 +611,18 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
       storage.getAllAuthUsers(),
       storage.getAllPayments(),
       storage.getAdminUserMetrics(),
+      storage.getAllActiveSubscriptions(),
     ]);
 
     const balanceMap = new Map(tokenBals.map((b) => [b.userId, b.balance]));
     const aiBalanceMap = new Map(aiBals.map((b) => [b.userId, b.balance]));
     const roleMap = new Map(roles.map((r) => [r.userId, r.role]));
     const authUserMap = new Map(allAuthUsers.map((u) => [u.id, u]));
+
+    const subsMap = new Map<string, typeof allSubscriptions[0]>();
+    for (const sub of allSubscriptions) {
+      if (!subsMap.has(sub.userId)) subsMap.set(sub.userId, sub);
+    }
 
     const paymentsMap = new Map<string, typeof allPayments>();
     for (const pay of allPayments) {
@@ -700,6 +706,14 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
         avgDailyReviews: metrics?.avgDailyReviews || 0,
         hasAiAnalyticsSub: aiBalance > 0,
         lastGenerationDate: metrics?.lastGenerationDate || null,
+        subscription: subsMap.has(p.id) ? {
+          plan_id: subsMap.get(p.id)!.planId,
+          status: subsMap.get(p.id)!.status,
+          photo_analysis_enabled: subsMap.get(p.id)!.photoAnalysisEnabled,
+          ai_analyst_enabled: subsMap.get(p.id)!.aiAnalystEnabled,
+          current_period_end: subsMap.get(p.id)!.currentPeriodEnd,
+          replies_used_this_period: subsMap.get(p.id)!.repliesUsedThisPeriod,
+        } : null,
       };
     });
 
@@ -1174,6 +1188,84 @@ router.get("/api/subscription", requireAuth, async (req: Request, res: Response)
       return;
     }
     res.json({ subscription: toSnakeCase(sub) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/api/admin/subscription", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).userId;
+    const role = await storage.getUserRole(adminId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Доступ запрещён" });
+      return;
+    }
+    const { userId, planId, photoAnalysis, aiAnalyst, periodDays } = req.body;
+    if (!userId || !planId) {
+      res.status(400).json({ error: "userId и planId обязательны" });
+      return;
+    }
+    const { getPlanById } = await import("@shared/subscriptionPlans");
+    const plan = getPlanById(planId);
+    if (!plan) {
+      res.status(400).json({ error: "Неизвестный тариф" });
+      return;
+    }
+    const existingSub = await storage.getUserSubscription(userId);
+    if (existingSub) {
+      const updates: any = {
+        planId,
+        photoAnalysisEnabled: !!photoAnalysis,
+        aiAnalystEnabled: !!aiAnalyst,
+        status: "active",
+      };
+      if (periodDays) {
+        const now = new Date();
+        updates.currentPeriodStart = now;
+        updates.currentPeriodEnd = new Date(now.getTime() + (periodDays || 30) * 24 * 60 * 60 * 1000);
+        updates.repliesUsedThisPeriod = 0;
+      }
+      await storage.updateSubscription(existingSub.id, updates);
+      const updated = await storage.getUserSubscription(userId);
+      res.json({ subscription: updated ? toSnakeCase(updated) : null });
+    } else {
+      const now = new Date();
+      const days = periodDays || 30;
+      const periodEnd = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+      const sub = await storage.createSubscription({
+        userId,
+        planId,
+        status: "active",
+        photoAnalysisEnabled: !!photoAnalysis,
+        aiAnalystEnabled: !!aiAnalyst,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        repliesUsedThisPeriod: 0,
+      });
+      res.json({ subscription: toSnakeCase(sub) });
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete("/api/admin/subscription/:userId", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).userId;
+    const role = await storage.getUserRole(adminId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Доступ запрещён" });
+      return;
+    }
+    const { userId } = req.params;
+    const sub = await storage.getUserSubscription(userId);
+    if (!sub) {
+      res.status(404).json({ error: "Подписка не найдена" });
+      return;
+    }
+    await storage.updateSubscription(sub.id, { status: "expired" });
+    res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

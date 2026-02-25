@@ -423,8 +423,7 @@ async function processCabinetReviews(
     let aiDraft = "";
     try {
       const promptTemplate = buildFullPrompt(basePrompt, globalExamples, globalRules, globalRulesDo, globalRulesDont, globalExamplesV2, fb.productValuation || 5);
-      const hasSubPhotoAccess = await hasPhotoAnalysisAccess(cabinet.userId);
-      const cabinetPhotoEnabled = hasSubPhotoAccess || cabinet.photoAnalysis === true;
+      const photoAnalysisEnabled = await hasPhotoAnalysisAccess(cabinet.userId);
       aiDraft = await generateAIReply(
         openrouterKey, promptTemplate,
         buildReviewText(fb.text, fb.pros, fb.cons),
@@ -432,7 +431,7 @@ async function processCabinetReviews(
         fb.productDetails?.productName || fb.subjectName || "Товар",
         photoLinks.length, hasVideo, fb.userName || "",
         isEmptyReview, recommendationInstruction, isRefusal, effectiveBrand,
-        photoLinks, cabinetPhotoEnabled
+        photoLinks, photoAnalysisEnabled
       );
     } catch (e: any) {
       console.error(`AI generation failed for ${wbId}:`, e);
@@ -987,8 +986,7 @@ export async function generateReply(req: Request, res: Response) {
       if (cabinet) {
         basePrompt = cabinet.aiPromptTemplate || basePrompt;
         cabinetBrand = cabinet.brandName || "";
-        const hasSubPhotoAccess = await hasPhotoAnalysisAccess(userId);
-        photoAnalysisEnabled = hasSubPhotoAccess || cabinet.photoAnalysis === true;
+        photoAnalysisEnabled = await hasPhotoAnalysisAccess(userId);
       }
     } else {
       const userSettings = await storage.getSettings(userId);
@@ -1179,8 +1177,7 @@ export async function generateReplyForReview(review: any, cabinet: any): Promise
     const photoCount = photoLinks.length;
     const hasVideo = review.hasVideo === true;
     const userId = cabinet?.userId || "";
-    const hasSubPhotoAccess = userId ? await hasPhotoAnalysisAccess(userId) : false;
-    const photoAnalysisEnabled = hasSubPhotoAccess || (cabinet?.photoAnalysis === true);
+    const photoAnalysisEnabled = userId ? await hasPhotoAnalysisAccess(userId) : false;
     let attachmentInfo = "";
     if (photoCount > 0 || hasVideo) {
       const parts: string[] = [];
@@ -2052,8 +2049,7 @@ async function runAutoSyncInternal() {
               const draft = await generateReplyForReview(review, cabinet);
               if (draft) {
                 const photoLinks = Array.isArray(review.photoLinks) ? review.photoLinks : [];
-                const hasSubPhoto = await hasPhotoAnalysisAccess(cabinet.userId);
-                const usedVision = photoLinks.length > 0 && (hasSubPhoto || cabinet?.photoAnalysis === true);
+                const usedVision = photoLinks.length > 0 && await hasPhotoAnalysisAccess(cabinet.userId);
                 await storage.updateReview(review.id, { aiDraft: draft, usedPhotoAnalysis: usedVision });
                 generated++;
               } else {

@@ -47,14 +47,41 @@ export interface Settings {
   brand_name: string;
 }
 
-export function useReviews() {
+export interface ReviewCounts {
+  pending: number;
+  answered: number;
+  archived: number;
+  all: number;
+}
+
+export function useReviewCounts() {
   const { data: activeCabinet } = useActiveCabinet();
   const cabinetId = activeCabinet?.id;
 
   return useQuery({
-    queryKey: ["reviews", cabinetId],
+    queryKey: ["reviews", "counts", cabinetId],
     queryFn: async () => {
-      return apiRequest(`/api/reviews?cabinet_id=${cabinetId}`) as Promise<Review[]>;
+      return apiRequest(`/api/reviews/counts?cabinet_id=${cabinetId}`) as Promise<ReviewCounts>;
+    },
+    enabled: !!cabinetId,
+  });
+}
+
+export function useReviews(filter?: string, page = 0, pageSize = 50) {
+  const { data: activeCabinet } = useActiveCabinet();
+  const cabinetId = activeCabinet?.id;
+
+  const status = filter && filter !== "all" ? filter : undefined;
+
+  return useQuery({
+    queryKey: ["reviews", cabinetId, filter || "all", page],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (cabinetId) params.set("cabinet_id", cabinetId);
+      if (status) params.set("status", status);
+      params.set("limit", String(pageSize));
+      params.set("offset", String(page * pageSize));
+      return apiRequest(`/api/reviews?${params.toString()}`) as Promise<Review[]>;
     },
     enabled: !!cabinetId,
   });

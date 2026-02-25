@@ -351,6 +351,20 @@ router.delete("/api/auth/account", requireAuth, async (req: Request, res: Respon
   }
 });
 
+router.get("/api/reviews/counts", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const cabinetId = req.query.cabinet_id as string;
+    if (!cabinetId) {
+      res.status(400).json({ error: "cabinet_id is required" });
+      return;
+    }
+    const counts = await storage.getReviewCounts(cabinetId);
+    res.json(counts);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get("/api/reviews", requireAuth, async (req: Request, res: Response) => {
   try {
     const cabinetId = req.query.cabinet_id as string;
@@ -358,7 +372,10 @@ router.get("/api/reviews", requireAuth, async (req: Request, res: Response) => {
       res.status(400).json({ error: "cabinet_id is required" });
       return;
     }
-    const data = await storage.getReviews(cabinetId);
+    const status = req.query.status as string | undefined;
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 50, 200));
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const data = await storage.getReviews(cabinetId, { status, limit, offset });
     res.json(toSnakeCase(data));
   } catch (e: any) {
     res.status(500).json({ error: e.message });

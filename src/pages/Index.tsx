@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Header } from "@/components/Header";
 import { ApiStatus } from "@/components/ApiStatus";
 import { useChats } from "@/hooks/useChats";
@@ -12,8 +12,10 @@ import { DashboardSection } from "@/components/DashboardSection";
 import { GuideSection } from "@/components/GuideSection";
 import {
   useReviews,
+  useReviewCounts,
   useSyncReviews,
   DEFAULT_REPLY_MODES,
+  Review,
 } from "@/hooks/useReviews";
 import { useActiveCabinet } from "@/hooks/useCabinets";
 import { format } from "date-fns";
@@ -21,6 +23,7 @@ import { ru } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const PAGE_SIZE = 50;
 const VISIBLE = "block";
 const HIDDEN = "hidden";
 
@@ -31,12 +34,59 @@ const Index = () => {
   const [settingsInitialSection, setSettingsInitialSection] = useState<"telegram" | undefined>(undefined);
   const [syncingCabinetId, setSyncingCabinetId] = useState<string | null>(null);
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(new Set(["reviews"]));
-  const [visibleCount, setVisibleCount] = useState(30);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [accumulatedReviews, setAccumulatedReviews] = useState<Review[]>([]);
 
-  const { data: reviews = [], isLoading: reviewsLoading } = useReviews();
+  const { data: reviewCounts } = useReviewCounts();
+  const { data: pageData, isLoading: reviewsLoading } = useReviews(activeFilter, currentPage, PAGE_SIZE);
   const { data: chats = [] } = useChats();
   const { data: activeCabinet } = useActiveCabinet();
   const syncReviews = useSyncReviews();
+
+  const prevFilterRef = useRef(activeFilter);
+  const prevCabinetRef = useRef(activeCabinet?.id);
+  useEffect(() => {
+    if (prevFilterRef.current !== activeFilter || prevCabinetRef.current !== activeCabinet?.id) {
+      setAccumulatedReviews([]);
+      setCurrentPage(0);
+      prevFilterRef.current = activeFilter;
+      prevCabinetRef.current = activeCabinet?.id;
+    }
+  }, [activeFilter, activeCabinet?.id]);
+
+  useEffect(() => {
+    if (!pageData) return;
+    if (currentPage === 0) {
+      setAccumulatedReviews(pageData);
+    } else {
+      setAccumulatedReviews(prev => {
+        const existingIds = new Set(prev.map(r => r.id));
+        const newItems = pageData.filter(r => !existingIds.has(r.id));
+        return [...prev, ...newItems];
+      });
+    }
+  }, [pageData, currentPage]);
+
+  const counts = useMemo(() => {
+    if (!reviewCounts) return { all: 0, pending: 0, answered: 0, archived: 0 };
+    return reviewCounts;
+  }, [reviewCounts]);
+
+  const stats = useMemo(() => ({
+    pending: counts.pending,
+    answered: counts.answered,
+    archived: counts.archived,
+  }), [counts]);
+
+  const totalForFilter = useMemo(() => {
+    if (activeFilter === "all") return counts.all;
+    if (activeFilter === "pending") return counts.pending;
+    if (activeFilter === "answered") return counts.answered;
+    if (activeFilter === "archived") return counts.archived;
+    return 0;
+  }, [activeFilter, counts]);
+
+  const hasMore = accumulatedReviews.length < totalForFilter;
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
@@ -58,42 +108,15 @@ const Index = () => {
     [activeCabinet?.reply_modes]
   );
 
-  const { stats, counts, activeReviews } = useMemo(() => {
-    const pending = reviews.filter((r) => r.status === "pending").length;
-    const answered = reviews.filter(
-      (r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally"
-    ).length;
-    const archived = reviews.filter((r) => r.status === "archived").length;
-    const active = reviews.filter((r) => r.status !== "archived");
-
-    return {
-      stats: { pending, answered, archived },
-      counts: { all: active.length, pending, answered, archived },
-      activeReviews: active,
-    };
-  }, [reviews]);
-
-  const filteredReviews = useMemo(() => {
-    if (activeFilter === "all") return activeReviews;
-    if (activeFilter === "answered")
-      return reviews.filter(
-        (r) => r.status === "auto" || r.status === "sent" || r.status === "answered_externally"
-      );
-    return reviews.filter((r) => r.status === activeFilter);
-  }, [reviews, activeReviews, activeFilter]);
-
-  const visibleReviews = useMemo(
-    () => filteredReviews.slice(0, visibleCount),
-    [filteredReviews, visibleCount]
-  );
-
-  const hasMore = visibleCount < filteredReviews.length;
-
   const handleSync = useCallback(() => {
     if (!activeCabinet?.id) return;
     setSyncingCabinetId(activeCabinet.id);
     syncReviews.mutate(undefined, {
       onSettled: () => setSyncingCabinetId(null),
+      onSuccess: () => {
+        setCurrentPage(0);
+        setAccumulatedReviews([]);
+      },
     });
   }, [activeCabinet?.id, syncReviews]);
 
@@ -118,6 +141,14 @@ const Index = () => {
   const handleSettingsChange = useCallback((v: boolean) => {
     setSettingsOpen(v);
     if (!v) setSettingsInitialSection(undefined);
+  }, []);
+
+  const handleFilterChange = useCallback((f: string) => {
+    setActiveFilter(f);
+  }, []);
+
+  const handleShowMore = useCallback(() => {
+    setCurrentPage(prev => prev + 1);
   }, []);
 
   return (
@@ -148,17 +179,17 @@ const Index = () => {
 
             <FilterTabs
               activeFilter={activeFilter}
-              onFilterChange={(f) => { setActiveFilter(f); setVisibleCount(30); }}
+              onFilterChange={handleFilterChange}
               counts={counts}
             />
 
-            {reviewsLoading ? (
+            {reviewsLoading && accumulatedReviews.length === 0 ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <div className="space-y-4">
-                {visibleReviews.map((review) => (
+                {accumulatedReviews.map((review) => (
                   <ReviewCard
                     key={review.id}
                     id={review.id}
@@ -183,17 +214,21 @@ const Index = () => {
                   <div className="flex justify-center pt-2 pb-4">
                     <Button
                       variant="outline"
-                      onClick={() => setVisibleCount(prev => prev + 30)}
+                      onClick={handleShowMore}
+                      disabled={reviewsLoading}
                       data-testid="button-show-more-reviews"
                     >
-                      Показать ещё ({filteredReviews.length - visibleCount} осталось)
+                      {reviewsLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : null}
+                      Показать ещё ({totalForFilter - accumulatedReviews.length} осталось)
                     </Button>
                   </div>
                 )}
 
-                {filteredReviews.length === 0 && !reviewsLoading && (
+                {accumulatedReviews.length === 0 && !reviewsLoading && (
                   <div className="text-center py-12 text-muted-foreground">
-                    {reviews.length === 0
+                    {counts.all === 0
                       ? "Нажмите «Синхронизировать» чтобы загрузить отзывы с WB"
                       : "Нет отзывов в этой категории"}
                   </div>
@@ -217,7 +252,7 @@ const Index = () => {
 
         {mountedTabs.has("dashboard") && (
           <div className={activeTab === "dashboard" ? VISIBLE : HIDDEN}>
-            <DashboardSection reviews={reviews} isLoading={reviewsLoading} />
+            <DashboardSection reviews={accumulatedReviews} isLoading={reviewsLoading} />
           </div>
         )}
 

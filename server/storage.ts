@@ -28,8 +28,48 @@ import {
 
 export class DatabaseStorage {
 
-  async getReviews(cabinetId: string): Promise<Review[]> {
-    return db.select().from(reviews).where(eq(reviews.cabinetId, cabinetId)).orderBy(desc(reviews.createdDate));
+  async getReviews(
+    cabinetId: string,
+    options?: { status?: string; limit?: number; offset?: number }
+  ): Promise<Review[]> {
+    const { status, limit = 50, offset = 0 } = options ?? {};
+    const conditions = [eq(reviews.cabinetId, cabinetId)];
+
+    if (status === "pending") {
+      conditions.push(eq(reviews.status, "pending"));
+    } else if (status === "answered") {
+      conditions.push(
+        sql`${reviews.status} IN ('auto', 'sent', 'answered_externally')`
+      );
+    } else if (status === "archived") {
+      conditions.push(eq(reviews.status, "archived"));
+    } else {
+      conditions.push(not(eq(reviews.status, "archived")));
+    }
+
+    return db
+      .select()
+      .from(reviews)
+      .where(and(...conditions))
+      .orderBy(desc(reviews.createdDate))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getReviewCounts(cabinetId: string): Promise<{ pending: number; answered: number; archived: number; all: number }> {
+    const rows = await db
+      .select({ status: reviews.status, cnt: count() })
+      .from(reviews)
+      .where(eq(reviews.cabinetId, cabinetId))
+      .groupBy(reviews.status);
+
+    let pending = 0, answered = 0, archived = 0;
+    for (const row of rows) {
+      if (row.status === "pending") pending = Number(row.cnt);
+      else if (row.status === "archived") archived = Number(row.cnt);
+      else answered += Number(row.cnt);
+    }
+    return { pending, answered, archived, all: pending + answered };
   }
 
   async getReviewById(id: string): Promise<Review | null> {

@@ -19,7 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Coins, BrainCircuit, Plus, Minus, Loader2, MessageCircle,
   Trash2, Save, Store, CreditCard, StickyNote, Clock, Monitor,
-  Smartphone, Tablet, Globe,
+  Smartphone, Tablet, Globe, BarChart3,
 } from "lucide-react";
 import { formatMsk, distanceToNowMsk } from "@/lib/dates";
 
@@ -203,6 +203,78 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                 </p>
               </div>
             )}
+          </div>
+
+          <Separator />
+
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Метрики использования
+            </h3>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm" data-testid="section-usage-metrics">
+              <div>
+                <span className="text-muted-foreground">Статус API WB</span>
+                <div className="mt-0.5">
+                  <Badge
+                    variant="outline"
+                    className={
+                      user.apiStatus === "connected_ok"
+                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 no-default-hover-elevate"
+                        : user.apiStatus === "error_401"
+                        ? "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20 no-default-hover-elevate"
+                        : "no-default-hover-elevate"
+                    }
+                    data-testid="badge-api-status"
+                  >
+                    {user.apiStatus === "connected_ok"
+                      ? "Подключён"
+                      : user.apiStatus === "error_401"
+                      ? "Ошибка 401"
+                      : "Не подключён"}
+                  </Badge>
+                  {user.apiStatusCheckedAt && (
+                    <p className="text-xs text-muted-foreground mt-1" data-testid="text-api-checked-at">
+                      {formatMsk(user.apiStatusCheckedAt, "dd MMM yyyy, HH:mm")}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Первый ответ (Time-to-Value)</span>
+                <p className="font-medium text-foreground" data-testid="text-first-response">
+                  {user.firstResponseDate ? formatMsk(user.firstResponseDate, "dd MMM yyyy") : "\u2014"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Расход токенов / день</span>
+                <p className="font-medium text-foreground" data-testid="text-tokens-per-day">
+                  {user.tokensSpentPerDay || 0}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Использование Vision</span>
+                <p className="font-medium text-foreground" data-testid="text-vision-usage">
+                  {user.visionUsagePercent}%
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Ср. отзывов / день</span>
+                <p className="font-medium text-foreground" data-testid="text-avg-daily-reviews">
+                  {user.avgDailyReviews}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">AI Аналитик</span>
+                <p className="font-medium" data-testid="text-ai-analytics-sub">
+                  {user.hasAiAnalyticsSub ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">Активна</span>
+                  ) : (
+                    <span className="text-muted-foreground">Нет</span>
+                  )}
+                </p>
+              </div>
+            </div>
           </div>
 
           <Separator />

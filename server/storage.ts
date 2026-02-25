@@ -819,6 +819,93 @@ export class DatabaseStorage {
   async getAllSurveyResponses(): Promise<SurveyResponse[]> {
     return db.select().from(surveyResponses).orderBy(desc(surveyResponses.createdAt));
   }
+
+  async updateCabinetApiStatus(cabinetId: string, apiStatus: string) {
+    return db.update(wbCabinets).set({ apiStatus, apiStatusCheckedAt: new Date() }).where(eq(wbCabinets.id, cabinetId));
+  }
+
+  async getAdminUserMetrics(): Promise<Record<string, {
+    firstResponseDate: string | null;
+    tokensSpentPerDay: number;
+    visionUsagePercent: number;
+    avgDailyReviews: number;
+    lastGenerationDate: string | null;
+  }>> {
+    const reviewStats = await db.execute(sql`
+      SELECT
+        user_id,
+        MIN(CASE WHEN sent_answer IS NOT NULL THEN updated_at END) as first_response_date,
+        COUNT(*) as total_reviews,
+        COUNT(CASE WHEN used_photo_analysis = true THEN 1 END) as vision_reviews,
+        COUNT(CASE WHEN ai_draft IS NOT NULL THEN 1 END) as drafted_reviews,
+        MIN(created_date) as first_review_date
+      FROM replai.reviews
+      WHERE user_id IS NOT NULL
+      GROUP BY user_id
+    `);
+
+    const tokenStats = await db.execute(sql`
+      SELECT
+        user_id,
+        SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as total_spent,
+        MIN(CASE WHEN amount < 0 THEN created_at END) as first_usage_date,
+        MAX(CASE WHEN amount < 0 THEN created_at END) as last_usage_date
+      FROM replai.token_transactions
+      WHERE user_id IS NOT NULL
+      GROUP BY user_id
+    `);
+
+    const result: Record<string, any> = {};
+
+    for (const row of reviewStats.rows as any[]) {
+      const userId = row.user_id;
+      const totalReviews = Number(row.total_reviews) || 0;
+      const visionReviews = Number(row.vision_reviews) || 0;
+      const draftedReviews = Number(row.drafted_reviews) || 0;
+      const firstReviewDate = row.first_review_date;
+
+      let avgDailyReviews = 0;
+      if (firstReviewDate && totalReviews > 0) {
+        const days = Math.max(1, Math.ceil((Date.now() - new Date(firstReviewDate).getTime()) / (1000 * 60 * 60 * 24)));
+        avgDailyReviews = Math.round((totalReviews / days) * 10) / 10;
+      }
+
+      result[userId] = {
+        firstResponseDate: row.first_response_date || null,
+        tokensSpentPerDay: 0,
+        visionUsagePercent: draftedReviews > 0 ? Math.round((visionReviews / draftedReviews) * 100) : 0,
+        avgDailyReviews,
+        lastGenerationDate: null,
+      };
+    }
+
+    for (const row of tokenStats.rows as any[]) {
+      const userId = row.user_id;
+      const totalSpent = Number(row.total_spent) || 0;
+      const firstUsageDate = row.first_usage_date;
+      const lastUsageDate = row.last_usage_date;
+
+      let tokensPerDay = 0;
+      if (firstUsageDate && totalSpent > 0) {
+        const days = Math.max(1, Math.ceil((Date.now() - new Date(firstUsageDate).getTime()) / (1000 * 60 * 60 * 24)));
+        tokensPerDay = Math.round((totalSpent / days) * 10) / 10;
+      }
+
+      if (!result[userId]) {
+        result[userId] = {
+          firstResponseDate: null,
+          tokensSpentPerDay: 0,
+          visionUsagePercent: 0,
+          avgDailyReviews: 0,
+          lastGenerationDate: null,
+        };
+      }
+      result[userId].tokensSpentPerDay = tokensPerDay;
+      result[userId].lastGenerationDate = lastUsageDate || null;
+    }
+
+    return result;
+  }
 }
 
 export const storage = new DatabaseStorage();

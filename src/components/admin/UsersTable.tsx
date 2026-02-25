@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import { Search, Download, Trash2, Loader2, Eye } from "lucide-react";
+import { Search, Download, Trash2, Loader2, Eye, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { formatMsk, distanceToNowMsk } from "@/lib/dates";
@@ -52,7 +52,7 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
 
   const handleExportCsv = () => {
     if (!filteredUsers.length) return;
-    const headers = ["ID", "Email", "Имя", "Статус", "Токены", "AI запросы", "Оплачено", "Регистрация", "Последняя активность"];
+    const headers = ["ID", "Email", "Имя", "Статус", "Токены", "AI запросы", "Оплачено", "Статус API WB", "Расход/день", "% Vision", "Ср. отзывов/день", "AI Аналитик", "Регистрация", "Последняя активность"];
     const rows = filteredUsers.map((u) => [
       u.id,
       u.email,
@@ -61,6 +61,11 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
       String(u.balance),
       String(u.aiBalance),
       String(u.totalPaid),
+      u.apiStatus,
+      String(u.tokensSpentPerDay),
+      String(u.visionUsagePercent),
+      String(u.avgDailyReviews),
+      u.hasAiAnalyticsSub ? "Да" : "Нет",
       formatMsk(u.created_at, "dd.MM.yyyy"),
       u.last_seen_at
         ? distanceToNowMsk(u.last_seen_at)
@@ -145,6 +150,10 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
               <TableHead data-testid="header-name">Имя / Email</TableHead>
               <TableHead data-testid="header-status">Статус</TableHead>
               <TableHead data-testid="header-tariff">Тариф</TableHead>
+              <TableHead data-testid="header-api">API</TableHead>
+              <TableHead data-testid="header-tokens-per-day">Расход/день</TableHead>
+              <TableHead data-testid="header-vision">% Vision</TableHead>
+              <TableHead data-testid="header-ai-analytics">AI Аналитик</TableHead>
               <TableHead data-testid="header-registration">Регистрация</TableHead>
               <TableHead data-testid="header-last-activity">Последняя активность</TableHead>
               <TableHead className="text-right" data-testid="header-actions">Действия</TableHead>
@@ -153,7 +162,7 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
           <TableBody>
             {filteredUsers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-10">
                   {search ? "Пользователи не найдены" : "Нет пользователей"}
                 </TableCell>
               </TableRow>
@@ -194,13 +203,25 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={sc.variant}
-                      className={sc.className}
-                      data-testid={`badge-status-${user.id}`}
-                    >
-                      {sc.label}
-                    </Badge>
+                    <div className="flex items-center flex-wrap gap-1">
+                      {user.apiStatus === "error_401" && (
+                        <span title="API ключ недействителен" data-testid={`icon-churn-api-${user.id}`}>
+                          <AlertTriangle className="w-4 h-4 text-red-500" />
+                        </span>
+                      )}
+                      {user.balance > 0 && (user.tokensSpentPerDay === 0 || (user.lastGenerationDate && (Date.now() - new Date(user.lastGenerationDate).getTime()) > 3 * 24 * 60 * 60 * 1000)) && (
+                        <span title="Нулевой расход" data-testid={`icon-churn-zero-${user.id}`}>
+                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                        </span>
+                      )}
+                      <Badge
+                        variant={sc.variant}
+                        className={sc.className}
+                        data-testid={`badge-status-${user.id}`}
+                      >
+                        {sc.label}
+                      </Badge>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <span
@@ -210,6 +231,37 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
                       {user.totalPaid > 0
                         ? `${user.totalPaid.toLocaleString("ru-RU")} \u20BD`
                         : "Бесплатный"}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs" data-testid={`text-api-status-${user.id}`}>
+                      {user.apiStatus === "connected_ok" && (
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />ОК</span>
+                      )}
+                      {user.apiStatus === "error_401" && (
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Ошибка</span>
+                      )}
+                      {user.apiStatus !== "connected_ok" && user.apiStatus !== "error_401" && (
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />Нет</span>
+                      )}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs" data-testid={`text-tokens-per-day-${user.id}`}>
+                      {user.tokensSpentPerDay.toFixed(1)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs" data-testid={`text-vision-${user.id}`}>
+                      {user.visionUsagePercent}%
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`text-xs ${user.hasAiAnalyticsSub ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+                      data-testid={`text-ai-analytics-${user.id}`}
+                    >
+                      {user.hasAiAnalyticsSub ? "Да" : "Нет"}
                     </span>
                   </TableCell>
                   <TableCell>

@@ -323,8 +323,12 @@ async function processCabinetReviews(
       page++;
       await delay(350);
     }
+    await storage.updateCabinetApiStatus(cabinetId, "connected_ok");
   } catch (e: any) {
     console.error(`[sync-reviews] cabinet=${cabinetId} Failed to fetch unanswered reviews: ${e.message}`);
+    if (e.message?.includes("401")) {
+      await storage.updateCabinetApiStatus(cabinetId, "error_401");
+    }
   }
 
   const answeredFeedbacks: any[] = [];
@@ -420,6 +424,7 @@ async function processCabinetReviews(
       }
     }
 
+    const usedPhotoAnalysis = !!(aiDraft && photoLinks.length > 0);
     const insertedReview = await storage.insertReview({
       wbId,
       userId,
@@ -438,6 +443,7 @@ async function processCabinetReviews(
       aiDraft: aiDraft || null,
       sentAnswer: status === "auto" ? aiDraft : null,
       createdDate: fb.createdDate ? new Date(fb.createdDate) : new Date(),
+      usedPhotoAnalysis,
     });
 
     newCount++;
@@ -1071,7 +1077,7 @@ export async function generateReply(req: Request, res: Response) {
 
     if (!newDraft) throw new Error("All AI models failed to generate response");
 
-    await storage.updateReview(review_id, { aiDraft: newDraft, status: "pending" });
+    await storage.updateReview(review_id, { aiDraft: newDraft, status: "pending", usedPhotoAnalysis: !!sendPhotosToAi });
 
     res.json({ success: true, draft: newDraft });
   } catch (e: any) {
@@ -1256,6 +1262,9 @@ export async function validateApiKey(req: Request, res: Response) {
 
     if (!testResp.ok) {
       await testResp.text();
+      if (testResp.status === 401) {
+        await storage.updateCabinetApiStatus(cabinet_id, "error_401");
+      }
       res.json({
         valid: false,
         error: testResp.status === 401 ? "Неверный API-ключ" : `Ошибка WB API: ${testResp.status}`,
@@ -1265,6 +1274,7 @@ export async function validateApiKey(req: Request, res: Response) {
     await testResp.text();
 
     await storage.updateCabinet(cabinet_id, { wbApiKey: trimmedKey });
+    await storage.updateCabinetApiStatus(cabinet_id, "connected_ok");
 
     const userSettings = await storage.getSettings(userId);
     if (userSettings) {
@@ -1958,7 +1968,9 @@ async function runAutoSyncInternal() {
             try {
               const draft = await generateReplyForReview(review, cabinet);
               if (draft) {
-                await storage.updateReview(review.id, { aiDraft: draft });
+                const photoLinks = Array.isArray(review.photoLinks) ? review.photoLinks : [];
+                const usedVision = photoLinks.length > 0 && cabinet?.photoAnalysis === true;
+                await storage.updateReview(review.id, { aiDraft: draft, usedPhotoAnalysis: usedVision });
                 generated++;
               } else {
                 aiErrors.push(`No draft returned for ${review.wbId}`);

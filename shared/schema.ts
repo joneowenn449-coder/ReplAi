@@ -127,6 +127,7 @@ export const reviews = replaiSchema.table("reviews", {
   aiDraft: text("ai_draft"),
   sentAnswer: text("sent_answer"),
   createdDate: timestamp("created_date").defaultNow(),
+  usedPhotoAnalysis: boolean("used_photo_analysis").default(false),
   fetchedAt: timestamp("fetched_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -189,6 +190,8 @@ export const wbCabinets = replaiSchema.table("wb_cabinets", {
   telegramFirstName: text("telegram_first_name"),
   tgNotifyType: text("tg_notify_type").default("all"),
   photoAnalysis: boolean("photo_analysis").default(false),
+  apiStatus: text("api_status").default("not_connected"),
+  apiStatusCheckedAt: timestamp("api_status_checked_at"),
 });
 
 export const telegramAuthTokens = replaiSchema.table("telegram_auth_tokens", {

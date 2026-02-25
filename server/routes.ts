@@ -602,7 +602,7 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
       return;
     }
 
-    const [allProfiles, tokenBals, aiBals, roles, allCabinets, allAuthUsers, allPayments] = await Promise.all([
+    const [allProfiles, tokenBals, aiBals, roles, allCabinets, allAuthUsers, allPayments, userMetrics] = await Promise.all([
       storage.getAllProfiles(),
       storage.getAllTokenBalances(),
       storage.getAllAiRequestBalances(),
@@ -610,6 +610,7 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
       storage.getAllCabinets(),
       storage.getAllAuthUsers(),
       storage.getAllPayments(),
+      storage.getAdminUserMetrics(),
     ]);
 
     const balanceMap = new Map(tokenBals.map((b) => [b.userId, b.balance]));
@@ -636,8 +637,16 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
     }
 
     const cabinetsCountMap = new Map<string, number>();
+    const apiStatusMap = new Map<string, { status: string; checkedAt: Date | null }>();
     for (const cab of allCabinets) {
       cabinetsCountMap.set(cab.userId, (cabinetsCountMap.get(cab.userId) || 0) + 1);
+      const current = apiStatusMap.get(cab.userId);
+      const cabStatus = (cab as any).apiStatus || "not_connected";
+      const cabCheckedAt = (cab as any).apiStatusCheckedAt || null;
+      if (!current || (cabStatus === "connected_ok" && current.status !== "connected_ok") ||
+          (cabStatus === "error_401" && current.status === "not_connected")) {
+        apiStatusMap.set(cab.userId, { status: cabStatus, checkedAt: cabCheckedAt });
+      }
     }
 
     const users = allProfiles.map((p) => {
@@ -656,6 +665,10 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
         status = "expired";
       }
 
+      const metrics = userMetrics[p.id] || null;
+      const apiInfo = apiStatusMap.get(p.id) || { status: "not_connected", checkedAt: null };
+      const aiBalance = aiBalanceMap.get(p.id) ?? 0;
+
       return {
         id: p.id,
         email: (p.email && p.email.trim()) || authUser?.email || "",
@@ -665,7 +678,7 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
         last_seen_at: p.lastSeenAt,
         admin_notes: p.adminNotes,
         balance,
-        aiBalance: aiBalanceMap.get(p.id) ?? 0,
+        aiBalance,
         role: roleMap.get(p.id) ?? "user",
         status,
         totalPaid,
@@ -679,6 +692,14 @@ router.get("/api/admin/users", requireAuth, async (req: Request, res: Response) 
           status: pay.status,
           created_at: pay.createdAt,
         })),
+        apiStatus: apiInfo.status,
+        apiStatusCheckedAt: apiInfo.checkedAt,
+        firstResponseDate: metrics?.firstResponseDate || null,
+        tokensSpentPerDay: metrics?.tokensSpentPerDay || 0,
+        visionUsagePercent: metrics?.visionUsagePercent || 0,
+        avgDailyReviews: metrics?.avgDailyReviews || 0,
+        hasAiAnalyticsSub: aiBalance > 0,
+        lastGenerationDate: metrics?.lastGenerationDate || null,
       };
     });
 

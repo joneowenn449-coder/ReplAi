@@ -1,152 +1,31 @@
 # WB Отзывы (ReplAi) - Wildberries Review Management
 
 ## Overview
-A Wildberries marketplace review management application with AI-powered reply generation. Built with React + Vite frontend and Express + Drizzle ORM backend. Uses Supabase for authentication only, with all data stored in an external PostgreSQL database.
-
-## Architecture
-- **Frontend**: React 18 + TypeScript + Vite + TailwindCSS + shadcn/ui
-- **Backend**: Express.js + Drizzle ORM (TypeScript)
-- **Database**: External PostgreSQL (85.193.81.180, database: default_db, schema: replai)
-- **Auth**: Supabase (email + password, session management only - no data operations)
-- **AI**: OpenRouter API (Gemini, GPT models) for review reply generation
-- **Payments**: Robokassa integration for token purchases
-
-## Key Features
-- Review sync from Wildberries API
-- AI-generated review replies (auto and manual modes)
-- Chat management with WB buyers
-- Multi-cabinet support (multiple WB seller accounts)
-- AI analytics assistant for review analysis
-- Token-based billing system
-- Admin panel for user management
-
-## Project Structure
-```
-server/
-  index.ts            # Express server entry point
-  db.ts               # Drizzle ORM database connection
-  storage.ts          # DatabaseStorage class (50+ methods)
-  routes.ts           # Express API routes
-  vite.ts             # Vite dev server integration
-shared/
-  schema.ts           # Drizzle schema (replai schema, 14 tables)
-src/
-  components/         # React components
-    ui/               # shadcn/ui primitives
-    admin/            # Admin panel components
-  contexts/           # React context (AuthContext - Supabase auth)
-  hooks/              # Custom React hooks (all use server API)
-  integrations/       # Supabase client config (auth only)
-  lib/
-    api.ts            # API helper with auth token injection
-    fetchAllRows.ts   # Export data helper
-    exportCsv.ts      # CSV export utilities
-    queryClient.ts    # TanStack Query client
-  pages/              # Route pages (Index, Auth, Admin, Pricing, PaymentReturn)
-supabase/
-  functions/          # Original Edge Functions (reference, not deployed)
-```
-
-## Authentication Flow
-1. Frontend uses Supabase auth (email + password) for login/signup
-2. Frontend gets JWT access token from Supabase session
-3. All API requests include `Authorization: Bearer <token>` header
-4. Server decodes JWT payload to extract user ID (`sub` field)
-5. Server uses user ID for all database queries (data isolation)
-
-## API Routes
-All data operations go through Express API:
-- `GET/PATCH /api/reviews` - Review CRUD
-- `GET/PATCH /api/chats` - Chat operations
-- `GET/POST/PATCH/DELETE /api/cabinets` - WB cabinet management
-- `GET/PATCH /api/settings` - User settings
-- `GET /api/balance/tokens|ai` - Balance queries
-- `GET/POST /api/conversations` - AI conversation management
-- `GET/POST /api/ai-messages` - AI message history
-- `GET/POST/DELETE /api/recommendations` - Product recommendations
-- `POST /api/functions/*` - Business logic (sync, send, generate)
-- `GET/POST /api/admin/*` - Admin operations
-
-## Environment Variables
-- `VITE_SUPABASE_URL` - Supabase project URL (auth only)
-- `VITE_SUPABASE_PUBLISHABLE_KEY` - Supabase anon key (auth only)
-- `DATABASE_URL` - External PostgreSQL connection string (replai schema)
-
-## Running
-- Dev server: `npx tsx server/index.ts` (serves both API and Vite frontend on port 5000)
-
-## Business Logic Endpoints (server/functions.ts)
-All business logic is fully ported from Supabase Edge Functions to Express:
-- `POST /api/functions/sync-reviews` - Syncs reviews from WB API + auto-replies via OpenRouter AI
-- `POST /api/functions/sync-chats` - Syncs chats and messages from WB API
-- `POST /api/functions/send-reply` - Sends review reply to WB + deducts token
-- `POST /api/functions/generate-reply` - Generates AI draft via OpenRouter (supports photos, recommendations, refusal detection)
-- `POST /api/functions/validate-api-key` - Validates WB API key + saves + triggers archive import
-- `POST /api/functions/send-chat-message` - Sends chat message via WB API
-- `POST /api/functions/ai-assistant` - Streaming AI analytics with RAG context from reviews
-- `POST /api/functions/create-payment` - Creates Robokassa payment URL
-- `POST /api/functions/robokassa-webhook` - Handles Robokassa payment callback (no auth)
-- `POST /api/functions/fetch-archive` - Imports archived (answered) reviews from WB
-
-## Telegram Bot (server/telegram.ts)
-- Uses TELEGRAM_BOT_TOKEN secret, gracefully skips init if not set
-- Long polling via node-telegram-bot-api
-- /start with auth_TOKEN payload: validates token, links chat_id to cabinet
-- Auth tokens expire in 10 minutes, one-time use (stored in telegram_auth_tokens table)
-- sendAutoReplyNotification: enhanced format with rating emoji, article, shouldNotify filtering
-- sendNewReviewNotification: rich format with rating emoji, article, pros/cons, AI insight, photo support (sendPhoto), URL button for chat
-- Settings menu: /start sends inline keyboard with notification type (all/negative/questions) + reply mode (manual/auto/drafts)
-- Bot commands (setMyCommands): /start, /shops, /stats, /balance, /mode, /settings
-- /shops: lists all connected WB cabinets with status, last sync date, reply modes
-- /stats: today's review statistics (total/answered/pending, avg rating, distribution bars)
-- /balance: token balance with "Пополнить" button linking to pricing page
-- /mode: current reply modes with inline button to launch step-by-step configuration
-- /settings command: reconfigure notification preferences
-- Callback handlers: gen_REVIEWID generates AI draft, pub_REVIEWID sends to WB + deducts token, edit_REVIEWID enters edit mode (pendingEdits Map), regen_REVIEWID regenerates, cancel_edit_REVIEWID cancels edit
-- Photo handling: reviews with photos sent via sendPhoto, edits use editMessageCaption; text reviews use sendMessage/editMessageText
-- Duplicate protection: keyboard removed after publish
-- shouldNotify(cabinet, rating, text): filters notifications based on tgNotifyType preference
-- Schema fields: tgNotifyType (all/negative/questions) on wbCabinets
-- Reply modes: configured via replyModes JSON on wbCabinets (per-rating: {"1":"manual",...,"5":"auto"}), editable from bot via step-by-step flow (rmcfg_start/rmset callbacks)
-- API routes: POST /api/functions/telegram-link, POST /api/functions/telegram-unlink
-- Frontend: SettingsDialog has collapsible Telegram section with connect/disconnect UI
-
-## Recent Changes
-- 2026-02-24: Rating-based AI model selection: reviews with rating 1-3 use GPT-4o (smarter, better for handling complaints), rating 4-5 use Gemini 2.0 Flash (cheaper for positive reviews); photo analysis always uses GPT-4o regardless of rating; fallback models added to generate-reply endpoint; all three AI generation paths (sync-reviews, generate-reply, generateReplyForReview) now use consistent model selection with proper text-only fallback for non-GPT-4o models when photos are present
-- 2026-02-20: MSK timezone fix: all admin panel dates now displayed in Moscow timezone (UTC+3) via src/lib/dates.ts utility (formatMsk, distanceToNowMsk); uses Intl.DateTimeFormat with Europe/Moscow for deterministic conversion regardless of browser timezone; DB connection forced to UTC timezone; applied to UserDetailModal, UsersTable, TransactionsTable, SurveyResults
-- 2026-02-20: Photo analysis toggle: photoAnalysis boolean field on wbCabinets (default false); when enabled, photos sent to GPT-4o Vision for analysis (expensive); when disabled, AI gets text-only + mention "photos attached" using cheaper Gemini Flash; SettingsDialog has toggle "Анализ фото AI" with description; ReviewCard badge "С анализом фото" only shown when toggle enabled; migration auto-runs on server start
-- 2026-02-20: Survey page (/survey) for user feedback collection: 23 questions across 7 blocks (general, setup, AI quality, Telegram, analytics, pricing, priorities); hidden from navigation, accessible by direct link only; no auth required; responses stored in survey_responses table (jsonb); admin panel gets "Опросник" tab with SurveyResults component using useQuery; POST /api/survey (public) + GET /api/admin/survey-responses (admin only)
-- 2026-02-20: AI prompt structure aligned with previous service: rules split into "ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА" (do) and "ЗАПРЕЩЕНО" (dont) sections in buildFullPrompt; rating-matched example responses (selectExamplesByRating selects up to 3 examples matching review rating, with fallback); global settings keys rules_do, rules_dont, response_examples_v2 (JSON array [{rating, text}]); backward compatible — old rules/examples still used when new fields are empty; admin AISettings.tsx updated with new UI for both rule types and per-rating examples
-- 2026-02-18: Performance optimization: QueryClient staleTime (2min) + gcTime (10min) + refetchOnWindowFocus:false; visibility-based tabs in Index.tsx (mountedTabs lazy mount, no component destruction on tab switch); useMemo for stats/counts/filteredReviews/activeReviews; useCallback for handlers; ReviewCard wrapped in React.memo with internal date formatting + photo normalization via useMemo; progressive review rendering (30 items batch with "Show more" button instead of 1000+ at once)
-- 2026-02-17: Full mobile responsive adaptation: Header compact layout with hidden labels; NavTabs/FilterTabs horizontal scroll with scrollbar-hide; ApiStatus vertical stacking; ReviewCard header wrap + shorter button labels; ChatsSection list/chat toggle pattern with back button; AiAssistant sidebar overlay with backdrop on mobile; DashboardSection compact stats cards + horizontal scroll tables; Admin page responsive tabs + UsersTable/TransactionsTable horizontal scroll; global padding px-3 sm:px-6 on Index/Admin/Pricing pages
-- 2026-02-17: Legal section: PrivacyPolicy (/privacy) and Terms (/terms) public pages; CookieBanner with localStorage persistence; registration form checkbox for terms agreement; footer links on Auth page; token count fixed to 50
-- 2026-02-17: Welcome bonus: 50 tokens credited at registration via ensureUserProvisioned (type: welcome_bonus), called directly from /api/auth/register endpoint
-- 2026-02-17: Session & device tracking: user_sessions table (IP, user-agent parsed via ua-parser-js: browser, OS, device type), recorded on each auth with 30-min throttle per user+IP+UA combo; admin API endpoints GET /api/admin/sessions, GET /api/admin/users/:id/sessions; sessions section in UserDetailModal with device icons (desktop/mobile/tablet)
-- 2026-02-17: Admin panel redesign: new UsersTable with columns (ID, Name/Email, Status badges, Tariff, Registration, Last Activity, Actions); UserDetailModal with payment history, admin notes, balance management, delete; CSV export; search/filter; lastSeenAt tracking (throttled 5min) in profiles; adminNotes field; status computed from payment history (active/trial/expired); PATCH /api/admin/users/:id/notes endpoint
-- 2026-02-17: Account deletion: admin can delete users from UsersTable (with confirmation dialog, self-deletion blocked); users can self-delete from Profile page (password confirmation required, auto-logout); deleteUser storage method cleans all 15+ related tables in a transaction
-- 2026-02-17: Telegram bot section "Coming Soon" teaser for non-owner users (owner ID gated); full functionality only for owner account
-- 2026-02-17: Fixed review photo display: snake_case key mismatch in toSnakeCase conversion; added lightbox with keyboard navigation
-- 2026-02-17: External answer detection during sync: checks all pending reviews against WB API, marks as "answered_externally" if answered outside the service; frontend displays new status in Answered tab
-- 2026-02-17: Settings dialog: all sections (API key, rating modes, recommendations, vibe, Telegram) now collapsible and collapsed by default
-- 2026-02-15: Fixed race condition in ensureUserProvisioned (duplicate cabinet prevention via provisioningInProgress map)
-- 2026-02-15: Cleaned up duplicate empty cabinets from DB; fixed auth docs (email+password, not phone OTP)
-- 2026-02-15: AI assistant multimodal photo analysis: sends review photos to Gemini as image_url, detects photo-related queries, collectPhotoUrls helper, updated system prompt with photo analysis capabilities
-- 2026-02-15: Landing page on Auth.tsx: hero, 4 USP cards, how-it-works, auth form
-- 2026-02-15: Bot commands menu: /shops, /stats, /balance, /mode with setMyCommands; getTodayReviewStats storage method
-- 2026-02-15: Telegram bot reply modes: removed tgReplyMode, now uses cabinet's replyModes JSON directly; step-by-step config in bot (4-5 stars / 1-3 stars, only Ручной/Авто)
-- 2026-02-15: Enhanced Telegram bot: settings menu, notification preferences, rich notification format with photos, Generate/Publish/Edit/Regenerate flow, shouldNotify filtering
-- 2026-02-15: Added tgNotifyType field to wbCabinets schema + DB migration
-- 2026-02-15: Telegram bot integration: notifications, manual review approval via inline buttons, auth token linking
-- 2026-02-15: Extracted generateReplyForReview as reusable function in functions.ts
-- 2026-02-15: Added telegramChatId to wbCabinets, telegramAuthTokens table
-- 2026-02-15: Ported all 10 Edge Functions to Express (server/functions.ts)
-- 2026-02-15: Added 8 new storage methods for business logic support
-- 2026-02-15: Migrated all frontend hooks from direct Supabase queries to server API
-- 2026-02-15: Created comprehensive DatabaseStorage class (60+ methods) with Drizzle ORM
-- 2026-02-15: Created complete Express API routes for all CRUD operations
-- 2026-02-15: Replaced Supabase realtime subscriptions with polling (chats 30s, messages 10s)
-- 2026-02-15: Created src/lib/api.ts helper for authenticated API requests
+ReplAi is a Wildberries marketplace review management application designed to automate and enhance seller-customer interactions. It enables sellers to sync reviews from Wildberries, generate AI-powered replies, manage chats with buyers, and oversee multiple seller cabinets. The platform aims to improve customer satisfaction, streamline review management processes, and provide AI-driven analytics for better decision-making.
 
 ## User Preferences
 - Language: Russian (UI and content)
 - Dark mode support via CSS variables
+
+## System Architecture
+The application uses a React 18 + TypeScript + Vite + TailwindCSS + shadcn/ui frontend and an Express.js + Drizzle ORM (TypeScript) backend. Authentication is handled by Supabase (email + password), but all application data is stored in an external PostgreSQL database. The system supports multi-cabinet management, token-based billing, and an admin panel for user management.
+
+**Key Technical Implementations:**
+- **Frontend:** Utilizes TanStack Query for data fetching and caching, `useMemo` and `useCallback` for performance optimization, and `React.memo` for component rendering efficiency. It features mobile-responsive design, progressive review rendering, and collapsible UI elements.
+- **Backend:** Express.js handles all API routes and business logic, which was fully ported from Supabase Edge Functions. Drizzle ORM manages interactions with the external PostgreSQL database.
+- **AI Integration:** OpenRouter API is used for AI-generated review replies and analytics. It supports dynamic AI model selection based on review rating (e.g., GPT-4o for critical reviews, Gemini 2.0 Flash for positive reviews) and multimodal photo analysis using GPT-4o Vision. AI prompts are structured with explicit "DO" and "DON'T" rules and rating-matched example responses.
+- **Data Management:** All data operations are routed through the Express API. Supabase is used solely for authentication and session management; no data is stored within Supabase. User data isolation is ensured by using the user ID from the JWT payload for all database queries.
+- **Telegram Bot:** An integrated Telegram bot provides notifications for new reviews, allows manual review approval, and supports a step-by-step configuration for reply modes and notification preferences via inline buttons and commands.
+- **Billing & Payments:** Token-based billing system with Robokassa integration for payment processing.
+- **Monitoring & Analytics:** The admin panel includes SaaS metrics for user activity, token consumption, AI vision usage, and churn alerts. It also features session and device tracking.
+- **Business Logic:** Centralized in `server/functions.ts`, including review synchronization, chat synchronization, reply generation and sending, AI assistant for analytics, and payment processing.
+- **Date Handling:** All dates in the admin panel are displayed in Moscow timezone (UTC+3) using `Intl.DateTimeFormat`.
+
+## External Dependencies
+- **Supabase:** Used exclusively for user authentication (email + password) and session management.
+- **PostgreSQL:** Primary database for all application data, hosted externally (85.193.81.180, database: `default_db`, schema: `replai`).
+- **OpenRouter API:** Integrated for AI model access (Gemini, GPT models) to generate review replies and power the AI analytics assistant.
+- **Robokassa:** Payment gateway integrated for processing token purchases.
+- **Wildberries API:** Used for syncing reviews, chats, messages, and sending replies to the Wildberries marketplace.
+- **`node-telegram-bot-api`:** Library used for Telegram bot integration.
+- **`ua-parser-js`:** Used for parsing user-agent strings for session tracking.

@@ -42,6 +42,14 @@ export interface AdminUser {
   cabinetsCount: number;
   telegram: { username: string | null; firstName: string | null; chatId: string | null } | null;
   payments: UserPayment[];
+  apiStatus: string;
+  apiStatusCheckedAt: string | null;
+  firstResponseDate: string | null;
+  tokensSpentPerDay: number;
+  visionUsagePercent: number;
+  avgDailyReviews: number;
+  hasAiAnalyticsSub: boolean;
+  lastGenerationDate: string | null;
 }
 
 export function useAdminUsers() {

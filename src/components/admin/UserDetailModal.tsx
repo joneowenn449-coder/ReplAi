@@ -144,7 +144,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
             <div>
               <span className="text-muted-foreground">Регистрация</span>
               <p className="font-medium text-foreground" data-testid="text-detail-registration">
-                {formatMsk(user.created_at, "dd MMM yyyy, HH:mm")}
+                {user.created_at ? formatMsk(user.created_at, "dd MMM yyyy, HH:mm") : "—"}
               </p>
             </div>
             <div className="flex items-start gap-1.5">
@@ -461,7 +461,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                           {payStatus}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {formatMsk(pay.created_at, "dd.MM.yyyy HH:mm")}
+                          {pay.created_at ? formatMsk(pay.created_at, "dd.MM.yyyy HH:mm") : "—"}
                         </span>
                       </div>
                     </div>
@@ -514,7 +514,7 @@ export const UserDetailModal = ({ user, open, onClose }: UserDetailModalProps) =
                         </div>
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatMsk(s.created_at, "dd.MM.yyyy HH:mm")}
+                        {s.created_at ? formatMsk(s.created_at, "dd.MM.yyyy HH:mm") : "—"}
                       </span>
                     </div>
                   );

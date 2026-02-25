@@ -67,7 +67,7 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
       String(u.visionUsagePercent),
       String(u.avgDailyReviews),
       u.hasAiAnalyticsSub ? "Да" : "Нет",
-      formatMsk(u.created_at, "dd.MM.yyyy"),
+      u.created_at ? formatMsk(u.created_at, "dd.MM.yyyy") : "",
       u.last_seen_at
         ? distanceToNowMsk(u.last_seen_at)
         : "",
@@ -169,7 +169,7 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
               </TableRow>
             )}
             {filteredUsers.map((user) => {
-              const sc = statusConfig[user.status];
+              const sc = statusConfig[user.status] || { label: user.status, variant: "outline" as const, className: "no-default-hover-elevate" };
               return (
                 <TableRow
                   key={user.id}
@@ -267,7 +267,7 @@ export const UsersTable = ({ onSelectUser }: UsersTableProps) => {
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground" data-testid={`text-registration-${user.id}`}>
-                      {formatMsk(user.created_at, "dd MMM yyyy")}
+                      {user.created_at ? formatMsk(user.created_at, "dd MMM yyyy") : "—"}
                     </span>
                   </TableCell>
                   <TableCell>

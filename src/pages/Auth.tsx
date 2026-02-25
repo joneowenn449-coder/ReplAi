@@ -11,6 +11,7 @@ import {
   ChevronDown, Check, Sparkles
 } from "lucide-react";
 import { SUBSCRIPTION_PLANS, SUBSCRIPTION_MODULES } from "@shared/subscriptionPlans";
+import DemoSection from "@/components/landing/DemoSection";
 
 const Auth = () => {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
@@ -259,6 +260,8 @@ const Auth = () => {
           </div>
         </div>
       </section>
+
+      <DemoSection />
 
       <section className="py-16 md:py-24 px-4 bg-card/50">
         <div className="max-w-6xl mx-auto space-y-12">

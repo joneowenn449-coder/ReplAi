@@ -3,6 +3,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "../../storage";
 import { pendingOnboarding } from "./start";
+import { resolveUserByChatId, resolveUserByTelegramId } from "../middleware/auth";
 import { escapeMarkdown, truncate } from "../utils";
 import { buildDraftMessage } from "../messages";
 import { draftKeyboard } from "../keyboards";
@@ -45,6 +46,18 @@ export function registerTextHandler(bot: TelegramBot): void {
         return;
       }
 
+      // ── Fallback: detect API key input even if pendingOnboarding was lost (bot restart) ──
+      // If user has a cabinet without API key and sends a long token-like string — treat as key input
+      const text = msg.text.trim();
+      if (looksLikeApiKey(text)) {
+        const fallbackCtx = await findCabinetAwaitingApiKey(chatId, String(msg.from?.id || ""));
+        if (fallbackCtx) {
+          console.log(`[bot/text] Fallback API key detection for chatId=${chatId} cabinet=${fallbackCtx.cabinetId}`);
+          await handleApiKeyInput(bot, chatId, msg, fallbackCtx.userId, fallbackCtx.cabinetId, true);
+          return;
+        }
+      }
+
       // No active context — ignore
     } catch (err) {
       console.error("[bot/text] Error:", err);
@@ -65,8 +78,8 @@ async function handleApiKeyInput(
   // Auto-delete the message with the API key for security
   try {
     await bot.deleteMessage(chatId, msg.message_id);
-  } catch {
-    // Can't delete — no permissions, silently continue
+  } catch (delErr) {
+    console.error("[bot/text] Failed to delete API key message:", delErr);
   }
 
   // Validate the API key against WB API
@@ -122,6 +135,52 @@ async function handleDraftEdit(
     parse_mode: "Markdown",
     reply_markup: { inline_keyboard: draftKeyboard(reviewId) },
   });
+}
+
+/**
+ * Check if a string looks like a WB API key (JWT or long base64 token).
+ * WB keys are typically JWT tokens (eyJ...) or long alphanumeric strings.
+ */
+function looksLikeApiKey(text: string): boolean {
+  // No spaces (API keys are single tokens), at least 50 chars
+  if (text.includes(" ") || text.length < 50) return false;
+  // JWT pattern: eyJ...
+  if (/^eyJ[A-Za-z0-9_-]+\./.test(text)) return true;
+  // Long base64-like string (WB sometimes uses non-JWT keys)
+  if (/^[A-Za-z0-9_\-+/=.]{50,}$/.test(text)) return true;
+  return false;
+}
+
+/**
+ * Find a cabinet without API key for the given chatId or telegramId.
+ * Used as fallback when pendingOnboarding map was lost (bot restart).
+ */
+async function findCabinetAwaitingApiKey(
+  chatId: string,
+  telegramId: string,
+): Promise<{ userId: string; cabinetId: string } | null> {
+  // Try by chatId first
+  const ctx = await resolveUserByChatId(chatId);
+  if (ctx) {
+    const cabinetWithoutKey = ctx.cabinets.find(c => !c.wbApiKey);
+    if (cabinetWithoutKey) {
+      return { userId: ctx.userId, cabinetId: cabinetWithoutKey.id };
+    }
+  }
+
+  // Try by telegramId
+  if (telegramId) {
+    const userId = await resolveUserByTelegramId(telegramId);
+    if (userId) {
+      const cabinets = await storage.getCabinets(userId);
+      const cabinetWithoutKey = cabinets.find(c => !c.wbApiKey);
+      if (cabinetWithoutKey) {
+        return { userId, cabinetId: cabinetWithoutKey.id };
+      }
+    }
+  }
+
+  return null;
 }
 
 /**

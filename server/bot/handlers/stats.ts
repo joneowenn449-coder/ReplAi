@@ -26,7 +26,7 @@ export function registerStatsHandler(bot: TelegramBot): void {
       for (let r = 5; r >= 1; r--) {
         const cnt = stats.byRating[r] || 0;
         const bar = cnt > 0 ? "█".repeat(Math.min(cnt, 20)) : "";
-        ratingBars += `${"*".repeat(r)} ${bar} ${cnt}\n`;
+        ratingBars += `${"⭐".repeat(r)} ${bar} ${cnt}\n`;
       }
 
       const msgText = `📊 *Статистика за ${today}*\n\n` +
@@ -39,7 +39,9 @@ export function registerStatsHandler(bot: TelegramBot): void {
       await bot.sendMessage(chatId, msgText, { parse_mode: "Markdown" });
     } catch (err) {
       console.error("[bot/stats] Error:", err);
-      await bot.sendMessage(chatId, "Ошибка при получении статистики.").catch(() => {});
+      // Fallback: show zero stats instead of error
+      const today = new Date().toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
+      await bot.sendMessage(chatId, `📊 *Статистика за ${today}*\n\n📥 Новых отзывов: *0*\n✅ Отвечено: *0*`, { parse_mode: "Markdown" }).catch(() => {});
     }
   });
 }

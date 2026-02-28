@@ -58,7 +58,7 @@ const OWNER_USER_ID = "5339ed4d-37c9-4fc1-bed9-dc4604bdffe6";
 
 export const SettingsDialog = ({ open, onOpenChange, initialSection }: SettingsDialogProps) => {
   const { user } = useAuth();
-  const isTelegramAvailable = user?.id === OWNER_USER_ID;
+  const isTelegramAvailable = true;
   const { data: subData } = useSubscription();
   const hasSubscription = !!(subData?.subscription && (subData.subscription.status === "active" || subData.subscription.status === "cancelled"));
   const { data: activeCabinet } = useActiveCabinet();

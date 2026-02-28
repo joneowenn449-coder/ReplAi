@@ -148,19 +148,21 @@ async function handleAuthTokenLink(
   const cabinet = await storage.getCabinetById(result.cabinetId);
   const cabinetName = cabinet?.name || "Кабинет";
 
-  await bot.sendMessage(chatId, AUTH_LINK_SUCCESS(cabinetName), { parse_mode: "MarkdownV2" });
+  // If cabinet has no API key — show onboarding flow instead of settings
+  if (cabinet && !cabinet.wbApiKey) {
+    await bot.sendMessage(chatId, AUTH_LINK_SUCCESS(cabinetName), { parse_mode: "MarkdownV2" });
 
-  // Show settings menu
-  if (cabinet) {
-    const notifyType = cabinet.tgNotifyType || "all";
-    const { formatReplyModes } = await import("../utils");
-    const modesInfo = formatReplyModes(cabinet.replyModes as Record<string, string> | null);
+    // Enter onboarding: ask for WB API key
+    pendingOnboarding.set(chatId, { userId: result.userId, cabinetId: result.cabinetId });
 
-    const text = `⚙️ Настройки кабинета:\n\n📝 Режим ответов:\n${modesInfo}`;
-    await bot.sendMessage(chatId, text, {
-      reply_markup: { inline_keyboard: settingsKeyboard(cabinet.id, notifyType) },
+    await bot.sendMessage(chatId, ASK_WB_API_KEY, {
+      parse_mode: "MarkdownV2",
+      reply_markup: { inline_keyboard: onboardingApiKeyKeyboard() },
     });
+    return;
   }
+
+  await bot.sendMessage(chatId, AUTH_LINK_SUCCESS(cabinetName), { parse_mode: "MarkdownV2" });
 }
 
 /**

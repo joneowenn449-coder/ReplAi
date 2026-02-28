@@ -96,6 +96,7 @@ export const authUsers = replaiSchema.table("auth_users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   displayName: text("display_name"),
+  telegramId: text("telegram_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

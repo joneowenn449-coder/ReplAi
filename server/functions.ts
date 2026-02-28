@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { storage } from "./storage";
 import crypto from "crypto";
-import { sendAutoReplyNotification, sendNewReviewNotification, shouldNotify, sendAdminAIErrorNotification } from "./telegram";
+import { sendAutoReplyNotification, sendNewReviewNotification, shouldNotify, sendAdminAIErrorNotification } from "./bot";
 import { getPlanById } from "@shared/subscriptionPlans";
 
 const WB_FEEDBACKS_URL = "https://feedbacks-api.wildberries.ru";

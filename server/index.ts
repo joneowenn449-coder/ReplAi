@@ -7,7 +7,7 @@ import { runAutoSync } from "./functions";
 import { db } from "./db";
 import { userRoles } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { startTelegramBot, stopTelegramBot } from "./telegram";
+import { startTelegramBot, stopTelegramBot } from "./bot";
 
 const app = express();
 

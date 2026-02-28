@@ -800,9 +800,18 @@ export class DatabaseStorage {
     return rows[0] ?? null;
   }
 
+  async getAuthUserByTelegramId(telegramId: string): Promise<AuthUser | null> {
+    const rows = await db.select().from(authUsers).where(eq(authUsers.telegramId, telegramId)).limit(1);
+    return rows[0] ?? null;
+  }
+
   async createAuthUser(data: InsertAuthUser): Promise<AuthUser> {
     const rows = await db.insert(authUsers).values(data).returning();
     return rows[0];
+  }
+
+  async linkTelegramToUser(userId: string, telegramId: string): Promise<void> {
+    await db.update(authUsers).set({ telegramId }).where(eq(authUsers.id, userId));
   }
 
   async updateAuthUserProfile(id: string, data: { displayName?: string | null }): Promise<AuthUser | null> {

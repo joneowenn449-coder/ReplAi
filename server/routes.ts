@@ -1141,7 +1141,7 @@ router.post("/api/functions/telegram-link", requireAuth, async (req: Request, re
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await storage.createTelegramAuthToken(token, userId, cabinetId, expiresAt);
 
-    const { getTelegramBot } = await import("./telegram");
+    const { getTelegramBot } = await import("./bot");
     const bot = getTelegramBot();
     let botUsername = "YourBot";
     if (bot) {

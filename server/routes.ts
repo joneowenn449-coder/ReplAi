@@ -8,6 +8,7 @@ import {
   validateApiKey, sendChatMessage, aiAssistant,
   createPayment, robokassaWebhook, fetchArchive,
 } from "./functions";
+import { TRIAL_PLAN_ID, TRIAL_DURATION_DAYS } from "@shared/subscriptionPlans";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-change-me";
 
@@ -100,17 +101,23 @@ async function ensureUserProvisioned(userId: string, email?: string | null): Pro
       await storage.upsertAiRequestBalance(userId, await storage.getAiRequestBalance(userId));
 
       if (isNewUser) {
-        const WELCOME_TOKENS = 50;
-        await storage.upsertTokenBalance(userId, WELCOME_TOKENS);
-        await storage.insertTokenTransaction({
-          userId,
-          amount: WELCOME_TOKENS,
-          type: "welcome_bonus",
-          description: "Приветственные токены",
-        });
-        console.log(`[auto-provision] Credited ${WELCOME_TOKENS} welcome tokens to user ${userId}`);
-      } else {
-        await storage.upsertTokenBalance(userId, await storage.getTokenBalance(userId));
+        // Trial subscription — 3 days free with all features
+        const existingSub = await storage.getUserSubscription(userId);
+        if (!existingSub) {
+          const now = new Date();
+          const trialEnd = new Date(now.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
+          await storage.createSubscription({
+            userId,
+            planId: TRIAL_PLAN_ID,
+            status: "active",
+            photoAnalysisEnabled: true,
+            aiAnalystEnabled: true,
+            currentPeriodStart: now,
+            currentPeriodEnd: trialEnd,
+            repliesUsedThisPeriod: 0,
+          });
+          console.log(`[auto-provision] Created trial subscription for user ${userId}`);
+        }
       }
 
       provisionedUsers.add(userId);

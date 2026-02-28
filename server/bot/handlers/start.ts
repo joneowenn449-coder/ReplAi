@@ -10,7 +10,7 @@ import {
   AUTH_LINK_SUCCESS, AUTH_LINK_EXPIRED, GENERIC_ERROR,
 } from "../messages";
 import { onboardingApiKeyKeyboard, settingsKeyboard } from "../keyboards";
-import { WELCOME_TOKENS } from "../config";
+import { TRIAL_PLAN_ID, TRIAL_DURATION_DAYS } from "@shared/subscriptionPlans";
 
 // Track users currently in onboarding flow (awaiting API key input)
 // Map<chatId, { userId: string, cabinetId: string }>
@@ -189,13 +189,18 @@ async function provisionNewTelegramUser(
     await storage.createCabinet({ userId, name: "Основной кабинет", isActive: true });
   }
 
-  // Welcome tokens
-  await storage.upsertTokenBalance(userId, WELCOME_TOKENS);
-  await storage.insertTokenTransaction({
+  // Trial subscription — 3 days free with all features
+  const now = new Date();
+  const trialEnd = new Date(now.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
+  await storage.createSubscription({
     userId,
-    amount: WELCOME_TOKENS,
-    type: "welcome_bonus",
-    description: "Приветственные токены",
+    planId: TRIAL_PLAN_ID,
+    status: "active",
+    photoAnalysisEnabled: true,
+    aiAnalystEnabled: true,
+    currentPeriodStart: now,
+    currentPeriodEnd: trialEnd,
+    repliesUsedThisPeriod: 0,
   });
 
   // AI request balance

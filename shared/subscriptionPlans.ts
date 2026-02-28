@@ -14,7 +14,11 @@ export interface SubscriptionModule {
   description: string;
 }
 
+export const TRIAL_PLAN_ID = "trial";
+export const TRIAL_DURATION_DAYS = 3;
+
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  { id: "trial", name: "Пробный период", price: 0, replyLimit: 200, description: "3 дня бесплатно со всеми функциями" },
   { id: "micro", name: "Micro", price: 490, replyLimit: 200, description: "Для небольших магазинов" },
   { id: "start", name: "Старт", price: 990, replyLimit: 500, description: "Для растущего бизнеса" },
   { id: "standard", name: "Standard", price: 1490, replyLimit: 1000, description: "Оптимальный выбор", popular: true },

@@ -189,7 +189,7 @@ export async function startTelegramBot() {
   try { await tempBot.stopPolling(); } catch (_) {}
   try { (tempBot as any).close?.(); } catch (_) {}
 
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  await new Promise(resolve => setTimeout(resolve, 5000));
 
   bot = new TelegramBot(token, {
     polling: {

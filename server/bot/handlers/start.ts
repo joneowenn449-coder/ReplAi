@@ -44,18 +44,22 @@ async function handleOnboarding(
   telegramId: string,
   msg: TelegramBot.Message,
 ): Promise<void> {
-  // Check if user already exists by telegramId
+  // ── First check: user already has cabinets linked to this chatId ──
+  // (covers users who registered via website and linked Telegram via auth_token)
+  const ctxByChatId = await resolveUserByChatId(chatId);
+  if (ctxByChatId && ctxByChatId.cabinets.length > 0) {
+    // Also link telegramId if not yet linked
+    if (telegramId) {
+      await storage.linkTelegramToUser(ctxByChatId.userId, telegramId).catch(() => {});
+    }
+    await bot.sendMessage(chatId, ALREADY_REGISTERED, { parse_mode: "MarkdownV2" });
+    return;
+  }
+
+  // ── Second check: user exists by telegramId but chatId not linked ──
   const existingUserId = await resolveUserByTelegramId(telegramId);
 
   if (existingUserId) {
-    // User exists — check if they have cabinets linked to this chatId
-    const ctx = await resolveUserByChatId(chatId);
-    if (ctx && ctx.cabinets.length > 0) {
-      // Fully set up — welcome back
-      await bot.sendMessage(chatId, ALREADY_REGISTERED, { parse_mode: "MarkdownV2" });
-      return;
-    }
-
     // User exists but chatId not linked — link all their cabinets
     const cabinets = await storage.getCabinets(existingUserId);
     for (const cab of cabinets) {

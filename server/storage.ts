@@ -742,11 +742,8 @@ export class DatabaseStorage {
     await db.delete(telegramAuthTokens).where(sql`${telegramAuthTokens.expiresAt} < NOW()`);
   }
 
-  async getTodayReviewStats(cabinetIds: string[]): Promise<{ total: number; answered: number; avgRating: number; byRating: Record<number, number> }> {
+  async getReviewStatsSince(cabinetIds: string[], since: Date): Promise<{ total: number; answered: number; avgRating: number; byRating: Record<number, number> }> {
     if (cabinetIds.length === 0) return { total: 0, answered: 0, avgRating: 0, byRating: {} };
-
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
 
     const allReviews = await db
       .select({
@@ -757,7 +754,7 @@ export class DatabaseStorage {
       .where(
         and(
           sql`${reviews.cabinetId} IN (${sql.join(cabinetIds.map(id => sql`${id}::uuid`), sql`, `)})`,
-          gte(reviews.fetchedAt, todayStart)
+          gte(reviews.fetchedAt, since)
         )
       );
 
@@ -770,6 +767,12 @@ export class DatabaseStorage {
     }
 
     return { total, answered, avgRating, byRating };
+  }
+
+  async getTodayReviewStats(cabinetIds: string[]) {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return this.getReviewStatsSince(cabinetIds, todayStart);
   }
 
   async getLatestPayment(userId: string) {

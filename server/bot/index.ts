@@ -17,6 +17,7 @@ import { registerModeHandler } from "./handlers/mode";
 import { registerSettingsHandler } from "./handlers/settings";
 import { registerHelpHandler } from "./handlers/help";
 import { registerCallbackHandler } from "./handlers/callbacks";
+import { registerSupportHandler } from "./handlers/support";
 import { registerTextHandler } from "./handlers/text";
 
 let bot: TelegramBot | null = null;
@@ -212,8 +213,8 @@ export async function startTelegramBot() {
   bot.setMyCommands([
     { command: "start", description: "Перезапуск / подключение" },
     { command: "shops", description: "Мои кабинеты WB" },
-    { command: "stats", description: "Статистика за сегодня" },
-    { command: "balance", description: "Баланс токенов" },
+    { command: "stats", description: "Статистика отзывов" },
+    { command: "subscription", description: "Подписка и тариф" },
     { command: "mode", description: "Режим ответов" },
     { command: "settings", description: "Настройки уведомлений" },
     { command: "help", description: "Справка" },
@@ -228,6 +229,7 @@ export async function startTelegramBot() {
   registerModeHandler(bot);
   registerSettingsHandler(bot);
   registerHelpHandler(bot);
+  registerSupportHandler(bot);
   registerTextHandler(bot);
   registerCallbackHandler(bot);
 }

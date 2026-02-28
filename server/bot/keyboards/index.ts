@@ -70,6 +70,19 @@ export function replyModeLowKeyboard(cabinetId: string, currentLow: string): Tel
   ];
 }
 
+// ── Stats ──
+
+export function statsPeriodKeyboard(activePeriod: string): TelegramBot.InlineKeyboardButton[][] {
+  const check = (p: string) => activePeriod === p ? "• " : "";
+  return [
+    [
+      { text: `${check("today")}Сегодня`, callback_data: "stats_today" },
+      { text: `${check("week")}7 дней`, callback_data: "stats_week" },
+      { text: `${check("month")}30 дней`, callback_data: "stats_month" },
+    ],
+  ];
+}
+
 // ── Balance ──
 
 export function balanceKeyboard(): TelegramBot.InlineKeyboardButton[][] {
@@ -82,17 +95,27 @@ export function modeSettingsKeyboard(cabinetId: string): TelegramBot.InlineKeybo
   return [[{ text: "⚙️ Настроить", callback_data: `rmcfg_start_${cabinetId}` }]];
 }
 
-// ── Shops (add cabinet) ──
+// ── Shops ──
 
-export function shopsAddKeyboard(): TelegramBot.InlineKeyboardButton[][] {
-  return [[{ text: "➕ Добавить кабинет", callback_data: "shops_add" }]];
-}
+import type { WbCabinet } from "@shared/schema";
 
-export function shopsManageKeyboard(cabinetId: string): TelegramBot.InlineKeyboardButton[][] {
-  return [
-    [
-      { text: "⚙️ Настройки", callback_data: `settings_${cabinetId}` },
-      { text: "🔑 Обновить API-ключ", callback_data: `shops_update_key_${cabinetId}` },
-    ],
-  ];
+export function shopsListKeyboard(cabinets: WbCabinet[]): TelegramBot.InlineKeyboardButton[][] {
+  const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+
+  // Switch buttons for non-active cabinets, key update for all
+  for (const cab of cabinets) {
+    const name = cab.name || "Кабинет";
+    const row: TelegramBot.InlineKeyboardButton[] = [];
+
+    if (!cab.isActive) {
+      row.push({ text: `🔄 ${name}`, callback_data: `shops_switch_${cab.id}` });
+    }
+    row.push({ text: `🔑 ${cab.isActive ? name : "Ключ"}`, callback_data: `shops_update_key_${cab.id}` });
+
+    keyboard.push(row);
+  }
+
+  keyboard.push([{ text: "➕ Добавить кабинет", callback_data: "shops_add" }]);
+
+  return keyboard;
 }

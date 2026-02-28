@@ -8,7 +8,7 @@ import { balanceKeyboard } from "../keyboards";
 import { getPlanById, isUnlimited } from "@shared/subscriptionPlans";
 
 export function registerBalanceHandler(bot: TelegramBot): void {
-  bot.onText(/\/balance/, async (msg) => {
+  bot.onText(/\/(balance|subscription)/, async (msg) => {
     const chatId = String(msg.chat.id);
     try {
       const ctx = await resolveUserByChatId(chatId);

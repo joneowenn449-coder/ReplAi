@@ -3,6 +3,8 @@
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "../../storage";
 import { sendSettingsMenu } from "./settings";
+import { sendShopsList } from "./shops";
+import { sendStats } from "./stats";
 import { pendingOnboarding } from "./start";
 import { pendingEdits, pendingApiKeyUpdate } from "./text";
 import { escapeMarkdown, truncate } from "../utils";
@@ -32,6 +34,40 @@ export function registerCallbackHandler(bot: TelegramBot): void {
         await bot.editMessageText("", { chat_id: chatId, message_id: messageId }).catch(() => {});
         await bot.sendMessage(chatId, ONBOARDING_SKIPPED, { parse_mode: "MarkdownV2" });
         await bot.answerCallbackQuery(query.id);
+        return;
+      }
+
+      // ── Stats: period switch ──
+      if (data.startsWith("stats_")) {
+        const period = data.replace("stats_", "") as "today" | "week" | "month";
+        if (["today", "week", "month"].includes(period)) {
+          await bot.answerCallbackQuery(query.id);
+          await sendStats(bot, chatId, period, messageId);
+          return;
+        }
+      }
+
+      // ── Shops: switch active cabinet ──
+      if (data.startsWith("shops_switch_")) {
+        const cabinetId = data.replace("shops_switch_", "");
+        const cabinets = await storage.getCabinetsByTelegramChatId(chatId);
+        const target = cabinets.find(c => c.id === cabinetId);
+        if (!target) {
+          await bot.answerCallbackQuery(query.id, { text: "Кабинет не найден" });
+          return;
+        }
+
+        // Deactivate all, activate target
+        const userId = cabinets[0].userId;
+        for (const cab of cabinets) {
+          if (cab.isActive) {
+            await storage.updateCabinet(cab.id, { isActive: false } as any);
+          }
+        }
+        await storage.updateCabinet(cabinetId, { isActive: true } as any);
+
+        await bot.answerCallbackQuery(query.id, { text: `Активный: ${target.name || "Кабинет"}` });
+        await sendShopsList(bot, chatId, messageId);
         return;
       }
 

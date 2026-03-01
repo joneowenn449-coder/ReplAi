@@ -16,6 +16,9 @@ export const pendingEdits = new Map<string, string>();
 // Pending API key updates: chatId → cabinetId (user is updating key for existing cabinet)
 export const pendingApiKeyUpdate = new Map<string, string>();
 
+// Pending new cabinet: chatId → userId (deferred creation — cabinet created only after key validation)
+export const pendingNewCabinet = new Map<string, string>();
+
 export function registerTextHandler(bot: TelegramBot): void {
   bot.on("message", async (msg) => {
     if (!msg.text || msg.text.startsWith("/")) return;
@@ -36,6 +39,13 @@ export function registerTextHandler(bot: TelegramBot): void {
         if (cabinet) {
           await handleApiKeyInput(bot, chatId, msg, cabinet.userId, updateCabinetId, false);
         }
+        return;
+      }
+
+      // ── New cabinet: deferred creation — validate key first, then create cabinet ──
+      const newCabinetUserId = pendingNewCabinet.get(chatId);
+      if (newCabinetUserId) {
+        await handleNewCabinetApiKey(bot, chatId, msg, newCabinetUserId);
         return;
       }
 
@@ -135,6 +145,62 @@ async function handleDraftEdit(
     parse_mode: "Markdown",
     reply_markup: { inline_keyboard: draftKeyboard(reviewId) },
   });
+}
+
+/**
+ * Handle API key input for a NEW cabinet (deferred creation).
+ * Creates cabinet only after successful validation.
+ */
+async function handleNewCabinetApiKey(
+  bot: TelegramBot,
+  chatId: string,
+  msg: TelegramBot.Message,
+  userId: string,
+): Promise<void> {
+  const apiKey = msg.text!.trim();
+
+  // Auto-delete the message with the API key for security
+  try {
+    await bot.deleteMessage(chatId, msg.message_id);
+  } catch (delErr) {
+    console.error("[bot/text] Failed to delete API key message:", delErr);
+  }
+
+  const validation = await validateWbApiKey(apiKey);
+
+  if (!validation.valid) {
+    await bot.sendMessage(chatId, API_KEY_INVALID, {
+      parse_mode: "MarkdownV2",
+      reply_markup: { inline_keyboard: [[{ text: "❌ Отменить", callback_data: "cancel_new_cabinet" }]] },
+    });
+    return;
+  }
+
+  // Key is valid — now create the cabinet
+  const shopName = validation.shopName || "Кабинет WB";
+  const existingCabinets = await storage.getCabinets(userId);
+  const cabinetNumber = existingCabinets.length + 1;
+  const cabinetName = validation.shopName || `Кабинет #${cabinetNumber}`;
+
+  const newCabinet = await storage.createCabinet({
+    userId,
+    name: cabinetName,
+    isActive: false,
+  });
+
+  // Link chatId and save key
+  await storage.updateCabinet(newCabinet.id, {
+    telegramChatId: chatId,
+    wbApiKey: apiKey,
+    brandName: validation.shopName || "",
+    apiStatus: "active",
+    apiStatusCheckedAt: new Date(),
+  } as any);
+
+  pendingNewCabinet.delete(chatId);
+
+  await bot.sendMessage(chatId, API_KEY_ACCEPTED(shopName), { parse_mode: "MarkdownV2" });
+  console.log(`[bot/text] New cabinet created: id=${newCabinet.id} shop=${shopName} userId=${userId}`);
 }
 
 /**

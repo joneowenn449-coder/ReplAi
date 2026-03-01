@@ -6,11 +6,12 @@ import { resolveUserByChatId } from "../middleware/auth";
 import { CABINET_NOT_FOUND } from "../messages";
 import { replyModeKeyboard } from "../keyboards";
 
-function buildModeText(modes: Record<string, string> | null): string {
+function buildModeText(modes: Record<string, string> | null, cabinetName?: string): string {
   const m = modes || {};
   const modeLabel = (r: number) => (m[String(r)] || (r >= 4 ? "auto" : "manual")) === "auto" ? "Авто" : "Ручной";
 
-  let text = `📝 *Режим ответов*\n\n`;
+  const nameLabel = cabinetName ? ` — ${cabinetName}` : "";
+  let text = `📝 *Режим ответов${nameLabel}*\n\n`;
   for (let r = 1; r <= 5; r++) {
     text += `${r} ⭐ — *${modeLabel(r)}*\n`;
   }
@@ -40,7 +41,7 @@ export async function sendModeMenu(
 
     const cabinet = ctx.activeCabinet;
     const modes = cabinet.replyModes as Record<string, string> | null;
-    const text = buildModeText(modes);
+    const text = buildModeText(modes, cabinet.name || undefined);
     const keyboard = replyModeKeyboard(cabinet.id, modes);
 
     if (messageId) {

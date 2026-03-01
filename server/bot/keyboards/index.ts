@@ -101,15 +101,17 @@ import type { WbCabinet } from "@shared/schema";
 export function shopsListKeyboard(cabinets: WbCabinet[]): TelegramBot.InlineKeyboardButton[][] {
   const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
 
-  // Switch buttons for non-active cabinets, key update for all
   for (const cab of cabinets) {
     const name = cab.name || "Кабинет";
     const row: TelegramBot.InlineKeyboardButton[] = [];
 
+    // Non-active cabinets get a switch button
     if (!cab.isActive) {
-      row.push({ text: `🔄 ${name}`, callback_data: `shops_switch_${cab.id}` });
+      row.push({ text: `📍 ${name}`, callback_data: `shops_switch_${cab.id}` });
     }
-    row.push({ text: `🔑 ${cab.isActive ? name : "Ключ"}`, callback_data: `shops_update_key_${cab.id}` });
+
+    // All cabinets get a key update button with explicit name
+    row.push({ text: `🔑 ${name}`, callback_data: `shops_update_key_${cab.id}` });
 
     keyboard.push(row);
   }

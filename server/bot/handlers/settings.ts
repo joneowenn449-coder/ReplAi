@@ -8,8 +8,9 @@ import { notifySettingsKeyboard } from "../keyboards";
 
 type NotifyMap = Record<string, boolean>;
 
-function buildNotifyText(notifyMap: NotifyMap): string {
-  let text = `🔔 *Уведомления*\n\n`;
+function buildNotifyText(notifyMap: NotifyMap, cabinetName?: string): string {
+  const nameLabel = cabinetName ? ` — ${cabinetName}` : "";
+  let text = `🔔 *Уведомления${nameLabel}*\n\n`;
   for (let r = 1; r <= 5; r++) {
     const enabled = notifyMap[String(r)] !== false; // default: enabled
     text += `${r} ⭐ — ${enabled ? "✅ Вкл" : "❌ Выкл"}\n`;
@@ -68,7 +69,7 @@ export async function sendSettingsMenu(
     if (!cabinet) return;
 
     const notifyMap = parseNotifySettings(cabinet);
-    const text = buildNotifyText(notifyMap);
+    const text = buildNotifyText(notifyMap, cabinet.name || undefined);
     const keyboard = notifySettingsKeyboard(cabinet.id, notifyMap);
 
     if (messageId) {

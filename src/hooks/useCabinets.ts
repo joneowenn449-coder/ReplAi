@@ -18,7 +18,10 @@ export interface WbCabinet {
   telegram_username: string | null;
   telegram_first_name: string | null;
   tg_notify_type: string | null;
+  tg_notify_stars: Record<string, boolean> | null;
   photo_analysis: boolean;
+  api_status: string | null;
+  api_status_checked_at: string | null;
 }
 
 export function useCabinets() {

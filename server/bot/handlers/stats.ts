@@ -54,10 +54,12 @@ export async function sendStats(
 
     const cabinetIds = ctx.cabinets.map(c => c.id);
     const since = getPeriodStart(period);
-    const stats = await storage.getReviewStatsSince(cabinetIds, since);
+    const [stats, totalPending] = await Promise.all([
+      storage.getReviewStatsSince(cabinetIds, since),
+      storage.getPendingReviewCount(cabinetIds),
+    ]);
 
     const periodLabel = PERIOD_LABELS[period];
-    const pending = stats.total - stats.answered;
     const avgStr = stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "—";
 
     let ratingBars = "";
@@ -70,7 +72,7 @@ export async function sendStats(
     const msgText = `📊 *Статистика за ${periodLabel}*\n\n` +
       `📥 Новых отзывов: *${stats.total}*\n` +
       `✅ Отвечено: *${stats.answered}*\n` +
-      `⏳ Ожидают ответа: *${pending}*\n` +
+      `⏳ Ожидают ответа: *${totalPending}*\n` +
       `⭐ Средний рейтинг: *${avgStr}*\n\n` +
       `📊 Распределение:\n${ratingBars}`;
 

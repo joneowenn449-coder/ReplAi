@@ -759,7 +759,7 @@ export class DatabaseStorage {
       );
 
     const total = allReviews.length;
-    const answered = allReviews.filter(r => r.status === "sent" || r.status === "auto").length;
+    const answered = allReviews.filter(r => r.status === "sent" || r.status === "auto" || r.status === "answered_externally").length;
     const avgRating = total > 0 ? allReviews.reduce((sum, r) => sum + r.rating, 0) / total : 0;
     const byRating: Record<number, number> = {};
     for (const r of allReviews) {
@@ -767,6 +767,22 @@ export class DatabaseStorage {
     }
 
     return { total, answered, avgRating, byRating };
+  }
+
+  async getPendingReviewCount(cabinetIds: string[]): Promise<number> {
+    if (cabinetIds.length === 0) return 0;
+
+    const rows = await db
+      .select({ cnt: count() })
+      .from(reviews)
+      .where(
+        and(
+          sql`${reviews.cabinetId} IN (${sql.join(cabinetIds.map(id => sql`${id}::uuid`), sql`, `)})`,
+          eq(reviews.status, "pending")
+        )
+      );
+
+    return Number(rows[0]?.cnt ?? 0);
   }
 
   async getTodayReviewStats(cabinetIds: string[]) {

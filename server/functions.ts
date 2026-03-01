@@ -549,6 +549,7 @@ async function processCabinetReviews(
         productArticle: String(fb.productDetails?.nmId || fb.nmId || ""),
         photoLinks: photoLinks,
         aiInsight: null,
+        aiDraft: aiDraft || null,
       }).catch(err => console.error("[telegram] new review notification error:", err));
     }
   }

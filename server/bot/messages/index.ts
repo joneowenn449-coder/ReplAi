@@ -73,6 +73,7 @@ export function buildNewReviewMessage(reviewData: {
   productName: string;
   productArticle: string;
   aiInsight: string | null;
+  aiDraft: string | null;
 }): string {
   const emoji = ratingEmoji(reviewData.rating);
 
@@ -81,18 +82,18 @@ export function buildNewReviewMessage(reviewData: {
   msg += `От: ${escapeMarkdown(reviewData.userName)}\n`;
 
   if (reviewData.text) {
-    msg += `\n💬 Текст: «${escapeMarkdown(truncate(reviewData.text, 300))}»\n`;
+    msg += `\n💬 *Текст:*\n«${escapeMarkdown(truncate(reviewData.text, 300))}»\n`;
   }
 
   if (reviewData.pros) {
-    msg += `\n👍 Достоинства: ${escapeMarkdown(truncate(reviewData.pros, 200))}`;
+    msg += `\n👍 *Плюсы:* ${escapeMarkdown(truncate(reviewData.pros, 200))}`;
   }
   if (reviewData.cons) {
-    msg += `\n👎 Недостатки: ${escapeMarkdown(truncate(reviewData.cons, 200))}`;
+    msg += `\n👎 *Минусы:* ${escapeMarkdown(truncate(reviewData.cons, 200))}`;
   }
 
-  if (reviewData.aiInsight) {
-    msg += `\n\n🤖 Инсайт AI: «${escapeMarkdown(truncate(reviewData.aiInsight, 200))}»`;
+  if (reviewData.aiDraft) {
+    msg += `\n\n📝 *Предложенный ответ:*\n«${escapeMarkdown(truncate(reviewData.aiDraft, 500))}»`;
   }
 
   return msg;
@@ -116,11 +117,11 @@ export function buildAutoReplyMessage(
 ): string {
   const emoji = ratingEmoji(review.rating);
   return (
-    `✅ *Авто\\-ответ отправлен*\n\n` +
-    `${emoji} (${review.rating}/5) | Арт: ${escapeMarkdown(review.productArticle || "")}\n` +
+    `${emoji} *АВТО\\-ОТВЕТ ОТПРАВЛЕН* (${review.rating}/5) | Арт: ${escapeMarkdown(review.productArticle || "")}\n\n` +
     `📦 ${escapeMarkdown(review.productName || "")}\n` +
+    `От: ${escapeMarkdown(review.userName || "Покупатель")}\n\n` +
     `💬 «${escapeMarkdown(truncate(review.text || "", 200))}»\n\n` +
-    `📝 *Ответ:* ${escapeMarkdown(truncate(answer, 500))}`
+    `📝 *Ответ:*\n«${escapeMarkdown(truncate(answer, 500))}»`
   );
 }
 

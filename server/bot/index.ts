@@ -6,7 +6,7 @@ import { storage } from "../storage";
 import { APP_DOMAIN, WB_FEEDBACKS_URL } from "./config";
 import { escapeMarkdown, truncate, ratingEmoji } from "./utils";
 import { buildNewReviewMessage, buildAutoReplyMessage, buildAdminAIErrorMessage } from "./messages";
-import { newReviewKeyboard } from "./keyboards";
+import { newReviewKeyboard, draftKeyboard } from "./keyboards";
 
 // State management
 import { expireOldPendingStates } from "./state";
@@ -54,6 +54,7 @@ export async function sendNewReviewNotification(
     productArticle: string;
     photoLinks: any[] | null;
     aiInsight: string | null;
+    aiDraft: string | null;
   }
 ) {
   if (!bot) {
@@ -73,7 +74,11 @@ export async function sendNewReviewNotification(
     }
 
     const msg = buildNewReviewMessage(reviewData);
-    const keyboard = newReviewKeyboard(reviewId);
+    // If AI draft is available — show publish/edit/regen buttons right away
+    // Otherwise — show generate button
+    const keyboard = reviewData.aiDraft
+      ? draftKeyboard(reviewId)
+      : newReviewKeyboard(reviewId);
 
     const photos = Array.isArray(reviewData.photoLinks) ? reviewData.photoLinks : [];
     const firstPhotoUrl = photos.length > 0
@@ -92,7 +97,7 @@ export async function sendNewReviewNotification(
         reply_markup: { inline_keyboard: keyboard },
       });
     }
-    console.log(`[bot] sendNewReview: sent to chatId=${cabinet.telegramChatId} cabinet=${cabinetId} rating=${reviewData.rating}`);
+    console.log(`[bot] sendNewReview: sent to chatId=${cabinet.telegramChatId} cabinet=${cabinetId} rating=${reviewData.rating} hasDraft=${!!reviewData.aiDraft}`);
   } catch (err) {
     console.error("[bot] Error sending new review notification:", err);
   }

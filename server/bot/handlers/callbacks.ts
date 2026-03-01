@@ -9,7 +9,7 @@ import { pendingOnboarding } from "./start";
 import { pendingEdits, pendingApiKeyUpdate } from "./text";
 import { escapeMarkdown, truncate } from "../utils";
 import { buildDraftMessage, ONBOARDING_SKIPPED, ASK_WB_API_KEY } from "../messages";
-import { draftKeyboard, cancelEditKeyboard, replyModeHighKeyboard, replyModeLowKeyboard, onboardingApiKeyKeyboard } from "../keyboards";
+import { draftKeyboard, cancelEditKeyboard, onboardingApiKeyKeyboard } from "../keyboards";
 import { WB_FEEDBACKS_URL } from "../config";
 
 export function registerCallbackHandler(bot: TelegramBot): void {
@@ -133,24 +133,7 @@ export function registerCallbackHandler(bot: TelegramBot): void {
         return;
       }
 
-      // ── Reply mode config ──
-      if (data.startsWith("rmcfg_start_")) {
-        const cabinetId = data.replace("rmcfg_start_", "");
-        const cabinet = await storage.getCabinetById(cabinetId);
-        if (!cabinet) return;
-
-        const modes = (cabinet.replyModes as Record<string, string>) || {};
-        const currentHigh = modes["4"] || modes["5"] || "auto";
-
-        await bot.editMessageText("⭐⭐⭐⭐-⭐⭐⭐⭐⭐ Режим для 4-5 звёзд:", {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: { inline_keyboard: replyModeHighKeyboard(cabinetId, currentHigh) },
-        });
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-
+      // ── Reply mode toggle (single-screen) ──
       if (data.startsWith("rmset_")) {
         const parts = data.split("_");
         const group = parts[1]; // high or low
@@ -163,23 +146,15 @@ export function registerCallbackHandler(bot: TelegramBot): void {
         if (group === "high") {
           currentModes["4"] = mode;
           currentModes["5"] = mode;
-          await storage.updateCabinet(cabinetId, { replyModes: currentModes } as any);
-
-          const currentLow = currentModes["1"] || currentModes["2"] || currentModes["3"] || "manual";
-          await bot.editMessageText("⭐-⭐⭐⭐ Режим для 1-3 звёзд:", {
-            chat_id: chatId,
-            message_id: messageId,
-            reply_markup: { inline_keyboard: replyModeLowKeyboard(cabinetId, currentLow) },
-          });
-          await bot.answerCallbackQuery(query.id);
         } else if (group === "low") {
           currentModes["1"] = mode;
           currentModes["2"] = mode;
           currentModes["3"] = mode;
-          await storage.updateCabinet(cabinetId, { replyModes: currentModes } as any);
-          await sendSettingsMenu(bot, chatId, cabinetId, messageId);
-          await bot.answerCallbackQuery(query.id, { text: "Режим ответов сохранён!" });
         }
+
+        await storage.updateCabinet(cabinetId, { replyModes: currentModes } as any);
+        await sendSettingsMenu(bot, chatId, cabinetId, messageId);
+        await bot.answerCallbackQuery(query.id, { text: "Сохранено ✅" });
         return;
       }
 

@@ -36,37 +36,38 @@ export function cancelEditKeyboard(reviewId: string): TelegramBot.InlineKeyboard
 
 // ── Settings ──
 
-export function settingsKeyboard(cabinetId: string, notifyType: string): TelegramBot.InlineKeyboardButton[][] {
+export function settingsKeyboard(cabinetId: string, notifyType: string, replyModes: Record<string, string> | null): TelegramBot.InlineKeyboardButton[][] {
+  const modes = replyModes || {};
+  const highMode = modes["4"] || modes["5"] || "auto";
+  const lowMode = modes["1"] || modes["2"] || modes["3"] || "manual";
+
   const checkN = (type: string) => notifyType === type ? "✅ " : "";
+  const checkM = (group: string, mode: string) => {
+    const current = group === "high" ? highMode : lowMode;
+    return current === mode ? "✅ " : "";
+  };
+
   return [
+    // Reply modes — positive
+    [{ text: "📝 Положительные (4-5 ⭐):", callback_data: "noop" }],
+    [
+      { text: `${checkM("high", "auto")}Авто`, callback_data: `rmset_high_auto_${cabinetId}` },
+      { text: `${checkM("high", "manual")}Ручной`, callback_data: `rmset_high_manual_${cabinetId}` },
+    ],
+    // Reply modes — negative
+    [{ text: "📝 Негативные (1-3 ⭐):", callback_data: "noop" }],
+    [
+      { text: `${checkM("low", "auto")}Авто`, callback_data: `rmset_low_auto_${cabinetId}` },
+      { text: `${checkM("low", "manual")}Ручной`, callback_data: `rmset_low_manual_${cabinetId}` },
+    ],
+    // Notifications
     [{ text: "🔔 Уведомления:", callback_data: "noop" }],
     [
       { text: `${checkN("all")}Все`, callback_data: `notify_all_${cabinetId}` },
       { text: `${checkN("negative")}Негатив`, callback_data: `notify_neg_${cabinetId}` },
       { text: `${checkN("questions")}Вопросы`, callback_data: `notify_questions_${cabinetId}` },
     ],
-    [{ text: "⚙️ Настроить режим ответов", callback_data: `rmcfg_start_${cabinetId}` }],
     [{ text: "✅ Готово", callback_data: `settings_done_${cabinetId}` }],
-  ];
-}
-
-export function replyModeHighKeyboard(cabinetId: string, currentHigh: string): TelegramBot.InlineKeyboardButton[][] {
-  const checkH = (m: string) => currentHigh === m ? "✅ " : "";
-  return [
-    [
-      { text: `${checkH("manual")}Ручной`, callback_data: `rmset_high_manual_${cabinetId}` },
-      { text: `${checkH("auto")}Авто`, callback_data: `rmset_high_auto_${cabinetId}` },
-    ],
-  ];
-}
-
-export function replyModeLowKeyboard(cabinetId: string, currentLow: string): TelegramBot.InlineKeyboardButton[][] {
-  const checkL = (m: string) => currentLow === m ? "✅ " : "";
-  return [
-    [
-      { text: `${checkL("manual")}Ручной`, callback_data: `rmset_low_manual_${cabinetId}` },
-      { text: `${checkL("auto")}Авто`, callback_data: `rmset_low_auto_${cabinetId}` },
-    ],
   ];
 }
 
@@ -87,12 +88,6 @@ export function statsPeriodKeyboard(activePeriod: string): TelegramBot.InlineKey
 
 export function balanceKeyboard(): TelegramBot.InlineKeyboardButton[][] {
   return [[{ text: "💳 Пополнить", url: `${APP_DOMAIN}/pricing` }]];
-}
-
-// ── Mode ──
-
-export function modeSettingsKeyboard(cabinetId: string): TelegramBot.InlineKeyboardButton[][] {
-  return [[{ text: "⚙️ Настроить", callback_data: `rmcfg_start_${cabinetId}` }]];
 }
 
 // ── Shops ──

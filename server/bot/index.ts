@@ -8,6 +8,9 @@ import { escapeMarkdown, truncate, ratingEmoji } from "./utils";
 import { buildNewReviewMessage, buildAutoReplyMessage, buildAdminAIErrorMessage } from "./messages";
 import { newReviewKeyboard } from "./keyboards";
 
+// State management
+import { expireOldPendingStates } from "./state";
+
 // Handlers
 import { registerStartHandler } from "./handlers/start";
 import { registerShopsHandler } from "./handlers/shops";
@@ -206,6 +209,11 @@ export async function startTelegramBot() {
       console.error("[bot] Polling error:", err?.message || err);
     }
   });
+
+  // Clean up expired pending states (older than 24h)
+  expireOldPendingStates()
+    .then(count => { if (count > 0) console.log(`[bot] Expired ${count} old pending states`); })
+    .catch(err => console.error("[bot] Error expiring pending states:", err));
 
   console.log("[bot] Bot started with long polling");
 

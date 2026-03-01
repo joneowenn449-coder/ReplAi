@@ -2,22 +2,16 @@
 
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "../../storage";
-import { pendingOnboarding } from "./start";
 import { resolveUserByChatId, resolveUserByTelegramId } from "../middleware/auth";
 import { escapeMarkdown, truncate } from "../utils";
 import { buildDraftMessage } from "../messages";
 import { draftKeyboard } from "../keyboards";
 import { API_KEY_ACCEPTED, API_KEY_INVALID, GENERIC_ERROR } from "../messages";
 import { WB_CONTENT_URL } from "../config";
-
-// Pending edits: chatId → reviewId (user is editing a draft)
-export const pendingEdits = new Map<string, string>();
-
-// Pending API key updates: chatId → cabinetId (user is updating key for existing cabinet)
-export const pendingApiKeyUpdate = new Map<string, string>();
-
-// Pending new cabinet: chatId → userId (deferred creation — cabinet created only after key validation)
-export const pendingNewCabinet = new Map<string, string>();
+import {
+  getPendingOnboarding, clearPendingOnboarding,
+  getPendingState, clearPendingState,
+} from "../state";
 
 export function registerTextHandler(bot: TelegramBot): void {
   bot.on("message", async (msg) => {
@@ -26,14 +20,14 @@ export function registerTextHandler(bot: TelegramBot): void {
 
     try {
       // ── Onboarding: waiting for API key ──
-      const onboardCtx = pendingOnboarding.get(chatId);
+      const onboardCtx = await getPendingOnboarding(chatId);
       if (onboardCtx) {
         await handleApiKeyInput(bot, chatId, msg, onboardCtx.userId, onboardCtx.cabinetId, true);
         return;
       }
 
       // ── Update API key for existing cabinet ──
-      const updateCabinetId = pendingApiKeyUpdate.get(chatId);
+      const updateCabinetId = await getPendingState(chatId, "api_key_update");
       if (updateCabinetId) {
         const cabinet = await storage.getCabinetById(updateCabinetId);
         if (cabinet) {
@@ -43,20 +37,20 @@ export function registerTextHandler(bot: TelegramBot): void {
       }
 
       // ── New cabinet: deferred creation — validate key first, then create cabinet ──
-      const newCabinetUserId = pendingNewCabinet.get(chatId);
+      const newCabinetUserId = await getPendingState(chatId, "new_cabinet");
       if (newCabinetUserId) {
         await handleNewCabinetApiKey(bot, chatId, msg, newCabinetUserId);
         return;
       }
 
       // ── Pending edit: user is sending new draft text ──
-      const reviewId = pendingEdits.get(chatId);
+      const reviewId = await getPendingState(chatId, "edit");
       if (reviewId) {
         await handleDraftEdit(bot, chatId, msg, reviewId);
         return;
       }
 
-      // ── Fallback: detect API key input even if pendingOnboarding was lost (bot restart) ──
+      // ── Fallback: detect API key input even if pending state was somehow lost ──
       // If user has a cabinet without API key and sends a long token-like string — treat as key input
       const text = msg.text.trim();
       if (looksLikeApiKey(text)) {
@@ -116,9 +110,9 @@ async function handleApiKeyInput(
 
   // Clear pending state
   if (isOnboarding) {
-    pendingOnboarding.delete(chatId);
+    await clearPendingOnboarding(chatId);
   } else {
-    pendingApiKeyUpdate.delete(chatId);
+    await clearPendingState(chatId, "api_key_update");
   }
 
   const shopName = validation.shopName || "Кабинет WB";
@@ -133,7 +127,7 @@ async function handleDraftEdit(
   msg: TelegramBot.Message,
   reviewId: string,
 ): Promise<void> {
-  pendingEdits.delete(chatId);
+  await clearPendingState(chatId, "edit");
   const newText = msg.text!;
 
   await storage.updateReview(reviewId, { aiDraft: newText, status: "pending" });
@@ -197,7 +191,7 @@ async function handleNewCabinetApiKey(
     apiStatusCheckedAt: new Date(),
   } as any);
 
-  pendingNewCabinet.delete(chatId);
+  await clearPendingState(chatId, "new_cabinet");
 
   await bot.sendMessage(chatId, API_KEY_ACCEPTED(shopName), { parse_mode: "MarkdownV2" });
   console.log(`[bot/text] New cabinet created: id=${newCabinet.id} shop=${shopName} userId=${userId}`);
@@ -219,7 +213,7 @@ function looksLikeApiKey(text: string): boolean {
 
 /**
  * Find a cabinet without API key for the given chatId or telegramId.
- * Used as fallback when pendingOnboarding map was lost (bot restart).
+ * Used as fallback when pending state was somehow lost.
  */
 async function findCabinetAwaitingApiKey(
   chatId: string,

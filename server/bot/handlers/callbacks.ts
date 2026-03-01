@@ -6,8 +6,9 @@ import { sendSettingsMenu, parseNotifySettings } from "./settings";
 import { sendModeMenu } from "./mode";
 import { sendShopsList } from "./shops";
 import { sendStats } from "./stats";
-import { pendingOnboarding } from "./start";
-import { pendingEdits, pendingApiKeyUpdate, pendingNewCabinet } from "./text";
+import {
+  clearPendingOnboarding, setPendingState, clearPendingState,
+} from "../state";
 import { escapeMarkdown, truncate } from "../utils";
 import { buildDraftMessage, ONBOARDING_SKIPPED, ASK_WB_API_KEY } from "../messages";
 import { draftKeyboard, cancelEditKeyboard, onboardingApiKeyKeyboard } from "../keyboards";
@@ -31,7 +32,7 @@ export function registerCallbackHandler(bot: TelegramBot): void {
 
       // ── Onboarding: skip API key ──
       if (data === "onboard_skip") {
-        pendingOnboarding.delete(chatId);
+        await clearPendingOnboarding(chatId);
         await bot.editMessageText("", { chat_id: chatId, message_id: messageId }).catch(() => {});
         await bot.sendMessage(chatId, ONBOARDING_SKIPPED, { parse_mode: "MarkdownV2" });
         await bot.answerCallbackQuery(query.id);
@@ -81,7 +82,7 @@ export function registerCallbackHandler(bot: TelegramBot): void {
         }
 
         // Deferred creation: don't create cabinet until API key is validated
-        pendingNewCabinet.set(chatId, cabinets[0].userId);
+        await setPendingState(chatId, "new_cabinet", cabinets[0].userId);
 
         await bot.sendMessage(chatId, ASK_WB_API_KEY, {
           parse_mode: "MarkdownV2",
@@ -94,7 +95,7 @@ export function registerCallbackHandler(bot: TelegramBot): void {
       // ── Shops: update API key for existing cabinet ──
       if (data.startsWith("shops_update_key_")) {
         const cabinetId = data.replace("shops_update_key_", "");
-        pendingApiKeyUpdate.set(chatId, cabinetId);
+        await setPendingState(chatId, "api_key_update", cabinetId);
 
         await bot.sendMessage(chatId, "🔑 Отправьте новый API\\-ключ WB\\. Сообщение будет автоматически удалено\\.", {
           parse_mode: "MarkdownV2",
@@ -105,14 +106,14 @@ export function registerCallbackHandler(bot: TelegramBot): void {
       }
 
       if (data === "cancel_key_update") {
-        pendingApiKeyUpdate.delete(chatId);
+        await clearPendingState(chatId, "api_key_update");
         await bot.editMessageText("❌ Обновление ключа отменено.", { chat_id: chatId, message_id: messageId });
         await bot.answerCallbackQuery(query.id);
         return;
       }
 
       if (data === "cancel_new_cabinet") {
-        pendingNewCabinet.delete(chatId);
+        await clearPendingState(chatId, "new_cabinet");
         await bot.editMessageText("❌ Добавление кабинета отменено.", { chat_id: chatId, message_id: messageId });
         await bot.answerCallbackQuery(query.id);
         return;
@@ -276,7 +277,7 @@ export function registerCallbackHandler(bot: TelegramBot): void {
       // ── Edit draft ──
       if (data.startsWith("edit_")) {
         const reviewId = data.replace("edit_", "");
-        pendingEdits.set(chatId, reviewId);
+        await setPendingState(chatId, "edit", reviewId);
         await bot.answerCallbackQuery(query.id);
         await bot.sendMessage(chatId, "✏️ Отправьте новый текст ответа следующим сообщением:", {
           reply_markup: { inline_keyboard: cancelEditKeyboard(reviewId) },
@@ -285,7 +286,7 @@ export function registerCallbackHandler(bot: TelegramBot): void {
       }
 
       if (data.startsWith("cancel_edit_")) {
-        pendingEdits.delete(chatId);
+        await clearPendingState(chatId, "edit");
         await bot.editMessageText("❌ Редактирование отменено.", { chat_id: chatId, message_id: messageId });
         await bot.answerCallbackQuery(query.id);
         return;

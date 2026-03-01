@@ -247,6 +247,18 @@ export const surveyResponses = replaiSchema.table("survey_responses", {
 
 export const insertSurveyResponseSchema = createInsertSchema(surveyResponses).omit({ id: true, createdAt: true });
 
+// Bot pending states — replaces in-memory Maps (survives bot restarts)
+// Types: onboarding, edit, api_key_update, new_cabinet
+export const botPendingStates = replaiSchema.table("bot_pending_states", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  chatId: text("chat_id").notNull(),
+  type: text("type").notNull(), // 'onboarding' | 'edit' | 'api_key_update' | 'new_cabinet'
+  targetId: text("target_id").notNull(), // reviewId, cabinetId, or JSON payload
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertBotPendingStateSchema = createInsertSchema(botPendingStates).omit({ id: true, createdAt: true });
+
 export const insertAiConversationSchema = createInsertSchema(aiConversations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAiMessageSchema = createInsertSchema(aiMessages).omit({ id: true, createdAt: true });
 export const insertAiRequestBalanceSchema = createInsertSchema(aiRequestBalances).omit({ id: true, updatedAt: true });
@@ -307,3 +319,5 @@ export type SurveyResponse = typeof surveyResponses.$inferSelect;
 export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
 export type UserSubscription = typeof userSubscriptions.$inferSelect;
 export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema>;
+export type BotPendingState = typeof botPendingStates.$inferSelect;
+export type InsertBotPendingState = z.infer<typeof insertBotPendingStateSchema>;

@@ -11,10 +11,7 @@ import {
 } from "../messages";
 import { onboardingApiKeyKeyboard, settingsKeyboard } from "../keyboards";
 import { TRIAL_PLAN_ID, TRIAL_DURATION_DAYS } from "@shared/subscriptionPlans";
-
-// Track users currently in onboarding flow (awaiting API key input)
-// Map<chatId, { userId: string, cabinetId: string }>
-export const pendingOnboarding = new Map<string, { userId: string; cabinetId: string }>();
+import { setPendingOnboarding } from "../state";
 
 export function registerStartHandler(bot: TelegramBot): void {
   bot.onText(/\/start(.*)/, async (msg, match) => {
@@ -104,7 +101,7 @@ async function handleOnboarding(
     } as any);
 
     // Enter onboarding flow — waiting for API key
-    pendingOnboarding.set(chatId, { userId: user.id, cabinetId: defaultCabinet.id });
+    await setPendingOnboarding(chatId, { userId: user.id, cabinetId: defaultCabinet.id });
   }
 
   // Send welcome message
@@ -153,7 +150,7 @@ async function handleAuthTokenLink(
     await bot.sendMessage(chatId, AUTH_LINK_SUCCESS(cabinetName), { parse_mode: "MarkdownV2" });
 
     // Enter onboarding: ask for WB API key
-    pendingOnboarding.set(chatId, { userId: result.userId, cabinetId: result.cabinetId });
+    await setPendingOnboarding(chatId, { userId: result.userId, cabinetId: result.cabinetId });
 
     await bot.sendMessage(chatId, ASK_WB_API_KEY, {
       parse_mode: "MarkdownV2",

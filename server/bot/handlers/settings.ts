@@ -1,68 +1,75 @@
-// /settings handler — notification settings
+// /settings handler — notification settings per star rating
 
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "../../storage";
 import { resolveUserByChatId } from "../middleware/auth";
 import { CABINET_NOT_FOUND } from "../messages";
-import { settingsKeyboard } from "../keyboards";
+import { notifySettingsKeyboard } from "../keyboards";
 
-function buildSettingsText(modes: Record<string, string> | null): string {
-  const m = modes || {};
-  const highMode = m["4"] || m["5"] || "auto";
-  const lowMode = m["1"] || m["2"] || m["3"] || "manual";
-  const modeLabel = (mode: string) => mode === "auto" ? "Авто" : "Ручной";
+type NotifyMap = Record<string, boolean>;
 
-  return `⚙️ *Настройки кабинета*\n\n` +
-    `📝 *Режим ответов:*\n` +
-    `Положительные (4-5 ⭐): *${modeLabel(highMode)}*\n` +
-    `Негативные (1-3 ⭐): *${modeLabel(lowMode)}*\n\n` +
-    `💡 _Авто — ответ отправляется сразу_\n` +
-    `💡 _Ручной — черновик на подтверждение_`;
+function buildNotifyText(notifyMap: NotifyMap): string {
+  let text = `🔔 *Уведомления*\n\n`;
+  for (let r = 1; r <= 5; r++) {
+    const enabled = notifyMap[String(r)] !== false; // default: enabled
+    text += `${r} ⭐ — ${enabled ? "✅ Вкл" : "❌ Выкл"}\n`;
+  }
+  return text;
+}
+
+function parseNotifySettings(cabinet: any): NotifyMap {
+  // tgNotifyType was old format: "all" | "negative" | "questions"
+  // New format: tgNotifyStars JSON { "1": true, "2": true, ... }
+  // Migrate old format on read
+  const stars = cabinet.tgNotifyStars as NotifyMap | null;
+  if (stars && typeof stars === "object") return stars;
+
+  // Fallback: migrate from old tgNotifyType
+  const oldType = cabinet.tgNotifyType || "all";
+  const map: NotifyMap = {};
+  for (let r = 1; r <= 5; r++) {
+    if (oldType === "all") map[String(r)] = true;
+    else if (oldType === "negative") map[String(r)] = r <= 3;
+    else if (oldType === "questions") map[String(r)] = r <= 2;
+    else map[String(r)] = true;
+  }
+  return map;
 }
 
 export function registerSettingsHandler(bot: TelegramBot): void {
   bot.onText(/\/settings/, async (msg) => {
     const chatId = String(msg.chat.id);
-    try {
+    await sendSettingsMenu(bot, chatId);
+  });
+}
+
+/**
+ * Send notification settings menu. If messageId provided, edits.
+ * Can be called with cabinetId directly (from callbacks) or resolves from chatId.
+ */
+export async function sendSettingsMenu(
+  bot: TelegramBot,
+  chatId: string,
+  cabinetId?: string,
+  messageId?: number,
+): Promise<void> {
+  try {
+    let cabinet;
+    if (cabinetId) {
+      cabinet = await storage.getCabinetById(cabinetId);
+    } else {
       const ctx = await resolveUserByChatId(chatId);
       if (!ctx || !ctx.activeCabinet) {
         await bot.sendMessage(chatId, CABINET_NOT_FOUND, { parse_mode: "MarkdownV2" });
         return;
       }
-
-      const cabinet = ctx.activeCabinet;
-      const notifyType = cabinet.tgNotifyType || "all";
-      const modes = cabinet.replyModes as Record<string, string> | null;
-
-      const text = buildSettingsText(modes);
-      await bot.sendMessage(chatId, text, {
-        parse_mode: "Markdown",
-        reply_markup: { inline_keyboard: settingsKeyboard(cabinet.id, notifyType, modes) },
-      });
-    } catch (err) {
-      console.error("[bot/settings] Error:", err);
-      await bot.sendMessage(chatId, "Ошибка настроек.").catch(() => {});
+      cabinet = ctx.activeCabinet;
     }
-  });
-}
-
-/**
- * Send settings menu programmatically (called from callbacks).
- */
-export async function sendSettingsMenu(
-  bot: TelegramBot,
-  chatId: string,
-  cabinetId: string,
-  messageId?: number,
-): Promise<void> {
-  try {
-    const cabinet = await storage.getCabinetById(cabinetId);
     if (!cabinet) return;
 
-    const notifyType = cabinet.tgNotifyType || "all";
-    const modes = cabinet.replyModes as Record<string, string> | null;
-    const text = buildSettingsText(modes);
-    const keyboard = settingsKeyboard(cabinet.id, notifyType, modes);
+    const notifyMap = parseNotifySettings(cabinet);
+    const text = buildNotifyText(notifyMap);
+    const keyboard = notifySettingsKeyboard(cabinet.id, notifyMap);
 
     if (messageId) {
       await bot.editMessageText(text, {
@@ -78,6 +85,8 @@ export async function sendSettingsMenu(
       });
     }
   } catch (err) {
-    console.error("[bot/settings] Error sending settings menu:", err);
+    console.error("[bot/settings] Error:", err);
   }
 }
+
+export { parseNotifySettings, type NotifyMap };

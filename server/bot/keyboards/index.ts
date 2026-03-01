@@ -36,39 +36,43 @@ export function cancelEditKeyboard(reviewId: string): TelegramBot.InlineKeyboard
 
 // ── Settings ──
 
-export function settingsKeyboard(cabinetId: string, notifyType: string, replyModes: Record<string, string> | null): TelegramBot.InlineKeyboardButton[][] {
-  const modes = replyModes || {};
-  const highMode = modes["4"] || modes["5"] || "auto";
-  const lowMode = modes["1"] || modes["2"] || modes["3"] || "manual";
+// ── Reply mode per star ──
 
-  const checkN = (type: string) => notifyType === type ? "✅ " : "";
-  const checkM = (group: string, mode: string) => {
-    const current = group === "high" ? highMode : lowMode;
-    return current === mode ? "✅ " : "";
-  };
+export function replyModeKeyboard(cabinetId: string, modes: Record<string, string> | null): TelegramBot.InlineKeyboardButton[][] {
+  const m = modes || {};
+  const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
 
-  return [
-    // Reply modes — positive
-    [{ text: "📝 Положительные (4-5 ⭐):", callback_data: "noop" }],
-    [
-      { text: `${checkM("high", "auto")}Авто`, callback_data: `rmset_high_auto_${cabinetId}` },
-      { text: `${checkM("high", "manual")}Ручной`, callback_data: `rmset_high_manual_${cabinetId}` },
-    ],
-    // Reply modes — negative
-    [{ text: "📝 Негативные (1-3 ⭐):", callback_data: "noop" }],
-    [
-      { text: `${checkM("low", "auto")}Авто`, callback_data: `rmset_low_auto_${cabinetId}` },
-      { text: `${checkM("low", "manual")}Ручной`, callback_data: `rmset_low_manual_${cabinetId}` },
-    ],
-    // Notifications
-    [{ text: "🔔 Уведомления:", callback_data: "noop" }],
-    [
-      { text: `${checkN("all")}Все`, callback_data: `notify_all_${cabinetId}` },
-      { text: `${checkN("negative")}Негатив`, callback_data: `notify_neg_${cabinetId}` },
-      { text: `${checkN("questions")}Вопросы`, callback_data: `notify_questions_${cabinetId}` },
-    ],
-    [{ text: "✅ Готово", callback_data: `settings_done_${cabinetId}` }],
-  ];
+  for (let r = 1; r <= 5; r++) {
+    const current = m[String(r)] || (r >= 4 ? "auto" : "manual");
+    keyboard.push([
+      { text: `${r} ⭐`, callback_data: "noop" },
+      { text: `${current === "auto" ? "✅ " : ""}Авто`, callback_data: `rmset_${r}_auto_${cabinetId}` },
+      { text: `${current === "manual" ? "✅ " : ""}Ручной`, callback_data: `rmset_${r}_manual_${cabinetId}` },
+    ]);
+  }
+
+  return keyboard;
+}
+
+// ── Notify settings per star ──
+
+type NotifyMap = Record<string, boolean>;
+
+export function notifySettingsKeyboard(cabinetId: string, notifyMap: NotifyMap): TelegramBot.InlineKeyboardButton[][] {
+  const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+
+  for (let r = 1; r <= 5; r++) {
+    const enabled = notifyMap[String(r)] !== false;
+    keyboard.push([
+      { text: `${r} ⭐`, callback_data: "noop" },
+      { text: `${enabled ? "✅ " : ""}Вкл`, callback_data: `ntf_${r}_on_${cabinetId}` },
+      { text: `${!enabled ? "✅ " : ""}Выкл`, callback_data: `ntf_${r}_off_${cabinetId}` },
+    ]);
+  }
+
+  keyboard.push([{ text: "✅ Готово", callback_data: `settings_done_${cabinetId}` }]);
+
+  return keyboard;
 }
 
 // ── Stats ──

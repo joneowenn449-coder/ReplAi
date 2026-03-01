@@ -192,6 +192,7 @@ export const wbCabinets = replaiSchema.table("wb_cabinets", {
   telegramUsername: text("telegram_username"),
   telegramFirstName: text("telegram_first_name"),
   tgNotifyType: text("tg_notify_type").default("all"),
+  tgNotifyStars: jsonb("tg_notify_stars"),
   photoAnalysis: boolean("photo_analysis").default(false),
   apiStatus: text("api_status").default("not_connected"),
   apiStatusCheckedAt: timestamp("api_status_checked_at"),

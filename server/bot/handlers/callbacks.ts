@@ -2,7 +2,8 @@
 
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "../../storage";
-import { sendSettingsMenu } from "./settings";
+import { sendSettingsMenu, parseNotifySettings } from "./settings";
+import { sendModeMenu } from "./mode";
 import { sendShopsList } from "./shops";
 import { sendStats } from "./stats";
 import { pendingOnboarding } from "./start";
@@ -118,42 +119,38 @@ export function registerCallbackHandler(bot: TelegramBot): void {
         return;
       }
 
-      // ── Notification type ──
-      if (data.startsWith("notify_")) {
+      // ── Notification per star: ntf_{rating}_{on|off}_{cabinetId} ──
+      if (data.startsWith("ntf_")) {
         const parts = data.split("_");
-        const typeKey = parts[1];
-        const cabinetId = parts.slice(2).join("_");
+        const rating = parts[1]; // 1-5
+        const state = parts[2]; // on or off
+        const cabinetId = parts.slice(3).join("_");
 
-        const typeMap: Record<string, string> = { all: "all", neg: "negative", questions: "questions" };
-        const newType = typeMap[typeKey] || "all";
+        const cabinet = await storage.getCabinetById(cabinetId);
+        if (!cabinet) { await bot.answerCallbackQuery(query.id); return; }
 
-        await storage.updateCabinet(cabinetId, { tgNotifyType: newType } as any);
+        const notifyMap = parseNotifySettings(cabinet);
+        notifyMap[rating] = state === "on";
+
+        await storage.updateCabinet(cabinetId, { tgNotifyStars: notifyMap } as any);
         await sendSettingsMenu(bot, chatId, cabinetId, messageId);
-        await bot.answerCallbackQuery(query.id);
+        await bot.answerCallbackQuery(query.id, { text: "Сохранено ✅" });
         return;
       }
 
-      // ── Reply mode toggle (single-screen) ──
+      // ── Reply mode per star: rmset_{rating}_{auto|manual}_{cabinetId} ──
       if (data.startsWith("rmset_")) {
         const parts = data.split("_");
-        const group = parts[1]; // high or low
-        const mode = parts[2]; // manual or auto
+        const rating = parts[1]; // 1-5
+        const mode = parts[2]; // auto or manual
         const cabinetId = parts.slice(3).join("_");
 
         const cabinet = await storage.getCabinetById(cabinetId);
         const currentModes = (cabinet?.replyModes as Record<string, string>) || {};
-
-        if (group === "high") {
-          currentModes["4"] = mode;
-          currentModes["5"] = mode;
-        } else if (group === "low") {
-          currentModes["1"] = mode;
-          currentModes["2"] = mode;
-          currentModes["3"] = mode;
-        }
+        currentModes[rating] = mode;
 
         await storage.updateCabinet(cabinetId, { replyModes: currentModes } as any);
-        await sendSettingsMenu(bot, chatId, cabinetId, messageId);
+        await sendModeMenu(bot, chatId, messageId);
         await bot.answerCallbackQuery(query.id, { text: "Сохранено ✅" });
         return;
       }

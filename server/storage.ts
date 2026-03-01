@@ -759,7 +759,7 @@ export class DatabaseStorage {
       );
 
     const total = allReviews.length;
-    const answered = allReviews.filter(r => r.status === "sent").length;
+    const answered = allReviews.filter(r => r.status === "sent" || r.status === "auto").length;
     const avgRating = total > 0 ? allReviews.reduce((sum, r) => sum + r.rating, 0) / total : 0;
     const byRating: Record<number, number> = {};
     for (const r of allReviews) {

@@ -61,7 +61,7 @@ export async function sendStats(
     let ratingBars = "";
     for (let r = 5; r >= 1; r--) {
       const cnt = stats.byRating[r] || 0;
-      const bar = cnt > 0 ? "█".repeat(Math.min(cnt, 20)) : "";
+      const bar = cnt > 0 ? "🟩".repeat(Math.min(cnt, 15)) : "";
       ratingBars += `${"⭐".repeat(r)} ${bar} ${cnt}\n`;
     }
 

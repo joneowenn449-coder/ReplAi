@@ -770,8 +770,10 @@ export class DatabaseStorage {
   }
 
   async getTodayReviewStats(cabinetIds: string[]) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    // Midnight in Moscow (UTC+3)
+    const msk = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    msk.setUTCHours(0, 0, 0, 0);
+    const todayStart = new Date(msk.getTime() - 3 * 60 * 60 * 1000);
     return this.getReviewStatsSince(cabinetIds, todayStart);
   }
 

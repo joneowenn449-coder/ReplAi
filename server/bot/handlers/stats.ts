@@ -15,11 +15,13 @@ const PERIOD_LABELS: Record<StatsPeriod, string> = {
 };
 
 function getPeriodStart(period: StatsPeriod): Date {
-  const now = new Date();
   switch (period) {
-    case "today":
-      now.setHours(0, 0, 0, 0);
-      return now;
+    case "today": {
+      // Midnight in Moscow (UTC+3)
+      const msk = new Date(Date.now() + 3 * 60 * 60 * 1000);
+      msk.setUTCHours(0, 0, 0, 0);
+      return new Date(msk.getTime() - 3 * 60 * 60 * 1000);
+    }
     case "week":
       return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     case "month":
@@ -89,7 +91,8 @@ export async function sendStats(
     }
   } catch (err) {
     console.error("[bot/stats] Error:", err);
-    const fallback = `📊 *Статистика*\n\n📥 Новых отзывов: *0*\n✅ Отвечено: *0*`;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const fallback = `⚠️ Не удалось загрузить статистику\n\nПопробуйте ещё раз через /stats\n\n_Ошибка: ${errMsg.slice(0, 100)}_`;
     if (messageId) {
       await bot.editMessageText(fallback, { chat_id: chatId, message_id: messageId, parse_mode: "Markdown" }).catch(() => {});
     } else {
